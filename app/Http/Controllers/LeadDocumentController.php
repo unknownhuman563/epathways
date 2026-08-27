@@ -151,9 +151,18 @@ class LeadDocumentController extends Controller
                     'requested_at' => now(),
                 ]);
 
-                // Email/SMS the lead a link to upload it. Prefer the
-                // 'doc_request' template; fall back to the legacy Mailable.
-                if (! empty($lead->email)) {
+                // The email-automation "Document requested" message is the single
+                // editable template for this — fire it per document so it can name
+                // the specific one ({{document_name}}). Returns true when it sent
+                // to the client, in which case we DON'T also send the built-in
+                // email below (no double-send).
+                $firedClient = app(\App\Services\EmailAutomationService::class)
+                    ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+
+                // Fallback: no client automation message is configured, so send
+                // the built-in request email. Prefer the 'doc_request' template;
+                // fall back to the legacy Mailable.
+                if (! $firedClient && ! empty($lead->email)) {
                     try {
                         $res = app(\App\Services\CommunicationService::class)
                             ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
@@ -165,9 +174,6 @@ class LeadDocumentController extends Controller
                     }
                 }
             }
-
-            // Email automation — document requested.
-            app(\App\Services\EmailAutomationService::class)->fire('immigration.document.requested', $lead, []);
 
             return back()->with('success', count($data['items']).' document request(s) added.');
         } catch (\Throwable $e) {

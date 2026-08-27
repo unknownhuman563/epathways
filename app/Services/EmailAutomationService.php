@@ -31,8 +31,9 @@ class EmailAutomationService
      * the template variables (fees, dates, names — never generated, always
      * passed from the calling action).
      */
-    public function fire(string $eventKey, Lead $lead, array $context = []): void
+    public function fire(string $eventKey, Lead $lead, array $context = []): bool
     {
+        $firedClient = false;
         try {
             $messages = EmailAutomationMessage::where('event_key', $eventKey)
                 ->where('enabled', true)
@@ -40,7 +41,7 @@ class EmailAutomationService
                 ->get();
 
             if ($messages->isEmpty()) {
-                return; // nothing configured — no-op
+                return false; // nothing configured — no-op
             }
 
             $department = $this->registry->departmentOf($eventKey);
@@ -49,30 +50,38 @@ class EmailAutomationService
                 if (empty($msg->template_key)) {
                     continue;
                 }
-                $this->deliver($msg, $lead, $context, $department);
+                if ($this->deliver($msg, $lead, $context, $department)) {
+                    $firedClient = true;
+                }
             }
         } catch (\Throwable $e) {
             Log::warning('Email automation fire failed', ['event' => $eventKey, 'lead' => $lead->id, 'error' => $e->getMessage()]);
         }
+
+        return $firedClient;
     }
 
-    private function deliver(EmailAutomationMessage $msg, Lead $lead, array $context, string $department): void
+    /** Returns true when a message was sent to the CLIENT (so a caller can skip a
+     *  built-in client email and avoid double-sending). Staff notices return false. */
+    private function deliver(EmailAutomationMessage $msg, Lead $lead, array $context, string $department): bool
     {
         if ($msg->recipient === 'client') {
             // The client is the lead — CommunicationService handles email/SMS
             // routing and message logging for us.
             if (! empty($lead->email) || ! empty($lead->phone)) {
                 $this->comms->sendTemplated($msg->template_key, $lead, $context, $department);
+
+                return true;
             }
 
-            return;
+            return false;
         }
 
         // Staff recipient — render the template with the case's context and send
         // to each resolved staff email as an internal notice.
         $emails = $this->staffEmails($msg->recipient, $lead);
         if (empty($emails)) {
-            return;
+            return false;
         }
 
         $template = MessageTemplate::active()
@@ -82,7 +91,7 @@ class EmailAutomationService
             ->first();
 
         if (! $template) {
-            return;
+            return false;
         }
 
         $subject = $this->comms->render($lead, (string) ($template->email_subject ?? ''), $context);
@@ -91,6 +100,8 @@ class EmailAutomationService
         foreach (array_unique($emails) as $email) {
             $this->comms->sendComposedEmail($email, $subject !== '' ? $subject : 'Case update', $body, [], true, $lead->id);
         }
+
+        return false; // staff notice — not a client send
     }
 
     /** Resolve staff recipient role → email addresses for this case. */

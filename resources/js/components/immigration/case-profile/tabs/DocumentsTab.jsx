@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
     FileText, Download, Upload, Eye, Check, Loader2,
     Send, X as XIcon, AlertCircle, Paperclip, ChevronDown, ChevronRight, Plus, MessageSquare,
-    MoreVertical, Trash2,
+    MoreVertical, Trash2, Flag,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
@@ -112,6 +112,29 @@ export default function DocumentsTab({
         const map = new Map();
         for (const t of threads) {
             if (t.anchor_type !== "document" || ! t.anchor_id) continue;
+            if (! map.has(t.anchor_id)) map.set(t.anchor_id, []);
+            map.get(t.anchor_id).push(t);
+        }
+        return map;
+    }, [threads]);
+    // Checklist-anchored notes — a note on a requirement itself, keyed by the
+    // checklist key. These need no uploaded file, so staff can note a slot before
+    // the client provides anything. Grouped by anchor_key.
+    const threadsByKey = useMemo(() => {
+        const map = new Map();
+        for (const t of threads) {
+            if (t.anchor_type !== "checklist" || ! t.anchor_key) continue;
+            if (! map.has(t.anchor_key)) map.set(t.anchor_key, []);
+            map.get(t.anchor_key).push(t);
+        }
+        return map;
+    }, [threads]);
+    // Replies to a document's reviewer note — grouped by document id so they
+    // render nested under that document's reviewer note.
+    const reviewerRepliesByDoc = useMemo(() => {
+        const map = new Map();
+        for (const t of threads) {
+            if (t.anchor_type !== "reviewer_note" || ! t.anchor_id) continue;
             if (! map.has(t.anchor_id)) map.set(t.anchor_id, []);
             map.get(t.anchor_id).push(t);
         }
@@ -417,29 +440,26 @@ export default function DocumentsTab({
                                 return (
                                     <Fragment key={category}>
                                         <tr className="bg-gray-800 border-y border-gray-700">
-                                            <td colSpan={4} className="px-4 py-2.5">
+                                            {/* The whole dark bar collapses/expands the section. */}
+                                            <td
+                                                colSpan={4}
+                                                className="px-4 py-2.5 cursor-pointer select-none hover:bg-gray-700/60 transition-colors"
+                                                onClick={() => toggleCat(category)}
+                                                title={collapsed ? "Expand section" : "Collapse section"}
+                                            >
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
                                                         {checklistRows.length > 0 && (
-                                                            <SectionSelectAll leadId={lead.id} rows={checklistRows} />
+                                                            <span onClick={(e) => e.stopPropagation()}>
+                                                                <SectionSelectAll leadId={lead.id} rows={checklistRows} />
+                                                            </span>
                                                         )}
-                                                        {/* Click the header to collapse/expand the section. */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleCat(category)}
-                                                            className="flex items-center gap-1.5 group"
-                                                            title={collapsed ? "Expand section" : "Collapse section"}
-                                                        >
-                                                            {collapsed
-                                                                ? <ChevronRight size={12} className="text-gray-400 group-hover:text-white" />
-                                                                : <ChevronDown size={12} className="text-gray-400 group-hover:text-white" />}
-                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-100 group-hover:text-white">
-                                                                {category}
-                                                            </span>
-                                                            <span className="text-[11px] font-semibold text-gray-400">
-                                                                {approved}/{groupRows.length}
-                                                            </span>
-                                                        </button>
+                                                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-100">
+                                                            {category}
+                                                        </span>
+                                                        <span className="text-[11px] font-semibold text-gray-400">
+                                                            {approved}/{groupRows.length}
+                                                        </span>
                                                     </div>
                                                     {rightNote && (
                                                         <span className="text-[11px] text-gray-300">{rightNote}</span>
@@ -454,6 +474,8 @@ export default function DocumentsTab({
                                                 leadId={lead.id}
                                                 docThreads={row.document ? (threadsByDoc.get(row.document.id) || []) : []}
                                                 threadsByDoc={threadsByDoc}
+                                                keyThreads={threadsByKey.get(row.key) || []}
+                                                reviewerReplies={row.document ? (reviewerRepliesByDoc.get(row.document.id) || []) : []}
                                                 caseStaff={caseStaff}
                                                 vif={isVifLabel(row.label) ? vif : null}
                                                 engagementSent={!! engagement.sent}
@@ -489,15 +511,15 @@ export default function DocumentsTab({
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-gray-800">Need something else?</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Request a document from the client that isn't on the checklist.</p>
+                        <p className="text-[13px] font-semibold text-gray-800">Request documents</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Ask the client to upload documents — pick from the checklist or add your own.</p>
                     </div>
                     <button
                         type="button"
                         onClick={() => setRequestOpen(true)}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black flex-shrink-0"
                     >
-                        <Plus size={14} /> Request a document
+                        <Plus size={14} /> Request documents
                     </button>
                 </div>
 
@@ -512,7 +534,14 @@ export default function DocumentsTab({
             </div>
 
             {requestOpen && (
-                <RequestAnyDocument leadId={lead.id} onClose={() => setRequestOpen(false)} />
+                <RequestAnyDocument
+                    leadId={lead.id}
+                    checklistItems={rows.filter((r) => ! r.hidden).map((r) => ({
+                        key: r.key, label: r.label, category: r.category,
+                        required: r.required, provided: !! r.document,
+                    }))}
+                    onClose={() => setRequestOpen(false)}
+                />
             )}
 
             {filesOpen && (
@@ -526,7 +555,59 @@ export default function DocumentsTab({
     );
 }
 
-function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff = [], vif = null, engagementSent = false, engagementSentAt = null, engagementSigned = false, engagementSignedAt = null, invoicePaid = false, invoicePaidAt = null, proofs = [] }) {
+// Reply affordance under the reviewer note. The reviewer note itself is a value
+// on the document (not a thread), so a "reply" is posted as a document-anchored
+// note — it then appears in the discussion below the note.
+function ReviewerReplyBox({ leadId, docId }) {
+    const [open, setOpen] = useState(false);
+    const [body, setBody] = useState("");
+    const [posting, setPosting] = useState(false);
+
+    const submit = () => {
+        if (! body.trim()) { toast.error("Write a reply first"); return; }
+        setPosting(true);
+        router.post(`/portal/immigration/cases/${leadId}/threads`,
+            { anchor_type: "reviewer_note", anchor_id: docId, body, client_visible: false },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => { toast.success("Reply added"); setBody(""); setOpen(false); },
+                onError: (e) => toast.error(Object.values(e)[0] || "Could not reply"),
+                onFinish: () => setPosting(false),
+            });
+    };
+
+    if (! open) {
+        return (
+            <button type="button" onClick={() => setOpen(true)}
+                className="mt-2 text-[12px] font-semibold text-amber-700 hover:text-amber-900">
+                Reply
+            </button>
+        );
+    }
+
+    return (
+        <div className="mt-2 space-y-2">
+            <textarea
+                autoFocus
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={2}
+                maxLength={2000}
+                placeholder="Reply to this note…"
+                className="w-full text-[13px] px-3 py-2 bg-white border border-amber-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none"
+            />
+            <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={() => { setOpen(false); setBody(""); }}
+                    className="text-[12px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
+                <button type="button" onClick={submit} disabled={posting}
+                    className="inline-flex items-center px-3 py-1.5 rounded-lg bg-amber-500 text-white text-[12px] font-semibold hover:bg-amber-600 disabled:opacity-50">Post reply</button>
+            </div>
+        </div>
+    );
+}
+
+function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), keyThreads = [], reviewerReplies = [], caseStaff = [], vif = null, engagementSent = false, engagementSentAt = null, engagementSigned = false, engagementSignedAt = null, invoicePaid = false, invoicePaidAt = null, proofs = [] }) {
     const doc = row.document;
     const [verifyOpen, setVerifyOpen] = useState(false);
     const pageUrl = usePage().url || "";
@@ -556,10 +637,21 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
     // full discussion only opens on click, keeping the table clean.
     const [notesOpen, setNotesOpen] = useState(false);
 
+    const isChecklistRow = row.kind === "checklist";
     const files = row.documents && row.documents.length ? row.documents : (doc ? [doc] : []);
-    const noteThreads = files.flatMap((d) => threadsByDoc.get(d.id) || []);
+    const docNoteThreads = files.flatMap((d) => threadsByDoc.get(d.id) || []);
+    // All notes on this requirement: file threads + checklist-anchored notes
+    // (which need no upload) + reviewer-note replies, newest last.
+    const noteThreads = [...docNoteThreads, ...keyThreads, ...reviewerReplies]
+        .slice()
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
     const noteCount = noteThreads.length + (note ? 1 : 0);
-    const notePreview = (noteThreads[noteThreads.length - 1]?.body) || note || "";
+    // The most-recent discussion note (thread), previewed under the note count.
+    // The reviewer note is surfaced separately as a pinned flag.
+    const lastThread = noteThreads[noteThreads.length - 1] || null;
+    // Whether staff can leave a note here — any checklist slot (even empty) or a
+    // real uploaded document. Engagement/invoice rows keep their lifecycle badge.
+    const canNote = !! doc || isChecklistRow;
 
     const persist = (nextStatus, nextNote, kind) => {
         if (! doc) return;
@@ -769,24 +861,54 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 )}
             </td>
 
-            {/* Notes — a compact summary that opens the full discussion in place */}
+            {/* Notes — a compact summary that opens the full discussion in place.
+                Shows the latest note with who wrote it and when. Available on any
+                checklist slot, even before the client uploads anything. */}
             <td className="px-4 py-3">
-                {doc ? (
-                    <button
-                        type="button"
-                        onClick={() => setNotesOpen((v) => ! v)}
-                        className="text-left group max-w-[220px]"
-                    >
-                        <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-gray-700 group-hover:text-gray-900">
-                            {noteCount > 0 ? `${noteCount} note${noteCount === 1 ? "" : "s"}` : "Add a note"}
-                            {notesOpen
-                                ? <ChevronDown size={12} className="text-gray-400" />
-                                : <ChevronRight size={12} className="text-gray-400" />}
-                        </span>
-                        {notePreview && ! notesOpen && (
-                            <span className="block text-[11px] text-gray-400 truncate">{notePreview}</span>
+                {canNote ? (
+                    <div className="max-w-[240px]">
+                        {/* Reviewer note — pinned as an always-visible flag so staff
+                            are alerted about this document without expanding. */}
+                        {note && (
+                            <div className="mb-1.5 flex items-start gap-1.5 rounded-md bg-amber-50 border border-amber-200 px-2 py-1">
+                                <Flag size={11} className="text-amber-500 mt-[3px] flex-shrink-0" />
+                                <span className="min-w-0">
+                                    <span className="block text-[11px] leading-snug text-amber-900 line-clamp-2">{note}</span>
+                                    {(doc?.reviewed_by || doc?.reviewed_at) && (
+                                        <span className="block text-[9.5px] text-amber-700/80 mt-0.5 truncate">
+                                            {doc?.reviewed_by || "Staff"}
+                                            {doc?.reviewed_at && <> · {formatDateTime(doc.reviewed_at)}</>}
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
                         )}
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setNotesOpen((v) => ! v)}
+                            className="text-left group w-full"
+                        >
+                            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-gray-700 group-hover:text-gray-900">
+                                {noteCount > 0 ? `${noteCount} note${noteCount === 1 ? "" : "s"}` : "Add a note"}
+                                {notesOpen
+                                    ? <ChevronDown size={12} className="text-gray-400" />
+                                    : <ChevronRight size={12} className="text-gray-400" />}
+                            </span>
+                            {/* Last discussion note (the reviewer note is already shown
+                                above as a flag, so this previews the latest thread). */}
+                            {lastThread && ! notesOpen && (
+                                <span className="block mt-0.5">
+                                    <span className="block text-[11px] text-gray-500 line-clamp-2">{lastThread.body}</span>
+                                    {(lastThread.author || lastThread.created_at) && (
+                                        <span className="block text-[10px] text-gray-400 mt-0.5 truncate">
+                                            {lastThread.author || "Staff"}
+                                            {lastThread.created_at && <> · {formatDateTime(lastThread.created_at)}</>}
+                                        </span>
+                                    )}
+                                </span>
+                            )}
+                        </button>
+                    </div>
                 ) : (
                     <span className="text-[11px] text-gray-300">—</span>
                 )}
@@ -804,51 +926,112 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
             checklist slot can hold several uploads (e.g. two Passport.pdf), and
             each keeps its own thread, labelled by filename when there's more
             than one. */}
-        {doc && notesOpen && (
+        {canNote && notesOpen && (
             <tr className="border-b border-gray-50 last:border-b-0 bg-gray-50/40">
                 <td colSpan={4} className="px-4 pb-4 pt-1">
                     {(() => {
                         const multi = files.length > 1;
                         return (
                             <div className="ml-6 max-w-3xl space-y-3">
-                                {/* Reviewer note — the private status note (also
-                                    set when a document is marked "Required
-                                    attention"). Saves on blur. */}
-                                <div className="relative max-w-md">
-                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Reviewer note</label>
-                                    <input
-                                        type="text"
-                                        value={note}
-                                        onChange={(e) => setNote(e.target.value)}
-                                        onBlur={onNoteBlur}
-                                        placeholder="Add a note…"
-                                        maxLength={500}
-                                        className="w-full text-[12px] px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-gray-400 disabled:opacity-50"
-                                        disabled={savingNote}
+                                {/* Composer at the top. Checklist rows note against
+                                    the requirement (no upload needed); engagement /
+                                    invoice docs note against the file. */}
+                                {isChecklistRow ? (
+                                    <ThreadComposer
+                                        leadId={leadId}
+                                        caseStaff={caseStaff}
+                                        fixedAnchor={{ anchor_type: "checklist", anchor_key: row.key }}
+                                        plain
+                                        placeholder={doc ? "Write a note about this requirement…" : "Leave a note about this requirement…"}
                                     />
-                                    {savedNote && (
-                                        <span className="absolute right-2 top-[27px] inline-flex items-center text-emerald-600">
-                                            <Check size={11} />
-                                        </span>
-                                    )}
-                                    {note && row.document?.reviewed_by && (
-                                        <p className="mt-1 text-[10.5px] text-gray-400">
-                                            {row.document.reviewed_by}
-                                            {row.document.reviewed_by_role && <> · {String(row.document.reviewed_by_role).replace(/_/g, " ")}</>}
-                                            {row.document.reviewed_at && <> · {formatDate(row.document.reviewed_at)}</>}
-                                        </p>
-                                    )}
-                                </div>
+                                ) : (
+                                    files.map((d) => (
+                                        <ThreadComposer
+                                            key={`compose-${d.id}`}
+                                            leadId={leadId}
+                                            caseStaff={caseStaff}
+                                            fixedAnchor={{ anchor_type: "document", anchor_id: d.id }}
+                                            plain
+                                            placeholder={multi ? `Write a note about ${d.original_name}…` : "Write a note about this document…"}
+                                        />
+                                    ))
+                                )}
+
+                                {/* Reviewer note — below the composer, as a card. The
+                                    private status note; editable, saves on blur. */}
+                                {doc && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-3.5 py-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-white flex-shrink-0">
+                                                    <Flag size={13} />
+                                                </span>
+                                                <span className="text-[13px] font-bold text-gray-900 truncate">{doc?.reviewed_by || "Reviewer note"}</span>
+                                                {doc?.reviewed_at && <span className="text-[11.5px] text-gray-400 flex-shrink-0">{formatDateTime(doc.reviewed_at)}</span>}
+                                            </div>
+                                            <span className="text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">Reviewer note</span>
+                                        </div>
+                                        <div className="relative mt-2">
+                                            <input
+                                                type="text"
+                                                value={note}
+                                                onChange={(e) => setNote(e.target.value)}
+                                                onBlur={onNoteBlur}
+                                                placeholder="Add a reviewer note…"
+                                                maxLength={500}
+                                                disabled={savingNote}
+                                                className="w-full text-[13px] px-3 py-2 rounded-lg border border-amber-200 bg-white focus:outline-none focus:border-amber-400 disabled:opacity-50"
+                                            />
+                                            {savedNote && (
+                                                <span className="absolute right-2.5 top-2.5 inline-flex items-center text-emerald-600"><Check size={12} /></span>
+                                            )}
+                                        </div>
+                                        {/* Replies to the reviewer note, nested under it. */}
+                                        {reviewerReplies.filter((t) => ! t.parent_id).length > 0 && (
+                                            <div className="mt-2.5 ml-5 space-y-2">
+                                                {reviewerReplies.filter((t) => ! t.parent_id).map((t) => (
+                                                    <ThreadItem
+                                                        key={t.id}
+                                                        thread={t}
+                                                        leadId={leadId}
+                                                        caseStaff={caseStaff}
+                                                        anchor={{ anchor_type: "reviewer_note", anchor_id: doc.id }}
+                                                        childrenOf={(id) => reviewerReplies.filter((x) => x.parent_id === id).sort((a, b) => a.id - b.id)}
+                                                        isReply
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                        {/* Staff can reply to the reviewer note — nests under it. */}
+                                        <ReviewerReplyBox leadId={leadId} docId={doc.id} />
+                                    </div>
+                                )}
+
+                                {/* Requirement notes (checklist-anchored). */}
+                                {isChecklistRow && keyThreads.filter((t) => ! t.parent_id).map((t) => (
+                                    <ThreadItem
+                                        key={t.id}
+                                        thread={t}
+                                        leadId={leadId}
+                                        caseStaff={caseStaff}
+                                        anchor={{ anchor_type: "checklist", anchor_key: row.key }}
+                                        childrenOf={(id) => keyThreads.filter((x) => x.parent_id === id).sort((a, b) => a.id - b.id)}
+                                    />
+                                ))}
+
+                                {/* Existing per-file document comments. */}
                                 {files.map((d) => {
                                     const dThreads = threadsByDoc.get(d.id) || [];
+                                    const roots = dThreads.filter((t) => ! t.parent_id);
+                                    if (roots.length === 0 && ! multi) return null;
                                     return (
-                                        <div key={d.id} className="border-l border-gray-200 pl-6">
+                                        <div key={d.id} className="space-y-2">
                                             {multi && (
-                                                <p className="text-[10.5px] font-semibold text-gray-500 inline-flex items-center gap-1.5 border-l-2 border-gray-200 pl-2">
+                                                <p className="text-[10.5px] font-semibold text-gray-500 inline-flex items-center gap-1.5">
                                                     <FileText size={11} className="text-gray-400" /> {d.original_name}
                                                 </p>
                                             )}
-                                            {dThreads.filter((t) => ! t.parent_id).map((t) => (
+                                            {roots.map((t) => (
                                                 <ThreadItem
                                                     key={t.id}
                                                     thread={t}
@@ -858,13 +1041,6 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                                                     childrenOf={(id) => dThreads.filter((x) => x.parent_id === id).sort((a, b) => a.id - b.id)}
                                                 />
                                             ))}
-                                            <ThreadComposer
-                                                leadId={leadId}
-                                                caseStaff={caseStaff}
-                                                fixedAnchor={{ anchor_type: "document", anchor_id: d.id }}
-                                                plain
-                                                placeholder={multi ? `Write a note about ${d.original_name}…` : "Write a note about this document…"}
-                                            />
                                         </div>
                                     );
                                 })}
@@ -1777,10 +1953,12 @@ function RequestRow({ req, leadId }) {
 // Ad-hoc document request — a free-text label (not tied to a checklist slot),
 // emailed to the client and logged as a LeadDocumentRequest via the same
 // endpoint the per-row request uses.
-function RequestAnyDocument({ leadId, onClose }) {
-    const [label, setLabel] = useState("");
+function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
+    // Which checklist documents to ask the client for (keyed by checklist key).
+    const [picked, setPicked] = useState(() => new Set());
+    // An off-checklist ad-hoc request ("Other").
+    const [customLabel, setCustomLabel] = useState("");
     const [message, setMessage] = useState("");
-    const [required, setRequired] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
@@ -1789,17 +1967,43 @@ function RequestAnyDocument({ leadId, onClose }) {
         return () => window.removeEventListener("keydown", onKey);
     }, [onClose]);
 
+    // Group checklist items by category so the picker mirrors the checklist table.
+    const groups = useMemo(() => {
+        const m = new Map();
+        for (const it of checklistItems) {
+            const cat = it.category || "Other";
+            if (! m.has(cat)) m.set(cat, []);
+            m.get(cat).push(it);
+        }
+        return Array.from(m.entries());
+    }, [checklistItems]);
+
+    const toggle = (key) => setPicked((prev) => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+    });
+
+    const count = picked.size + (customLabel.trim() ? 1 : 0);
+
     const send = () => {
         if (submitting) return;
-        if (! label.trim()) { toast.error("Give the document a name"); return; }
+        // Build one request item per picked checklist document + the custom one.
+        const items = checklistItems
+            .filter((it) => picked.has(it.key))
+            .map((it) => ({ label: it.label, description: message.trim() || null, required: !! it.required }));
+        if (customLabel.trim()) {
+            items.push({ label: customLabel.trim(), description: message.trim() || null, required: true });
+        }
+        if (items.length === 0) { toast.error("Pick at least one document to request"); return; }
         setSubmitting(true);
         router.post(
             `/admin/leads/${leadId}/documents/requests`,
-            { items: [{ label: label.trim(), description: message.trim() || null, required }] },
+            { items },
             {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => { toast.success("Request sent to client"); onClose(); },
+                onSuccess: () => { toast.success(`Requested ${items.length} document${items.length > 1 ? "s" : ""} from the client`); onClose(); },
                 onError: (errs) => toast.error(Object.values(errs)[0] || "Request failed"),
                 onFinish: () => setSubmitting(false),
             },
@@ -1808,53 +2012,87 @@ function RequestAnyDocument({ leadId, onClose }) {
 
     return createPortal(
         <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-                <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
-                    <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
-                        <Plus size={14} className="text-gray-500" /> Request a document
-                    </h2>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 flex-shrink-0">
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
+                            <Plus size={14} className="text-gray-500" /> Request documents
+                        </h2>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Tick which documents to ask the client for — they'll get an upload link for each.</p>
+                    </div>
                     <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><XIcon size={16} /></button>
                 </header>
-                <div className="px-5 py-4 space-y-3">
-                    <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1">Document name</label>
+
+                <div className="px-5 py-4 space-y-4 overflow-y-auto">
+                    {/* Checklist picker */}
+                    {groups.length > 0 ? (
+                        <div className="space-y-3">
+                            {groups.map(([cat, its]) => (
+                                <div key={cat}>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">{cat}</p>
+                                    <div className="space-y-1">
+                                        {its.map((it) => (
+                                            <label key={it.key} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={picked.has(it.key)}
+                                                    onChange={() => toggle(it.key)}
+                                                    className="rounded border-gray-300"
+                                                />
+                                                <span className="text-[12.5px] text-gray-800 flex-1 min-w-0 truncate">{it.label}</span>
+                                                {it.required && <span className="text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>}
+                                                {it.provided && <span className="text-[9px] font-semibold uppercase tracking-wide text-emerald-600">Provided</span>}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-[12px] text-gray-500">No checklist items for this case yet — use "Other" below.</p>
+                    )}
+
+                    {/* Off-checklist custom request */}
+                    <div className="pt-1">
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1">Other (not on the checklist)</label>
                         <input
                             type="text"
-                            value={label}
-                            onChange={(e) => setLabel(e.target.value)}
+                            value={customLabel}
+                            onChange={(e) => setCustomLabel(e.target.value)}
                             maxLength={120}
                             placeholder="e.g. Employment contract"
                             className="w-full text-xs px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900"
-                            autoFocus
                         />
                     </div>
+
+                    {/* Shared instruction line */}
                     <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1">Message (optional)</label>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1">Message to client (optional)</label>
                         <textarea
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
-                            rows={3}
+                            rows={2}
                             maxLength={500}
-                            placeholder="Any instructions for the client…"
+                            placeholder="Any instructions to include with the request…"
                             className="w-full text-xs px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900 resize-none"
                         />
                     </div>
-                    <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 cursor-pointer">
-                        <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} className="rounded border-gray-300" />
-                        Required document
-                    </label>
                 </div>
-                <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
-                    <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
-                    <button
-                        type="button"
-                        onClick={send}
-                        disabled={submitting}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-900 text-white hover:bg-black disabled:opacity-50"
-                    >
-                        {submitting ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                        Send request
-                    </button>
+
+                <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-between gap-2 flex-shrink-0">
+                    <span className="text-[11px] text-gray-500">{count} selected</span>
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                        <button
+                            type="button"
+                            onClick={send}
+                            disabled={submitting || count === 0}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-900 text-white hover:bg-black disabled:opacity-50"
+                        >
+                            {submitting ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                            Send request{count > 1 ? `s (${count})` : ""}
+                        </button>
+                    </div>
                 </footer>
             </div>
         </div>,
@@ -1972,6 +2210,10 @@ function categoryFromKey(key) {
 
 const formatDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+// Date + time — used on notes so staff see exactly when a note was left.
+const formatDateTime = (iso) =>
+    iso ? new Date(iso).toLocaleString("en-NZ", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
 // Human-readable file size from a byte count.
 const formatBytes = (bytes) => {
