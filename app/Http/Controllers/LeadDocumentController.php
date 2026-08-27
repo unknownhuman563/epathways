@@ -194,6 +194,41 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Re-send the "please upload this document" email for a single existing
+     * request — one click from the Documents tab. Uses the SAME single source as
+     * the original request: the configured "Document requested" automation
+     * message, falling back to the built-in email only when none is set.
+     */
+    public function resendRequest(Request $request, $leadId, $requestId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $docRequest = LeadDocumentRequest::where('lead_id', $lead->id)->findOrFail($requestId);
+
+        $firedClient = app(\App\Services\EmailAutomationService::class)
+            ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+
+        if (! $firedClient && ! empty($lead->email)) {
+            try {
+                $res = app(\App\Services\CommunicationService::class)
+                    ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
+                if (! $res['email']) {
+                    Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+                }
+            } catch (\Throwable $e) {
+                Log::error('Resend document request failed', ['lead_id' => $lead->id, 'request_id' => $docRequest->id, 'error' => $e->getMessage()]);
+
+                return back()->withErrors(['error' => 'Could not send the reminder.']);
+            }
+        }
+
+        if (empty($lead->email)) {
+            return back()->withErrors(['error' => 'No email on file for this client.']);
+        }
+
+        return back()->with('success', "Reminder sent for “{$docRequest->label}”.");
+    }
+
+    /**
      * Flat JSON list of every file on a case, with its review status.
      *
      * Feeds the "Files" popover on the immigration Cases table so staff can
