@@ -787,7 +787,14 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     const [timeOut, setTimeOut] = useState(entry?.time_out || "");
     const [remarks, setRemarks] = useState(entry?.remarks || "");
     const uidRef = useRef(0);
-    const mk = (text, status, source = null, from = null) => ({ uid: uidRef.current++, text, status, source, from });
+    // Stable id persisted with the task so a side task can point at its parent
+    // across save/reload (uid is client-only and regenerated each load).
+    const rid = () => Math.random().toString(36).slice(2, 10);
+    // kind: "main" (default) or "side" (a sub-task nested under a main task,
+    // linked by `parent` = the parent's tid). Side tasks act like main tasks
+    // (own status, counted in the day) but render indented + colour-coded.
+    const mk = (text, status, source = null, from = null, kind = "main", parent = null, tid = null) =>
+        ({ uid: uidRef.current++, tid: tid || rid(), text, status, source, from, kind, parent });
     // A task item is one of three states: `todo` (planned / ongoing — not
     // recorded), `done` (completed — recorded), `carry` (pending for tomorrow —
     // recorded and rolls forward). The stored entry keeps only done (in `task`)
@@ -801,11 +808,14 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
         // by field (task → completed, pending → carry).
         (entry?.tasks || []).forEach((r) => {
             const st = r.status;
-            if (st === "todo") { rows.push(mk(r.task || "", "todo")); return; }
-            if (st === "done") { if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done")); return; }
-            if (st === "carry") { if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry")); return; }
-            if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done"));
-            if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry"));
+            const k = r.kind === "side" ? "side" : "main";
+            const par = r.parent || null;
+            const tid = r.tid || null;
+            if (st === "todo") { rows.push(mk(r.task || "", "todo", null, null, k, par, tid)); return; }
+            if (st === "done") { if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done", null, null, k, par, tid)); return; }
+            if (st === "carry") { if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry", null, null, k, par, tid)); return; }
+            if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done", null, null, k, par, tid));
+            if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry", null, null, k, par, tid));
         });
         rows.push(mk("", "todo")); // a blank line to type the next plan into
         return rows;
@@ -819,6 +829,13 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     const todoItems = tasks.filter((t) => t.status === "todo");
     const doneItems = tasks.filter((t) => t.status === "done");
     const carryItems = tasks.filter((t) => t.status === "carry");
+    // Main vs side split for the to-do column; side tasks live in their own box.
+    const mainTodoItems = todoItems.filter((t) => t.kind !== "side");
+    const sideTodoItems = todoItems.filter((t) => t.kind === "side");
+    // The optional Side Tasks box is open once enabled, or whenever the day
+    // already has any side task (so it survives a reload).
+    const [sideOpen, setSideOpen] = useState(() => (entry?.tasks || []).some((r) => r.kind === "side"));
+    const openSide = () => { setSideOpen(true); addSide(); };
     const ongoingCount = todoItems.filter((t) => t.text.trim()).length;
     const doneCount = doneItems.filter((t) => t.text.trim()).length;
     const carryCount = carryItems.filter((t) => t.text.trim()).length;
@@ -829,7 +846,11 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
         return next;
     });
     const removeTask = (uid) => setTasks((p) => p.filter((t) => t.uid !== uid));
-    const addTodo = () => setTasks((p) => p.some((t) => t.status === "todo" && !t.text.trim()) ? p : [...p, mk("", "todo")]);
+    const addTodo = () => setTasks((p) => p.some((t) => t.status === "todo" && t.kind !== "side" && !t.text.trim()) ? p : [...p, mk("", "todo")]);
+    // Side tasks are a SEPARATE, optional list (own box) — not nested under a
+    // main task. They still act like tasks (own status, counted, autosaved) and
+    // are colour-coded so they never blend with the main tasks.
+    const addSide = () => setTasks((p) => p.some((t) => t.kind === "side" && t.status === "todo" && !t.text.trim()) ? p : [...p, mk("", "todo", null, null, "side", null)]);
     const stampNow = () => new Date().toLocaleTimeString("en-GB", { timeZone: setting.timezone || "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
 
     // What actually gets persisted: completed + for-tomorrow always, plus fresh
@@ -846,8 +867,8 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
             time_in: (override.time_in ?? timeIn) || null,
             time_out: (override.time_out ?? timeOut) || null,
             tasks: recorded.map((t) => t.status === "carry"
-                ? { task: "", pending: t.text.trim(), status: "carry", pending_done: false }
-                : { task: t.text.trim(), pending: "", status: t.status, pending_done: false }),
+                ? { task: "", pending: t.text.trim(), status: "carry", pending_done: false, kind: t.kind, parent: t.parent, tid: t.tid }
+                : { task: t.text.trim(), pending: "", status: t.status, pending_done: false, kind: t.kind, parent: t.parent, tid: t.tid }),
             // Carried items resolved today → close them on their source entry so
             // they stop rolling forward.
             close_carried: tasks.filter((t) => t.source && (t.status === "done" || t.status === "carry")).map((t) => t.source),
@@ -872,7 +893,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     // nothing is lost on refresh. Empty rows carry no text, so merely opening a
     // blank line doesn't trigger a write.
     const recordSig = JSON.stringify({
-        t: tasks.filter(persistable).map((t) => [t.status, t.text.trim()]),
+        t: tasks.filter(persistable).map((t) => [t.status, t.text.trim(), t.kind, t.parent]),
         c: tasks.filter((t) => t.source && (t.status === "done" || t.status === "carry")).map((t) => t.source),
         r: remarks, in: timeIn, out: timeOut,
     });
@@ -1008,12 +1029,14 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {/* To do / ongoing — includes yesterday's carry-overs */}
-                        <div className="rounded-xl border border-gray-200 overflow-hidden self-start">
+                        <div className="space-y-4 self-start">
+                        {/* To do / ongoing — main tasks only (includes carry-overs) */}
+                        <div className="rounded-xl border border-gray-200 overflow-hidden">
                             <div className="px-3 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                                 <ListChecks size={12} /> To do / ongoing
                             </div>
                             <div className="divide-y divide-gray-100">
-                                {todoItems.map((t) => (
+                                {mainTodoItems.map((t) => (
                                     <div key={t.uid} className="flex items-center gap-1 px-2 py-1.5 hover:bg-gray-50/60 transition-colors">
                                         {t.source && <span title={`Carried from ${t.from}`} className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 ml-1" />}
                                         <input
@@ -1032,6 +1055,41 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                             </button>
                         </div>
 
+                        {/* Side tasks — OPTIONAL, a separate box you toggle on. Indigo-coded
+                            so it never mixes with the main tasks; still acts like a task
+                            (own status, counted, autosaved, within the clocked-in day). */}
+                        {!sideOpen ? (
+                            <button type="button" onClick={openSide} className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-indigo-200 text-[11px] font-bold uppercase tracking-wider text-indigo-500 hover:bg-indigo-50/50 transition-colors">
+                                <Plus size={13} /> Add side tasks
+                            </button>
+                        ) : (
+                            <div className="rounded-xl border border-indigo-200 overflow-hidden">
+                                <div className="px-3 py-2.5 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                                    <span className="flex items-center gap-2"><ListChecks size={12} /> Side tasks</span>
+                                    <button type="button" onClick={() => setSideOpen(false)} title="Hide side tasks" className="text-indigo-400 hover:text-indigo-600"><ChevronDown size={13} /></button>
+                                </div>
+                                <div className="divide-y divide-indigo-50">
+                                    {sideTodoItems.map((s) => (
+                                        <div key={s.uid} className="flex items-center gap-1 px-2 py-1.5 hover:bg-indigo-50/40 transition-colors">
+                                            <span title="Side task" className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0 ml-1" />
+                                            <input
+                                                className="flex-1 min-w-0 px-2 py-1.5 text-sm text-indigo-900 bg-transparent outline-none placeholder:text-indigo-300"
+                                                placeholder="Add a side task…" value={s.text} onChange={setText(s.uid)}
+                                                onKeyDown={(e) => { if (e.key === "Enter" && s.text.trim()) { e.preventDefault(); addSide(); } }}
+                                            />
+                                            <button type="button" onClick={() => s.text.trim() && move(s.uid, "done")} title="Mark completed" className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"><ArrowRight size={15} /></button>
+                                            <button type="button" onClick={() => s.text.trim() && move(s.uid, "carry")} title="Carry to tomorrow" className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors"><CalendarClock size={15} /></button>
+                                            <button type="button" onClick={() => removeTask(s.uid)} title="Remove side task" className="p-1.5 rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"><X size={13} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button type="button" onClick={addSide} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-500 hover:bg-indigo-50/60 border-t border-indigo-100 transition-colors">
+                                    <Plus size={13} /> Add side task
+                                </button>
+                            </div>
+                        )}
+                        </div>
+
                         {/* Completed + For tomorrow */}
                         <div className="space-y-4">
                             <div className="rounded-xl border border-emerald-200 overflow-hidden">
@@ -1042,9 +1100,10 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                                     {doneItems.length === 0 ? (
                                         <p className="px-3 py-3 text-xs text-gray-400">Finish a task and it lands here.</p>
                                     ) : doneItems.map((t) => (
-                                        <div key={t.uid} className="flex items-center gap-1.5 px-2 py-1.5">
-                                            <CheckCircle size={14} className="text-emerald-500 shrink-0 ml-1" />
+                                        <div key={t.uid} className={`flex items-center gap-1.5 px-2 py-1.5 ${t.kind === "side" ? "border-l-2 border-indigo-300 bg-indigo-50/20" : ""}`}>
+                                            <CheckCircle size={14} className={`${t.kind === "side" ? "text-indigo-500" : "text-emerald-500"} shrink-0 ml-1`} />
                                             <input className="flex-1 min-w-0 px-1 py-1.5 text-sm bg-transparent outline-none" value={t.text} onChange={setText(t.uid)} />
+                                            {t.kind === "side" && <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5 shrink-0">Side</span>}
                                             <button type="button" onClick={() => move(t.uid, "todo")} title="Move back to to do" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"><Undo2 size={14} /></button>
                                         </div>
                                     ))}
@@ -1059,9 +1118,10 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                                     {carryItems.length === 0 ? (
                                         <p className="px-3 py-3 text-xs text-gray-400">Carry an unfinished task here — it keeps showing until it's done.</p>
                                     ) : carryItems.map((t) => (
-                                        <div key={t.uid} className="flex items-center gap-1.5 px-2 py-1.5">
-                                            <CalendarClock size={14} className="text-amber-500 shrink-0 ml-1" />
+                                        <div key={t.uid} className={`flex items-center gap-1.5 px-2 py-1.5 ${t.kind === "side" ? "border-l-2 border-indigo-300 bg-indigo-50/20" : ""}`}>
+                                            <CalendarClock size={14} className={`${t.kind === "side" ? "text-indigo-500" : "text-amber-500"} shrink-0 ml-1`} />
                                             <input className="flex-1 min-w-0 px-1 py-1.5 text-sm bg-transparent outline-none" value={t.text} onChange={setText(t.uid)} />
+                                            {t.kind === "side" && <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5 shrink-0">Side</span>}
                                             <button type="button" onClick={() => move(t.uid, "done")} title="Mark completed" className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"><ArrowRight size={15} /></button>
                                             <button type="button" onClick={() => move(t.uid, "todo")} title="Move back to to do" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"><Undo2 size={14} /></button>
                                         </div>

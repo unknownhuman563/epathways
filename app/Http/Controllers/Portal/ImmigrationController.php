@@ -1290,10 +1290,31 @@ class ImmigrationController extends Controller
         $data = $request->validate([
             'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
             'immigration_assignee' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGE_ASSIGNEES)],
+            // Optional note captured when moving to stages like "Request to
+            // Lodged" or "Withdrawn". Recorded as an internal case note.
+            'stage_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $newStage = $data['immigration_stage'] ?? null;
         $stageMoved = ($lead->immigration_stage ?? null) !== $newStage;
+        $stageNote = trim((string) ($data['stage_note'] ?? ''));
+
+        // Records the optional note as an internal case note so it surfaces in
+        // the Overview timeline, attributed to the mover and the target stage.
+        $recordStageNote = function () use ($lead, $stageNote, $newStage) {
+            if ($stageNote === '') {
+                return;
+            }
+            $user = auth()->user();
+            \App\Models\LeadNote::create([
+                'lead_id'     => $lead->id,
+                'user_id'     => $user?->id,
+                'author_name' => $user?->name,
+                'author_role' => $user?->role,
+                'kind'        => 'note',
+                'body'        => "Stage → {$newStage}: {$stageNote}",
+            ]);
+        };
 
         // Build 12 phase 4.5 (§15.1): the process chain is the single
         // authoritative writer of immigration_stage. When the case is on the
@@ -1314,6 +1335,7 @@ class ImmigrationController extends Controller
                 if ($lead->isDirty()) {
                     $lead->save();
                 }
+                $recordStageNote();
                 \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
                 // Email automation — the chain path sets the stage without going
@@ -1348,6 +1370,10 @@ class ImmigrationController extends Controller
 
         if ($stageMoved || $lead->isDirty('immigration_assignee')) {
             $lead->save();
+        }
+
+        if ($stageMoved) {
+            $recordStageNote();
         }
 
         // Re-evaluate findings off the request path when the stage moves (§8d).

@@ -528,9 +528,17 @@ class CaseProfileController extends Controller
         $this->guardCase($lead);
         abort_unless($dependent->lead_id === $lead->id, 404);
 
+        // The case profile renders in both the immigration manager portal and the
+        // adviser portal. This endpoint is always the manager route, so the caller
+        // tells us which portal it is in — otherwise an adviser opening a case would
+        // be redirected into the manager portal and their sidebar would flip.
+        $profileUrl = fn ($id) => request('portal') === 'immigration-adviser'
+            ? "/portal/immigration-adviser/cases/{$id}"
+            : "/portal/immigration/cases/{$id}/profile";
+
         // Already tied to a case — just go there.
         if ($dependent->linked_lead_id) {
-            return redirect("/portal/immigration/cases/{$dependent->linked_lead_id}/profile");
+            return redirect($profileUrl($dependent->linked_lead_id));
         }
 
         $case = Lead::create([
@@ -562,7 +570,7 @@ class CaseProfileController extends Controller
         // Tie the dependant to its new case so the link is permanent.
         $dependent->update(['linked_lead_id' => $case->id]);
 
-        return redirect("/portal/immigration/cases/{$case->id}/profile")
+        return redirect($profileUrl($case->id))
             ->with('success', "Case opened for {$dependent->fullName()}.");
     }
 
@@ -1890,6 +1898,7 @@ class CaseProfileController extends Controller
             ->map(fn (\App\Models\LeadTask $t) => [
                 'id' => $t->id,
                 'title' => $t->title,
+                'description' => $t->description,
                 'priority' => $t->priority,
                 'status' => $t->status,
                 'due_at' => optional($t->due_at)?->toIso8601String(),

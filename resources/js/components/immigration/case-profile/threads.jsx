@@ -11,8 +11,11 @@ import { MessageSquare, CheckCircle2, Send, HelpCircle, CornerDownRight, Pencil,
 const fmt = (iso) =>
     iso ? new Date(iso).toLocaleString("en-NZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
-export function resolveThread(leadId, threadId) {
-    router.post(`/portal/immigration/cases/${leadId}/threads/${threadId}/resolve`, {}, {
+// `basePath` lets non-immigration surfaces reuse these threads: the immigration
+// Case Profile posts to /portal/immigration/cases/{lead}/threads (the default),
+// while the general lead-profile Documents tab passes /admin/leads.
+export function resolveThread(leadId, threadId, basePath = "/portal/immigration/cases") {
+    router.post(`${basePath}/${leadId}/threads/${threadId}/resolve`, {}, {
         preserveScroll: true,
         onSuccess: () => toast.success("Thread resolved"),
         onError: (e) => toast.error(Object.values(e)[0] || "Could not resolve"),
@@ -40,14 +43,14 @@ const roleLabel = (r) =>
 // The composer's textarea id for a given anchor, so a thread's "Reply" can focus
 // the composer that posts to the same place.
 const composerIdFor = (anchor) =>
-    anchor && anchor.anchor_type === "document" && anchor.anchor_id
-        ? `thread-composer-document-${anchor.anchor_id}`
+    anchor && anchor.anchor_type === "document" && (anchor.anchor_id || anchor.anchor_key)
+        ? `thread-composer-document-${anchor.anchor_id || anchor.anchor_key}`
         : null;
 
 /** One thread: body, who wrote it, its audience, and an explicit resolve.
  * When `childrenOf`/`anchor` are supplied it renders nested replies and an
  * inline reply box (used for document comments). */
-export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = null, anchor = null, caseStaff = [] }) {
+export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = null, anchor = null, caseStaff = [], basePath = "/portal/immigration/cases" }) {
     const open = ! thread.resolved_at;
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(thread.body || "");
@@ -59,7 +62,7 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
     const saveEdit = () => {
         if (! draft.trim()) return toast.error("Comment can't be empty");
         setSaving(true);
-        router.patch(`/portal/immigration/cases/${leadId}/threads/${thread.id}`, { body: draft }, {
+        router.patch(`${basePath}/${leadId}/threads/${thread.id}`, { body: draft }, {
             preserveScroll: true,
             onSuccess: () => { toast.success("Comment updated"); setEditing(false); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not update"),
@@ -131,7 +134,7 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
                                         ? "Awaiting client answer"
                                         : `Awaiting answer${thread.addressed_to ? ` from ${thread.addressed_to.name}` : ""}`}
                                     {" · "}
-                                    <button type="button" onClick={() => resolveThread(leadId, thread.id)} className="text-gray-400 hover:text-emerald-600 underline underline-offset-2">
+                                    <button type="button" onClick={() => resolveThread(leadId, thread.id, basePath)} className="text-gray-400 hover:text-emerald-600 underline underline-offset-2">
                                         mark answered
                                     </button>
                                 </>
@@ -159,6 +162,7 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
                     anchor={anchor}
                     parentId={thread.id}
                     clientVisible={thread.client_visible}
+                    basePath={basePath}
                     onDone={() => setReplyOpen(false)}
                 />
             )}
@@ -173,6 +177,7 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
                             anchor={anchor}
                             caseStaff={caseStaff}
                             childrenOf={childrenOf}
+                            basePath={basePath}
                         />
                     ))}
                 </div>
@@ -182,14 +187,14 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
 }
 
 /** A compact inline reply box, posting a child comment on the same anchor. */
-function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone }) {
+function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone, basePath = "/portal/immigration/cases" }) {
     const [body, setBody] = useState("");
     const [posting, setPosting] = useState(false);
 
     const submit = () => {
         if (! body.trim()) return toast.error("Write a reply first");
         setPosting(true);
-        router.post(`/portal/immigration/cases/${leadId}/threads`, {
+        router.post(`${basePath}/${leadId}/threads`, {
             ...anchor,
             parent_id: parentId,
             body,
@@ -229,7 +234,7 @@ function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone }) {
  * general anchor picker (Case / Gate / Stage) for the Notes tab. `stages` is an
  * optional list for the Stage picker.
  */
-export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, stages = [], compact = false, plain = false, placeholder = "Ask a question…" }) {
+export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, stages = [], compact = false, plain = false, placeholder = "Ask a question…", basePath = "/portal/immigration/cases" }) {
     const [open, setOpen] = useState(! compact);
     const [body, setBody] = useState("");
     const [addressedTo, setAddressedTo] = useState("");
@@ -249,7 +254,7 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
             return toast.error(anchorType === "gate" ? "Name the gate (e.g. 06)" : "Name the stage");
         }
         setPosting(true);
-        router.post(`/portal/immigration/cases/${leadId}/threads`, {
+        router.post(`${basePath}/${leadId}/threads`, {
             ...anchor,
             body,
             addressed_to_id: addressedTo || null,

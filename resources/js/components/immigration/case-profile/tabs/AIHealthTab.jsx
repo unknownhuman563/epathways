@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
+import { caseNav } from "@/lib/caseNav";
 import {
     Sparkles, RefreshCw, ShieldAlert, AlertTriangle, Info, X, Check,
     ArrowRight, EyeOff, HelpCircle, ChevronRight, ChevronDown, Layers,
@@ -42,7 +43,8 @@ const worstSeverity = (items) =>
 // A finding's one-click action — deep-links to the surface where staff resolve
 // it. Unknown keys just get no action button (still dismissable).
 function actionFor(f, leadId) {
-    const base = `/portal/immigration/cases/${leadId}/profile`;
+    const nav = caseNav();
+    const base = nav.profile(leadId);
     const k = f.finding_key || "";
     if (k.startsWith("checklist_missing") || k.startsWith("doc_rejected") || k.startsWith("doc_request_unanswered")) {
         return { label: "Open documents", href: `${base}?tab=documents` };
@@ -51,7 +53,7 @@ function actionFor(f, leadId) {
     if (k.startsWith("thread_unanswered")) return { label: "Open notes", href: `${base}?tab=notes` };
     if (k === "passport_expiring") return { label: "Open profile", href: `${base}?tab=personal` };
     if (k === "no_contact") return { label: "Open messages", href: `${base}?tab=communications` };
-    if (k === "engagement_no_invoice") return { label: "Go to invoicing", href: "/portal/immigration/cases/invoice" };
+    if (k === "engagement_no_invoice") return { label: "Go to invoicing", href: nav.invoice };
     return null;
 }
 

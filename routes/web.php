@@ -752,6 +752,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])
             ->name('admin.leads.registration');
 
+        // Bulk actions from the Leads-table toolbar (Set/edit agent, Delete).
+        // The admin Leads page reuses the sales component with portalBase=/admin,
+        // so it posts here. Declared BEFORE /admin/leads/{id} so the literal
+        // "bulk-*" segments aren't captured as an {id}.
+        Route::post('/admin/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('admin.leads.bulk-agent');
+        Route::post('/admin/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('admin.leads.bulk-delete');
+
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
         // Archive (soft-delete) a lead / case — used by the Cases + Leads row menus.
@@ -797,6 +804,16 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('admin.leads.visa');
         Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
         Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
+
+        // Per-document discussion threads on the lead-profile Documents tab —
+        // mirrors the immigration Case Profile threads (shared CaseThread model).
+        Route::post('/admin/leads/{id}/threads', [LeadController::class, 'storeDocThread'])->name('admin.leads.threads.store');
+        Route::post('/admin/leads/{id}/threads/{thread}/resolve', [LeadController::class, 'resolveDocThread'])->name('admin.leads.threads.resolve');
+        Route::patch('/admin/leads/{id}/threads/{thread}', [LeadController::class, 'updateDocThread'])->name('admin.leads.threads.update');
+
+        // Inline edit of the proposed-program shortlist from the Lead Stats
+        // "Programs offered" card (no proposal-version churn).
+        Route::post('/admin/leads/{id}/shortlist', [LeadController::class, 'updateProposedShortlist'])->name('admin.leads.shortlist');
 
         // Internal notes — any staff role can add, only author or admin can edit/delete.
         Route::get('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'index'])
