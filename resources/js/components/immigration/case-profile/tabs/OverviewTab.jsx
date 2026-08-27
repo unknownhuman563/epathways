@@ -48,14 +48,23 @@ export default function OverviewTab(props) {
     const depDone = dependents.reduce((s, d) => s + (d.progress?.required_done ?? 0), 0);
     const depTotal = dependents.reduce((s, d) => s + (d.progress?.required_total ?? 0), 0);
 
+    // INZ lodgement / decision are driven by the immigration STAGE (Visa Lodged
+    // and beyond), with the INZ status field kept as a secondary signal so either
+    // lights the milestone.
+    const stage = lead.immigration_stage || "";
+    const LODGED_STAGES = new Set(["Visa Lodged", "Interim Visa Issued", "Request for Information", "RFI Responded", "Approved in Principle", "Approved Visa", "Decline Visa"]);
+    const DECISION_STAGES = new Set(["Approved Visa", "Decline Visa", "Withdrawn"]);
+    const lodged = LODGED_STAGES.has(stage) || /lodg|decision|approv|declin/i.test(lead.inz_status || "");
+    const decided = DECISION_STAGES.has(stage) || /approv|declin/i.test(lead.inz_status || "");
+
     // Pipeline stepper — each stage's state derived from case milestones.
     const steps = [
         { key: "assessment", label: "Assessment", done: !!lead.immigration_converted_at, sub: lead.immigration_converted_at ? `converted ${fmtShort(lead.immigration_converted_at)}` : "not converted" },
         { key: "engagement", label: "Engagement", done: !!engagement.sent, sub: engagement.signed ? `signed ${fmtShort(engagement.signed_at)}` : engagement.sent ? `sent ${fmtShort(engagement.sent_at)}` : "not sent" },
         { key: "invoice", label: "Invoice", done: !!engagement.invoice_paid, sub: engagement.invoice_paid ? `paid ${fmtShort(engagement.invoice_paid_at)}` : engagement.sent ? "sent · awaiting payment" : "not sent" },
         { key: "documents", label: "Documents", done: reqTotal > 0 && reqApproved >= reqTotal, sub: `${reqApproved} of ${reqTotal} approved` },
-        { key: "lodgement", label: "INZ lodgement", done: /lodg|decision|approv|declin/i.test(lead.inz_status || ""), sub: lead.inz_status && /lodg|decision|approv|declin/i.test(lead.inz_status) ? lead.inz_status : "not started" },
-        { key: "decision", label: "Decision", done: /approv|declin/i.test(lead.inz_status || ""), sub: /approv|declin/i.test(lead.inz_status || "") ? lead.inz_status : "—" },
+        { key: "lodgement", label: "INZ lodgement", done: lodged, sub: lodged ? (lead.inz_status || stage || "lodged") : "not started" },
+        { key: "decision", label: "Decision", done: decided, sub: decided ? (lead.inz_status || stage) : "—" },
     ];
     // Colour rule: completed stages are teal; every incomplete stage up to and
     // including the one just past the furthest completed milestone (the current
