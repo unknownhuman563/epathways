@@ -37,6 +37,9 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
         residence_country: lead.residence_country || "",
         passport_number:   lead.passport_number || "",
         passport_expiry:   lead.passport_expiry || "",
+        inz_client_number:      lead.inz_client_number || "",
+        inz_application_number: lead.inz_application_number || "",
+        inz_medical_ref:        lead.inz_medical_ref || "",
     });
 
     const submit = (e) => {
@@ -153,8 +156,14 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
                         <F label="Country of residence">
                             <input type="text" value={data.residence_country} onChange={(e) => setData("residence_country", e.target.value)} className={IC} maxLength={120} />
                         </F>
-                        <F label="NZ immigration ID" badge={!lead.nz_immigration_id ? { text: "Required", tone: "req" } : null}>
-                            <input type="text" value={lead.nz_immigration_id || ""} readOnly className={ICLocked} placeholder="Not supplied" />
+                        <F label="INZ application number" badge={!data.inz_application_number ? { text: "Required", tone: "req" } : null}>
+                            <input type="text" value={data.inz_application_number} onChange={(e) => setData("inz_application_number", e.target.value)} className={IC} maxLength={60} placeholder="Not supplied" />
+                        </F>
+                        <F label="INZ client number" badge={!data.inz_client_number ? { text: "Required", tone: "req" } : null}>
+                            <input type="text" value={data.inz_client_number} onChange={(e) => setData("inz_client_number", e.target.value)} className={IC} maxLength={60} placeholder="Not supplied" />
+                        </F>
+                        <F label="Medical reference number">
+                            <input type="text" value={data.inz_medical_ref} onChange={(e) => setData("inz_medical_ref", e.target.value)} className={IC} maxLength={60} placeholder="Not supplied" />
                         </F>
                         <F label="Suffix">
                             <input type="text" value={data.suffix} onChange={(e) => setData("suffix", e.target.value)} className={IC} maxLength={20} placeholder="Jr., Sr., III…" />

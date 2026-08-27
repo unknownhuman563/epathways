@@ -207,6 +207,10 @@ class EngagementSigningController extends Controller
             'uploaded_by' => null,
         ]);
 
+        // Email automation — notify staff that a proof of payment is waiting to be
+        // verified (no-op unless a message is configured for this event).
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.proof.uploaded', $lead, []);
+
         return back()->with('success', 'Proof of payment uploaded — thank you. We will confirm receipt shortly.');
     }
 
@@ -300,6 +304,7 @@ class EngagementSigningController extends Controller
         // never blocks the signature from being saved.
         if ($firstSigning) {
             \App\Jobs\SendLeadFollowupEmail::sendKey('agreement_signed', $lead);
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.signed', $lead, []);
         }
 
         return back()->with('success', 'Thank you — your agreement has been signed.');

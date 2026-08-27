@@ -34,6 +34,11 @@ class AnalyzeLeadAssessment implements ShouldQueue
                 'ai_analysis_status' => 'completed',
             ]);
 
+            // Email automation — assessment result ready.
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.assessment.ready', $this->lead, [
+                'eligibility_score' => $analysis['overall_score'] ?? null,
+            ]);
+
             Log::info('AI analysis completed', [
                 'lead_id' => $this->lead->lead_id,
                 'overall_score' => $analysis['overall_score'] ?? null,

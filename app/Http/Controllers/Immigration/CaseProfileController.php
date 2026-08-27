@@ -1130,9 +1130,9 @@ class CaseProfileController extends Controller
         $data = $request->validate([
             'parent_id' => ['nullable', 'integer'],
             'anchor_type' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseThread::ANCHOR_TYPES)],
-            // document → an id on this case; step/gate/stage → a key.
-            'anchor_id' => ['nullable', 'integer', 'required_if:anchor_type,document'],
-            'anchor_key' => ['nullable', 'string', 'max:60', 'required_if:anchor_type,step', 'required_if:anchor_type,gate', 'required_if:anchor_type,stage'],
+            // document / reviewer_note → an id on this case; step/gate/stage/checklist → a key.
+            'anchor_id' => ['nullable', 'integer', 'required_if:anchor_type,document', 'required_if:anchor_type,reviewer_note'],
+            'anchor_key' => ['nullable', 'string', 'max:60', 'required_if:anchor_type,step', 'required_if:anchor_type,gate', 'required_if:anchor_type,stage', 'required_if:anchor_type,checklist'],
             'anchor_attempt' => ['nullable', 'integer', 'min:1'],
             'body' => ['required', 'string', 'max:2000'],
             'addressed_to_id' => ['nullable', 'integer', 'exists:users,id'],
@@ -1151,9 +1151,9 @@ class CaseProfileController extends Controller
             $data['anchor_attempt'] = $parent->anchor_attempt;
         }
 
-        // A document anchor must reference a document that belongs to this case —
-        // row-level, not just "some document id" (§13).
-        if ($data['anchor_type'] === \App\Models\CaseThread::ANCHOR_DOCUMENT) {
+        // A document (or reviewer-note) anchor must reference a document that
+        // belongs to this case — row-level, not just "some document id" (§13).
+        if (in_array($data['anchor_type'], [\App\Models\CaseThread::ANCHOR_DOCUMENT, \App\Models\CaseThread::ANCHOR_REVIEWER_NOTE], true)) {
             abort_unless(
                 LeadDocument::where('id', $data['anchor_id'])->where('lead_id', $lead->id)->exists(),
                 422,
@@ -1165,8 +1165,8 @@ class CaseProfileController extends Controller
             'lead_id' => $lead->id,
             'parent_id' => $parent?->id,
             'anchor_type' => $data['anchor_type'],
-            'anchor_id' => $data['anchor_type'] === \App\Models\CaseThread::ANCHOR_DOCUMENT ? $data['anchor_id'] : null,
-            'anchor_key' => in_array($data['anchor_type'], ['step', 'gate', 'stage'], true) ? ($data['anchor_key'] ?? null) : null,
+            'anchor_id' => in_array($data['anchor_type'], [\App\Models\CaseThread::ANCHOR_DOCUMENT, \App\Models\CaseThread::ANCHOR_REVIEWER_NOTE], true) ? $data['anchor_id'] : null,
+            'anchor_key' => in_array($data['anchor_type'], ['step', 'gate', 'stage', 'checklist'], true) ? ($data['anchor_key'] ?? null) : null,
             'anchor_attempt' => $data['anchor_type'] === \App\Models\CaseThread::ANCHOR_STEP ? ($data['anchor_attempt'] ?? null) : null,
             'author_id' => $user->id,
             'addressed_to_id' => $data['addressed_to_id'] ?? null,
@@ -1399,6 +1399,9 @@ class CaseProfileController extends Controller
             'residence_country' => 'nullable|string|max:120',
             'passport_number' => 'nullable|string|max:60',
             'passport_expiry' => 'nullable|date',
+            'inz_client_number' => 'nullable|string|max:60',
+            'inz_application_number' => 'nullable|string|max:60',
+            'inz_medical_ref' => 'nullable|string|max:60',
         ]);
 
         $lead->update($validated);
@@ -1624,6 +1627,9 @@ class CaseProfileController extends Controller
             'immigration_stage' => $lead->immigration_stage,
             'inz_visa_type' => $lead->inz_visa_type,
             'inz_reference' => $lead->inz_reference,
+            'inz_client_number' => $lead->inz_client_number,
+            'inz_application_number' => $lead->inz_application_number,
+            'inz_medical_ref' => $lead->inz_medical_ref,
             'inz_status' => $lead->inz_status,
             'inz_lodged_at' => $lead->inz_lodged_at,
             'inz_decision_at' => $lead->inz_decision_at,

@@ -151,9 +151,18 @@ class LeadDocumentController extends Controller
                     'requested_at' => now(),
                 ]);
 
-                // Email/SMS the lead a link to upload it. Prefer the
-                // 'doc_request' template; fall back to the legacy Mailable.
-                if (! empty($lead->email)) {
+                // The email-automation "Document requested" message is the single
+                // editable template for this — fire it per document so it can name
+                // the specific one ({{document_name}}). Returns true when it sent
+                // to the client, in which case we DON'T also send the built-in
+                // email below (no double-send).
+                $firedClient = app(\App\Services\EmailAutomationService::class)
+                    ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+
+                // Fallback: no client automation message is configured, so send
+                // the built-in request email. Prefer the 'doc_request' template;
+                // fall back to the legacy Mailable.
+                if (! $firedClient && ! empty($lead->email)) {
                     try {
                         $res = app(\App\Services\CommunicationService::class)
                             ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
@@ -276,6 +285,9 @@ class LeadDocumentController extends Controller
                 Auth::id(),
             );
 
+            // Email automation — payment verified (no-op unless configured).
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.invoice.paid', $doc->lead, []);
+
             // Mark the specific invoice this proof settles as paid, so only that
             // invoice row flips to "Paid" (not every invoice on the case). The
             // invoice's reviewed_at doubles as the paid date shown on the badge.
@@ -300,10 +312,23 @@ class LeadDocumentController extends Controller
         $lead?->recordStaffActivity(
             $validated['status'].' '.($doc->original_name ?: 'file')
         );
+
+        // Email automation — document approved / needs attention (a proof of
+        // payment is handled by immigration.invoice.paid above, so exclude it).
+        if ($lead && $doc->source_variant !== 'proof_of_payment') {
+            if ($validated['status'] === LeadDocument::STATUS_APPROVED) {
+                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.approved', $lead, ['document_name' => $doc->original_name]);
+            } elseif ($validated['status'] === LeadDocument::STATUS_REJECTED) {
+                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.rejected', $lead, ['document_name' => $doc->original_name, 'reason' => $validated['note'] ?? '']);
+            }
+        }
         if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
-                $key = $validated['status'] === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'doc_rejected';
+                // Needs-attention → the "please re-upload" template (asks the
+                // client to log in to their portal and submit again); approval
+                // keeps the doc_approved template.
+                $key = $validated['status'] === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'document_reupload';
                 $res = app(\App\Services\CommunicationService::class)->sendTemplated($key, $lead, [
                     'document_name' => $doc->original_name,
                     'reason' => $validated['note'] ?? '',
@@ -345,6 +370,27 @@ class LeadDocumentController extends Controller
         ]);
 
         return back()->with('success', 'File shared with the lead.');
+    }
+
+    /**
+     * Send an existing case document to the client — flips it to StaffShared so
+     * it surfaces on the client's portal + /track. Used from the Documents tab's
+     * "Send to client" action for staff-created / generated documents.
+     */
+    public function sendToClient(Request $request, $leadId, $docId)
+    {
+        $doc = LeadDocument::where('lead_id', $leadId)->findOrFail($docId);
+        abort_unless($doc->file_path, 422, 'This document has no file to send.');
+
+        $doc->update([
+            'status' => LeadDocument::STATUS_STAFF_SHARED,
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+        ]);
+
+        $doc->lead?->recordStaffActivity('Sent to client: '.($doc->original_name ?: 'document'));
+
+        return back()->with('success', 'Document sent to the client.');
     }
 
     /**
@@ -710,10 +756,11 @@ class LeadDocumentController extends Controller
             }
 
             // Generating the written agreement moves the case forward to
-            // "For Agreement & Invoice" — but only from an early stage, so it
-            // never downgrades an advanced or already-signed case.
+            // "Agreement Sent" — but only from an early stage, so it never
+            // downgrades an advanced or already-signed case. Signing then moves
+            // it on to "Agreement Signed".
             if (in_array('written_agreement', $typesToGenerate, true)) {
-                if ($lead->advanceImmigrationStage('For Agreement & Invoice', ['For Assessment', 'Endorsed', 'Agreement Sent'], auth()->id())) {
+                if ($lead->advanceImmigrationStage('Agreement Sent', ['For Assessment', 'Endorsed'], auth()->id())) {
                     \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
                 }
             }
@@ -735,7 +782,19 @@ class LeadDocumentController extends Controller
                     $message .= ' Email not sent — no email on file.';
                 } else {
                     $token = $lead->ensureEngagementSigningToken();
-                    $this->notifyEngagement($lead, $token, $typesToGenerate, $generatedDocIds);
+                    $signUrl = rtrim((string) config('app.url'), '/').'/engagement/'.$token;
+
+                    // The "Engagement sent" automation message is the single source
+                    // for this email — fire it with the signing link so the template
+                    // can include {{engagement_url}}. Only when no client automation
+                    // message is configured do we send the built-in email instead
+                    // (so the client never gets two).
+                    $firedClient = app(\App\Services\EmailAutomationService::class)
+                        ->fire('immigration.engagement.sent', $lead, ['engagement_url' => $signUrl]);
+                    if (! $firedClient) {
+                        $this->notifyEngagement($lead, $token, $typesToGenerate, $generatedDocIds);
+                    }
+
                     $lead->forceFill(['engagement_sent_at' => now()])->save();
                     $message .= " Client notified at {$lead->email}.";
                 }
@@ -930,6 +989,7 @@ class LeadDocumentController extends Controller
         $token = $lead->ensureEngagementSigningToken();
         $this->notifyEngagement($lead, $token, array_keys($typeMap), $typeMap);
         $lead->forceFill(['engagement_sent_at' => now()])->save();
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.sent', $lead, []);
 
         return back()->with('success', "Engagement sent to {$lead->email}.");
     }

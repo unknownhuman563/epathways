@@ -200,6 +200,14 @@ class Lead extends Model
         $this->pushStageHistory('immigration', $to, $this->immigration_assignee);
         $this->save();
 
+        // Email automation — fire the per-stage event so any configured
+        // messages go out (no-op unless an admin enabled one).
+        app(\App\Services\EmailAutomationService::class)->fire(
+            'immigration.stage.'.\Illuminate\Support\Str::slug($to, '_'),
+            $this,
+            ['stage' => $to],
+        );
+
         return true;
     }
 
@@ -284,6 +292,7 @@ class Lead extends Model
         'last_seen_at',
         // INZ lodgement tracking
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
+        'inz_client_number', 'inz_application_number', 'inz_medical_ref',
         // IAA / Privacy Act gating
         'services_agreement_signed_at',
         // Lead-portal acknowledgment of Consultancy + English Engagement

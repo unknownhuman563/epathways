@@ -37,6 +37,7 @@ export default function ImmigrationLayout({ children }) {
                 { name: "List of Cases", href: "/portal/immigration/cases",            icon: <Globe size={16} /> },
                 { name: "Engagement",    href: "/portal/immigration/cases/engagement", icon: <FileSignature size={16} /> },
                 { name: "Invoice",       href: "/portal/immigration/cases/invoice",    icon: <ReceiptText size={16} /> },
+                { name: "Client Documents", href: "/portal/immigration/client-documents", icon: <FileText size={16} /> },
                 { name: "INZ Forms",     href: "/portal/immigration/cases/inz-forms",  icon: <FileText size={16} /> },
             ],
         },

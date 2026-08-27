@@ -58,3 +58,12 @@ Schedule::command('immigration:evaluate-findings')
     ->timezone('Pacific/Auckland')
     ->name('immigration-evaluate-findings')
     ->withoutOverlapping();
+
+// Time-based email automations (cold leads, expired packs, overdue invoices).
+// Mid-morning NZ so any client emails land during the working day; the one-day
+// windows in the command dedupe so each case fires once.
+Schedule::command('email:automation-sweep')
+    ->dailyAt('09:30')
+    ->timezone('Pacific/Auckland')
+    ->name('email-automation-sweep')
+    ->withoutOverlapping();

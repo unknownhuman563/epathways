@@ -48,14 +48,28 @@ export default function OverviewTab(props) {
     const depDone = dependents.reduce((s, d) => s + (d.progress?.required_done ?? 0), 0);
     const depTotal = dependents.reduce((s, d) => s + (d.progress?.required_total ?? 0), 0);
 
+    // INZ lodgement / decision are driven by the immigration STAGE (Visa Lodged
+    // and beyond), with the INZ status field kept as a secondary signal so either
+    // lights the milestone.
+    const stage = lead.immigration_stage || "";
+    const LODGED_STAGES = new Set(["Visa Lodged", "Interim Visa Issued", "Request for Information", "RFI Responded", "Approved in Principle", "Approved Visa", "Decline Visa"]);
+    const DECISION_STAGES = new Set(["Approved Visa", "Decline Visa", "Withdrawn"]);
+    const lodged = LODGED_STAGES.has(stage) || /lodg|decision|approv|declin/i.test(lead.inz_status || "");
+    const decided = DECISION_STAGES.has(stage) || /approv|declin/i.test(lead.inz_status || "");
+    // Negative outcomes recolour the outcome bars: declined = red, withdrawn =
+    // orange (an approval stays teal).
+    const declined = stage === "Decline Visa" || /declin/i.test(lead.inz_status || "");
+    const withdrawn = stage === "Withdrawn" || /withdraw/i.test(lead.inz_status || "");
+    const outcomeTone = declined ? "danger" : withdrawn ? "warn" : null;
+
     // Pipeline stepper — each stage's state derived from case milestones.
     const steps = [
         { key: "assessment", label: "Assessment", done: !!lead.immigration_converted_at, sub: lead.immigration_converted_at ? `converted ${fmtShort(lead.immigration_converted_at)}` : "not converted" },
         { key: "engagement", label: "Engagement", done: !!engagement.sent, sub: engagement.signed ? `signed ${fmtShort(engagement.signed_at)}` : engagement.sent ? `sent ${fmtShort(engagement.sent_at)}` : "not sent" },
         { key: "invoice", label: "Invoice", done: !!engagement.invoice_paid, sub: engagement.invoice_paid ? `paid ${fmtShort(engagement.invoice_paid_at)}` : engagement.sent ? "sent · awaiting payment" : "not sent" },
         { key: "documents", label: "Documents", done: reqTotal > 0 && reqApproved >= reqTotal, sub: `${reqApproved} of ${reqTotal} approved` },
-        { key: "lodgement", label: "INZ lodgement", done: /lodg|decision|approv|declin/i.test(lead.inz_status || ""), sub: lead.inz_status && /lodg|decision|approv|declin/i.test(lead.inz_status) ? lead.inz_status : "not started" },
-        { key: "decision", label: "Decision", done: /approv|declin/i.test(lead.inz_status || ""), sub: /approv|declin/i.test(lead.inz_status || "") ? lead.inz_status : "—" },
+        { key: "lodgement", label: "INZ lodgement", done: lodged, tone: outcomeTone, sub: lodged ? (lead.inz_status || stage || "lodged") : "not started" },
+        { key: "decision", label: "Decision", done: decided, tone: outcomeTone, sub: decided ? (lead.inz_status || stage) : "—" },
     ];
     // Colour rule: completed stages are teal; every incomplete stage up to and
     // including the one just past the furthest completed milestone (the current
@@ -89,11 +103,21 @@ export default function OverviewTab(props) {
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}>
                         {steps.map((s, i) => {
                             const state = s.done ? "done" : i <= stepFrontier ? "current" : "todo";
+                            // A completed outcome bar recolours by result: declined = red,
+                            // withdrawn = orange, otherwise the usual teal.
+                            const barClass = state === "done"
+                                ? (s.tone === "danger" ? "bg-red-600" : s.tone === "warn" ? "bg-orange-500" : "bg-teal-600")
+                                : state === "current" ? "bg-amber-500" : "bg-gray-200";
+                            const subClass = state === "done" && s.tone === "danger"
+                                ? "text-red-600"
+                                : state === "done" && s.tone === "warn"
+                                    ? "text-orange-600"
+                                    : state === "current" ? "text-amber-600" : "text-gray-400";
                             return (
                                 <div key={s.key}>
-                                    <div className={`h-1.5 rounded-full ${state === "done" ? "bg-teal-600" : state === "current" ? "bg-amber-500" : "bg-gray-200"}`} />
+                                    <div className={`h-1.5 rounded-full ${barClass}`} />
                                     <p className="text-[12.5px] font-semibold text-gray-900 mt-2">{s.label}</p>
-                                    <p className={`text-[11px] mt-0.5 ${state === "current" ? "text-amber-600" : "text-gray-400"}`}>{s.sub}</p>
+                                    <p className={`text-[11px] mt-0.5 ${subClass}`}>{s.sub}</p>
                                 </div>
                             );
                         })}
@@ -347,7 +371,7 @@ function InternalNotes({ leadId, notes = [], onSeeAll }) {
         router.post(`/admin/leads/${leadId}/notes`, { body: body || "(attachment)", pinned, kind, files }, {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => { setBody(""); setPinned(false); setKind("general"); setFiles([]); toast.success("Note added"); },
+            onSuccess: () => { setBody(""); setPinned(false); setKind("general"); setFiles([]); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not add note"),
             onFinish: () => setPosting(false),
         });
@@ -429,7 +453,7 @@ function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
         setBusyId(t.id);
         router.patch(`/api/tasks/${t.id}`, { status: t.completed ? "not_started" : "completed" }, {
             preserveScroll: true,
-            onSuccess: () => toast.success(t.completed ? "Task reopened" : "Task completed"),
+            onSuccess: () => {},   // flash message handles the toast
             onError: (e) => toast.error(Object.values(e)[0] || "Could not update task"),
             onFinish: () => setBusyId(null),
         });
@@ -542,7 +566,7 @@ function QuickAddTask({ leadId, caseStaff = [], onClose }) {
             department: "immigration",
         }, {
             preserveScroll: true,
-            onSuccess: () => { toast.success("Task added"); onClose(); },
+            onSuccess: () => { onClose(); },   // flash message handles the toast
             onError: (e) => toast.error(Object.values(e)[0] || "Could not add task"),
             onFinish: () => setSaving(false),
         });

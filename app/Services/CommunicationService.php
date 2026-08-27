@@ -399,6 +399,11 @@ class CommunicationService
             'stage' => $lead->stage ?? ($lead->status ?? ''),
             'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
             'client_portal_url' => $this->clientPortalUrl($lead),
+            // Portal sign-in link + username (their email) — for templates that
+            // ask the client to log in and act (e.g. re-upload a document).
+            'portal_login_url' => rtrim((string) config('app.url'), '/').'/login',
+            'portal_username' => $lead->email ?? '',
+            'has_portal_account' => $lead->portalUser()->exists() ? 'yes' : 'no',
             'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
         ], $eventCtx, $extra);
     }
