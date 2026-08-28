@@ -49,18 +49,27 @@ class TemplatedMessage extends Mailable implements ShouldQueue
         // A visual-builder email is already a complete document — render it as-is
         // (no branded shell) so its own layout/banner isn't double-wrapped.
         public bool $rawHtml = false,
+        // Optional per-template Reply-To (name + email). When set it wins over
+        // the central config fallback; replies then land in this inbox.
+        public ?string $replyToEmail = null,
+        public ?string $replyToName = null,
     ) {}
 
     public function envelope(): Envelope
     {
-        // Optional per-template sender (e.g. the event template sends from
-        // hello@epathways.ph); falls back to the app default MAIL_FROM. A
-        // central Reply-To (config) routes replies to a monitored inbox.
-        $replyTo = config('services.contact.reply_to');
+        // Reply-To precedence: the template's own address first, then the
+        // central config inbox (services.contact.reply_to) as a fallback.
+        // Null on both = replies go to the From address.
+        $replyTo = [];
+        if ($this->replyToEmail) {
+            $replyTo = [new Address($this->replyToEmail, $this->replyToName ?: null)];
+        } elseif ($central = config('services.contact.reply_to')) {
+            $replyTo = [new Address($central)];
+        }
 
         return new Envelope(
             from: $this->fromEmail ? new Address($this->fromEmail, $this->fromName ?: null) : null,
-            replyTo: $replyTo ? [new Address($replyTo)] : [],
+            replyTo: $replyTo,
             cc: $this->addressList($this->ccList),
             bcc: $this->addressList($this->bccList),
             subject: $this->subjectLine,

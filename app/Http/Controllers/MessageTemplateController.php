@@ -156,6 +156,8 @@ class MessageTemplateController extends Controller
             'design_json' => $source->design_json,
             'from_email' => $source->from_email,
             'from_name' => $source->from_name,
+            'reply_to_email' => $source->reply_to_email,
+            'reply_to_name' => $source->reply_to_name,
             'branding' => $source->branding,
             'to_extra' => $source->to_extra,
             'cc' => $source->cc,
@@ -406,6 +408,8 @@ class MessageTemplateController extends Controller
                     'design_json' => $t->design_json,
                     'from_email' => $t->from_email,
                     'from_name' => $t->from_name,
+                    'reply_to_email' => $t->reply_to_email,
+                    'reply_to_name' => $t->reply_to_name,
                     'branding' => $t->branding,
                     'to_extra' => $t->to_extra,
                     'cc' => $t->cc,
@@ -695,6 +699,10 @@ class MessageTemplateController extends Controller
             // mail provider). Null = the app default MAIL_FROM.
             'from_email' => ['nullable', 'email', 'max:255'],
             'from_name' => ['nullable', 'string', 'max:120'],
+            // Optional per-template Reply-To — where client replies land. Wins
+            // over the central config inbox. Null = fall back to that inbox.
+            'reply_to_email' => ['nullable', 'email', 'max:255'],
+            'reply_to_name' => ['nullable', 'string', 'max:120'],
             // Per-portal banner/CTA preset (config/email_branding.php).
             'branding' => ['nullable', Rule::in(array_keys(config('email_branding', ['default' => []])))],
             // Comma-separated addresses copied on every send.
