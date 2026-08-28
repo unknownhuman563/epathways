@@ -4067,6 +4067,58 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
     const remaining = total - accepted;
     const pct = total > 0 ? Math.round((accepted / total) * 100) : 0;
 
+    // ─── "Download all" picker ────────────────────────────────────────────
+    // Flat list of every uploaded file (checklist items + orphan uploads),
+    // each carrying its LeadDocument id + a label, for the selection modal.
+    const uploadedDocs = React.useMemo(() => {
+        const out = [];
+        sections.forEach((s) => {
+            s.items.forEach((it) => {
+                (checklistFiles[it.id] || []).forEach((f) => {
+                    out.push({ id: f.id, name: f.original_name || 'Document', item: it.name, section: s.section });
+                });
+            });
+        });
+        (orphans || []).forEach((f) => {
+            out.push({ id: f.id, name: f.original_name || 'Document', item: null, section: 'Other uploads' });
+        });
+        return out;
+    }, [sections, checklistFiles, orphans]);
+
+    // Group the flat list by section for a tidy, scannable modal.
+    const groupedDownloads = React.useMemo(() => {
+        const map = new Map();
+        uploadedDocs.forEach((d) => {
+            if (! map.has(d.section)) map.set(d.section, []);
+            map.get(d.section).push(d);
+        });
+        return Array.from(map, ([section, docs]) => ({ section, docs }));
+    }, [uploadedDocs]);
+
+    const [downloadOpen, setDownloadOpen] = useState(false);
+    const [selectedDocIds, setSelectedDocIds] = useState(() => new Set());
+    // Opening pre-selects everything — the common case is "download all".
+    const openDownloadPicker = () => {
+        setSelectedDocIds(new Set(uploadedDocs.map((d) => d.id)));
+        setDownloadOpen(true);
+    };
+    const toggleDoc = (id) => setSelectedDocIds((prev) => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+    });
+    const allDownloadsSelected = uploadedDocs.length > 0 && selectedDocIds.size === uploadedDocs.length;
+    const toggleAllDownloads = () =>
+        setSelectedDocIds(allDownloadsSelected ? new Set() : new Set(uploadedDocs.map((d) => d.id)));
+    const downloadSelected = () => {
+        if (selectedDocIds.size === 0) return;
+        const ids = uploadedDocs.filter((d) => selectedDocIds.has(d.id)).map((d) => d.id);
+        // The endpoint streams a ZIP as an attachment, so navigating triggers a
+        // download without leaving the page.
+        window.location.href = `/admin/leads/${lead.id}/documents/download-all?ids=${ids.join(',')}`;
+        setDownloadOpen(false);
+    };
+
     return (
         <div className="space-y-4">
             {/* Progress header */}
@@ -4120,13 +4172,30 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
             {/* Add a per-lead ad-hoc document — a row that only this lead has. */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[12px] text-gray-500">Need something not on the list? Add a document for this lead only.</p>
-                <button
-                    type="button"
-                    onClick={openAddDocument}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black transition-colors"
-                >
-                    <Plus size={14} /> Add document
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* Open a picker to choose which uploaded documents to bundle
+                        into a ZIP. Disabled until at least one file exists. */}
+                    <button
+                        type="button"
+                        onClick={openDownloadPicker}
+                        disabled={uploadedDocs.length === 0}
+                        title={uploadedDocs.length === 0 ? 'No uploaded documents to download yet' : 'Choose documents to download'}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[12px] font-semibold transition-colors ${
+                            uploadedDocs.length === 0
+                                ? 'border-gray-200 bg-white text-gray-400 cursor-not-allowed'
+                                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                        }`}
+                    >
+                        <Download size={14} /> Download all
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openAddDocument}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black transition-colors"
+                    >
+                        <Plus size={14} /> Add document
+                    </button>
+                </div>
             </div>
 
             {/* Add-document modal — a per-lead ad-hoc requirement. */}
@@ -4196,6 +4265,82 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+            {/* Download picker — tick which uploaded documents to bundle into a
+                ZIP, with a Select-all toggle for the quick "download everything". */}
+            {downloadOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                    onMouseDown={(e) => { if (e.target === e.currentTarget) setDownloadOpen(false); }}
+                >
+                    <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[85vh]">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2.5 bg-gray-50/40">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                                <Download size={16} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900">Download documents</h3>
+                                <p className="text-[11px] text-gray-500 mt-0.5">Tick the files to include, then download them as a ZIP.</p>
+                            </div>
+                            <button type="button" onClick={() => setDownloadOpen(false)} className="ml-auto w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Select-all toggle + running count */}
+                        <div className="px-6 py-2.5 border-b border-gray-100 flex items-center justify-between bg-white">
+                            <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-gray-700 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={allDownloadsSelected}
+                                    onChange={toggleAllDownloads}
+                                    className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                Select all
+                            </label>
+                            <span className="text-[11px] text-gray-500 tabular-nums">{selectedDocIds.size} of {uploadedDocs.length} selected</span>
+                        </div>
+
+                        {/* Grouped list of every uploaded file */}
+                        <div className="flex-1 overflow-y-auto px-2 py-2">
+                            {groupedDownloads.map((g) => (
+                                <div key={g.section} className="mb-1.5">
+                                    <p className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{g.section}</p>
+                                    {g.docs.map((d) => (
+                                        <label key={d.id} className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedDocIds.has(d.id)}
+                                                onChange={() => toggleDoc(d.id)}
+                                                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 shrink-0"
+                                            />
+                                            <FileText size={14} className="text-gray-400 shrink-0" />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[13px] font-medium text-gray-800 truncate" title={d.name}>{d.name}</p>
+                                                {d.item && <p className="text-[11px] text-gray-400 truncate">{d.item}</p>}
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50/40">
+                            <button type="button" onClick={() => setDownloadOpen(false)} className="px-4 py-2 rounded-lg text-[12px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={downloadSelected}
+                                disabled={selectedDocIds.size === 0}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black transition-colors disabled:opacity-50"
+                            >
+                                <Download size={14} /> Download{selectedDocIds.size > 0 ? ` (${selectedDocIds.size})` : ''}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

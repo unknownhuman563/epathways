@@ -2016,10 +2016,17 @@ class LeadDocumentController extends Controller
             return back()->withErrors(['error' => 'ZIP support is not available on the server.']);
         }
 
-        // A bulk download assembles the case file for lodgement, so it ships
-        // APPROVED documents only by default. `?status=all` (or ?all=1) bundles
-        // EVERY document on the case; `?status=Submitted` (etc.) narrows to
-        // another single state for the File history's filtered download.
+        // An explicit `ids` list (from the "Download all" picker) wins: bundle
+        // exactly those documents, still scoped to this lead's own records.
+        // Otherwise fall back to the status filtering: APPROVED only by default,
+        // `?status=all` (or ?all=1) for EVERY document, `?status=Submitted` (etc.)
+        // for another single state.
+        $ids = collect(explode(',', (string) $request->query('ids', '')))
+            ->map(fn ($n) => (int) trim($n))
+            ->filter()
+            ->values()
+            ->all();
+
         $statusParam = $request->query('status', LeadDocument::STATUS_APPROVED);
         $wantAll = $statusParam === 'all' || $request->boolean('all');
 
@@ -2034,15 +2041,18 @@ class LeadDocumentController extends Controller
         $status = in_array($statusParam, $allowed, true) ? $statusParam : LeadDocument::STATUS_APPROVED;
 
         $docs = $lead->documents()
-            ->when(! $wantAll, fn ($q) => $q->where('status', $status))
+            ->when(! empty($ids), fn ($q) => $q->whereIn('id', $ids))
+            ->when(empty($ids) && ! $wantAll, fn ($q) => $q->where('status', $status))
             ->orderBy('created_at')
             ->get();
 
         if ($docs->isEmpty()) {
             return back()->withErrors([
-                'error' => $wantAll
-                    ? 'This case has no documents to download.'
-                    : "This case has no {$status} documents to download.",
+                'error' => ! empty($ids)
+                    ? 'None of the selected documents could be found.'
+                    : ($wantAll
+                        ? 'This case has no documents to download.'
+                        : "This case has no {$status} documents to download."),
             ]);
         }
 
@@ -2082,7 +2092,7 @@ class LeadDocumentController extends Controller
 
         // Name the bundle after what's in it — an "approved" ZIP and a
         // "submitted" ZIP must not be mistaken for each other on disk.
-        $tag = Str::slug($status);
+        $tag = ! empty($ids) ? 'selected' : ($wantAll ? 'all' : Str::slug($status));
 
         return response()->download($tmp, "{$slug}-{$tag}-documents.zip", [
             'Content-Type' => 'application/zip',
