@@ -6,7 +6,7 @@ import {
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
     CheckSquare, Clock, Crown, LifeBuoy, Mail, MessageSquare, Smartphone,
-    Wallet, UserCheck, Wrench, Award, User, BadgeCheck, Send,
+    Wallet, UserCheck, Wrench, Award, User, BadgeCheck, Send, Boxes,
 } from "lucide-react";
 
 // Super-admin-only entry — only injected when the current user holds
@@ -26,6 +26,24 @@ const SUPER_ADMIN_MAINTENANCE_NAV = {
     href: "/admin/maintenance",
     icon: <Wrench size={20} />,
 };
+
+// Super-admin-only — grant per-user access to restricted modules.
+const SUPER_ADMIN_MODULE_NAV = {
+    name: "Module Management",
+    href: "/admin/module-management",
+    icon: <Boxes size={20} />,
+};
+
+// Drop nav items gated by a restricted module the user can't see. Items with
+// no `module` field are grandfathered and always shown; a group is removed if
+// gating empties its children. `modules` is the granted-key list from
+// auth.modules (super admins get every key).
+function gateNav(items, modules) {
+    return items
+        .filter((it) => ! it.module || modules.includes(it.module))
+        .map((it) => (it.children ? { ...it, children: gateNav(it.children, modules) } : it))
+        .filter((it) => ! it.children || it.children.length > 0);
+}
 
 const ADMIN_NAV = [
     { name: "Dashboard", href: "/admin/dashboard", icon: <Home size={20} /> },
@@ -48,6 +66,8 @@ const ADMIN_NAV = [
     { name: "Promotions", href: "/admin/promos", icon: <Tag size={20} /> },
     { name: "Facebook Live", href: "/admin/facebook-live", icon: <Video size={20} /> },
     { name: "Visa Approved", href: "/admin/visa-approvals", icon: <Award size={20} /> },
+    // Restricted module — hidden unless granted (default super-admin-only).
+    { name: "Agents", href: "/admin/agents", icon: <UserCheck size={20} />, module: "agents" },
     {
         name: "Social",
         icon: <Radio size={20} />,
@@ -108,11 +128,15 @@ const ADMIN_NAV = [
 export default function AdminLayout({ children }) {
     const { props } = usePage();
     const isSuperAdmin = props?.auth?.user?.role === "super_admin";
-    // Slip the Super Dashboard link in at the top for super-admins; the
-    // rest of the nav stays untouched for plain admins.
-    const nav = isSuperAdmin
-        ? [SUPER_ADMIN_NAV, ...ADMIN_NAV, SUPER_ADMIN_MAINTENANCE_NAV]
+    const modules = props?.auth?.modules || [];
+    // Slip the Super Dashboard link in at the top for super-admins; Module
+    // Management + Maintenance sit at the bottom with the system controls.
+    const baseNav = isSuperAdmin
+        ? [SUPER_ADMIN_NAV, ...ADMIN_NAV, SUPER_ADMIN_MODULE_NAV, SUPER_ADMIN_MAINTENANCE_NAV]
         : ADMIN_NAV;
+    // Hide any restricted-module items the user hasn't been granted. No-op for
+    // the current nav (nothing is gated yet) — ready for future modules.
+    const nav = gateNav(baseNav, modules);
 
     return (
         <DashboardLayout
