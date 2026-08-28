@@ -74,4 +74,26 @@ class AgentModuleTest extends TestCase
 
         $this->actingAs($super)->get("/admin/agents/{$notAgent->id}")->assertNotFound();
     }
+
+    public function test_agent_sees_and_downloads_their_own_agreement_in_the_portal(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+
+        // Staff generate it from the Agents module.
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", ['agent_passport' => 'AK1']);
+
+        // The agent views + downloads their own from the Agent portal.
+        $this->actingAs($agent)->get('/portal/agent/agreement')->assertOk();
+        $this->actingAs($agent)->get('/portal/agent/agreement/download')->assertOk();
+    }
+
+    public function test_agent_with_no_agreement_sees_page_but_download_404s(): void
+    {
+        $agent = User::factory()->create(['role' => 'agent']);
+
+        $this->actingAs($agent)->get('/portal/agent/agreement')->assertOk();
+        $this->actingAs($agent)->get('/portal/agent/agreement/download')->assertNotFound();
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgentAgreement;
 use App\Models\Lead;
 use App\Models\Program;
 use App\Traits\BuildsLeadRow;
@@ -10,6 +11,7 @@ use App\Traits\CreatesDashboardLead;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Recruiting Agent portal. An agent works alongside sales but only ever sees
@@ -56,10 +58,10 @@ class AgentController extends Controller
 
         return inertia('portal/agent/Dashboard', [
             'stats' => [
-                'total'      => $base()->count(),
-                'this_week'  => $base()->where('created_at', '>=', now()->startOfWeek())->count(),
+                'total' => $base()->count(),
+                'this_week' => $base()->where('created_at', '>=', now()->startOfWeek())->count(),
                 'this_month' => $base()->where('created_at', '>=', now()->startOfMonth())->count(),
-                'converted'  => $base()->where(fn ($q) => $q->where('status', 'Converted')->orWhere('is_student', true)->orWhere('is_immigration_case', true))->count(),
+                'converted' => $base()->where(fn ($q) => $q->where('status', 'Converted')->orWhere('is_student', true)->orWhere('is_immigration_case', true))->count(),
             ],
             'recent' => $recent->map(fn ($l) => $this->leadRow($l)),
             'referral' => [
@@ -87,6 +89,32 @@ class AgentController extends Controller
         ]);
     }
 
+    /** The agent's own Referral Agent Agreement — view + download only. Staff
+     *  generate it from the Agents module; the agent just sees the result. */
+    public function agreement()
+    {
+        $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->first();
+
+        return inertia('portal/agent/Agreement', [
+            'agreement' => $agreement ? [
+                'original_name' => $agreement->original_name,
+                'size' => $agreement->size,
+                'created_at' => optional($agreement->created_at)?->toIso8601String(),
+                'download_url' => '/portal/agent/agreement/download',
+            ] : null,
+        ]);
+    }
+
+    /** Stream the agent's own agreement PDF (scoped to Auth::id()). */
+    public function downloadAgreement()
+    {
+        $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->firstOrFail();
+
+        abort_unless(Storage::disk('local')->exists($agreement->file_path), 404);
+
+        return Storage::disk('local')->download($agreement->file_path, $agreement->original_name);
+    }
+
     /** The agent's own leads list (add + edit-info only). */
     public function leads()
     {
@@ -104,10 +132,10 @@ class AgentController extends Controller
                 ->get();
 
             return inertia('portal/agent/Leads', [
-                'portal'   => 'agent',
+                'portal' => 'agent',
                 'statuses' => self::LEAD_STATUSES,
                 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
-                'leads'    => $leads->map(fn ($l) => $this->leadRow($l)),
+                'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
             ]);
         } catch (\Throwable $e) {
             Log::error('Agent leads list failed', ['error' => $e->getMessage()]);
@@ -142,19 +170,19 @@ class AgentController extends Controller
         $lead = Lead::where('id', $id)->where('agent_id', Auth::id())->firstOrFail();
 
         $validated = $request->validate([
-            'first_name'        => 'required|string|max:120',
-            'last_name'         => 'nullable|string|max:120',
-            'suffix'            => 'nullable|string|max:30',
-            'email'             => 'nullable|email|max:200',
-            'phone'             => 'nullable|string|max:40',
-            'residence_city'    => 'nullable|string|max:120',
+            'first_name' => 'required|string|max:120',
+            'last_name' => 'nullable|string|max:120',
+            'suffix' => 'nullable|string|max:30',
+            'email' => 'nullable|email|max:200',
+            'phone' => 'nullable|string|max:40',
+            'residence_city' => 'nullable|string|max:120',
             'residence_country' => 'nullable|string|max:120',
             'highest_qualification' => 'nullable|string|max:200',
-            'program_offered'   => 'nullable|string|max:200',
+            'program_offered' => 'nullable|string|max:200',
         ]);
 
         $lead->first_name = trim($validated['first_name']);
-        $lead->last_name = trim(($validated['last_name'] ?? '') . ' ' . ($validated['suffix'] ?? ''));
+        $lead->last_name = trim(($validated['last_name'] ?? '').' '.($validated['suffix'] ?? ''));
         $lead->email = $validated['email'] ?? null;
         $lead->phone = $validated['phone'] ?? null;
         $lead->residence_city = $validated['residence_city'] ?? null;
@@ -170,7 +198,7 @@ class AgentController extends Controller
                 $plan->update(['preferred_course' => $validated['program_offered']]);
             } else {
                 $lead->studyPlans()->create([
-                    'preferred_course'    => $validated['program_offered'],
+                    'preferred_course' => $validated['program_offered'],
                     'qualification_level' => '',
                 ]);
             }

@@ -1200,6 +1200,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
+            Route::get('/agreement', [\App\Http\Controllers\Portal\AgentController::class, 'agreement'])->name('agreement');
+            Route::get('/agreement/download', [\App\Http\Controllers\Portal\AgentController::class, 'downloadAgreement'])->name('agreement.download');
         });
 
         // Sub-agent portal — works ONE recruiting agent's referral leads
