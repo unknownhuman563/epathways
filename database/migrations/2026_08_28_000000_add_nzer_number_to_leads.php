@@ -8,59 +8,36 @@ use Illuminate\Support\Facades\Schema;
 /**
  * NZER number — another INZ-side identifier staff record on a case and search by.
  *
- * The `leads` table is very wide (200+ columns) and utf8mb4 (4 bytes/char), so it
- * hit InnoDB's ~8126-byte in-row limit ("Row size too large", SQLSTATE 1118) when
- * adding another VARCHAR on production. This migration frees room three ways, then
- * adds the column:
- *   1. ROW_FORMAT=DYNAMIC — stores long varchars off-page.
- *   2. Right-sizes columns that Laravel defaulted to VARCHAR(255) but only ever
- *      hold tiny values (gender, has_passport, marital_status, …). At 4 bytes/char
- *      each 255 costs up to 1020 in-row; shrinking them reclaims real space and
- *      works under any row format. Each MODIFY is isolated so a column whose data
- *      is somehow longer than the new size is skipped, never truncated.
- *   3. Adds nzer_number (idempotent — safe to re-run after a prior partial failure).
+ * The `leads` table is very wide (200+ columns) and utf8mb4, so adding another
+ * VARCHAR overflowed InnoDB's ~8126-byte in-row limit on production
+ * ("Row size too large", SQLSTATE 1118). The error's own hint is the fix:
+ *   "The maximum row size … NOT COUNTING BLOBs, is 8126 … change some columns
+ *    to TEXT or BLOBs."
+ * TEXT is a BLOB type stored off-page, so it does not count toward that limit and
+ * adds cleanly no matter the MySQL version or row format. nzer_number only ever
+ * holds a short id; TEXT is searched with LIKE exactly like a VARCHAR would be.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        if (DB::getDriverName() === 'mysql') {
-            try {
-                DB::statement('ALTER TABLE `leads` ROW_FORMAT=DYNAMIC');
-            } catch (\Throwable $e) {
-                // already dynamic / unsupported — the shrinks below still free space
-            }
-
-            $modify = [
-                "`gender` VARCHAR(40) NULL",
-                "`marital_status` VARCHAR(40) NULL",
-                "`has_passport` VARCHAR(20) NULL",
-                "`ai_analysis_status` VARCHAR(30) NOT NULL DEFAULT 'pending'",
-                "`branch` VARCHAR(80) NULL",
-                "`stage` VARCHAR(120) NULL",
-                "`status` VARCHAR(80) NOT NULL DEFAULT 'New'",
-                "`english_assignee` VARCHAR(60) NULL",
-                "`immigration_assignee` VARCHAR(60) NULL",
-                "`student_payment` VARCHAR(60) NULL",
-                "`student_coop` VARCHAR(60) NULL",
-                "`student_oop` VARCHAR(60) NULL",
-                "`referral` VARCHAR(191) NULL",
-                "`country` VARCHAR(120) NULL",
-            ];
-            foreach ($modify as $def) {
+        if (Schema::hasColumn('leads', 'nzer_number')) {
+            // A prior run (or local dev) may have created it as VARCHAR — normalise
+            // to TEXT so every environment matches and it's off the in-row budget.
+            if (DB::getDriverName() === 'mysql') {
                 try {
-                    DB::statement("ALTER TABLE `leads` MODIFY {$def}");
+                    DB::statement('ALTER TABLE `leads` MODIFY `nzer_number` TEXT NULL');
                 } catch (\Throwable $e) {
-                    // data longer than the new size — skip this one, keep going
+                    // leave it as-is if it can't be modified
                 }
             }
+
+            return;
         }
 
-        if (! Schema::hasColumn('leads', 'nzer_number')) {
-            Schema::table('leads', function (Blueprint $table) {
-                $table->string('nzer_number', 60)->nullable()->after('inz_medical_ref');
-            });
-        }
+        Schema::table('leads', function (Blueprint $table) {
+            $table->text('nzer_number')->nullable();
+        });
     }
 
     public function down(): void
