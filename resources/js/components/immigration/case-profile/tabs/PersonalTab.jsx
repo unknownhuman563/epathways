@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "@inertiajs/react";
 import { toast } from "sonner";
 import { Save, ClipboardList, Eye, Download, FileText, Sparkles, Loader2, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from "lucide-react";
@@ -23,7 +23,7 @@ const VISA_LABEL = {
 };
 
 export default function PersonalTab({ lead = {}, intake = null, assessmentCompleteness = null, activity = [] }) {
-    const { data, setData, post, processing, errors } = useForm({
+    const form = useForm({
         first_name:        lead.first_name || "",
         middle_name:       lead.middle_name || "",
         last_name:         lead.last_name || "",
@@ -40,16 +40,36 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
         inz_client_number:      lead.inz_client_number || "",
         inz_application_number: lead.inz_application_number || "",
         inz_medical_ref:        lead.inz_medical_ref || "",
+        nzer_number:            lead.nzer_number || "",
     });
+    const { data, setData, post, processing, errors, isDirty } = form;
+
+    // "saved just now" indicator (auto-save + manual save both set it).
+    const [savedAt, setSavedAt] = useState(0);
+
+    const save = (opts = {}) => {
+        post(`/portal/immigration/cases/${lead.id}/personal`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => { form.defaults(); setSavedAt(Date.now()); },
+            onError: () => { if (opts.loud) toast.error("Please fix the highlighted fields."); },
+        });
+    };
 
     const submit = (e) => {
         e.preventDefault();
-        post(`/portal/immigration/cases/${lead.id}/personal`, {
-            preserveScroll: true,
-            onSuccess: () => toast.success("Personal details saved."),
-            onError: () => toast.error("Please fix the highlighted fields."),
-        });
+        save({ loud: true });
     };
+
+    // Auto-save: debounce edits and persist ~800ms after typing stops. `defaults()`
+    // on success resets the dirty baseline so it doesn't re-fire in a loop.
+    const firstRun = useRef(true);
+    useEffect(() => {
+        if (firstRun.current) { firstRun.current = false; return; }
+        if (! isDirty || processing) return;
+        const t = setTimeout(() => save(), 800);
+        return () => clearTimeout(t);
+    }, [data, isDirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Completeness across the tracked personal fields (real).
     const tracked = ["first_name", "last_name", "dob", "gender", "marital_status", "email", "phone", "citizenship", "residence_country", "passport_number", "passport_expiry"];
@@ -107,8 +127,20 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
                         <p className="text-[11px] font-semibold text-gray-600 tabular-nums">{filled} of {total} complete</p>
                         <div className="w-40 h-1.5 rounded-full bg-gray-100 overflow-hidden mt-1"><div className="h-full bg-teal-600 rounded-full" style={{ width: `${(filled / total) * 100}%` }} /></div>
                     </div>
-                    <button type="submit" disabled={processing} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[13px] font-bold hover:bg-gray-800 transition-colors disabled:opacity-40">
-                        <Save size={13} /> {processing ? "Saving…" : "Save changes"}
+                    {/* Auto-save status — changes persist automatically; the button is a manual fallback. */}
+                    <span className="text-[12px] font-medium inline-flex items-center gap-1 min-w-[92px] justify-end">
+                        {processing ? (
+                            <span className="text-gray-400 inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Saving…</span>
+                        ) : isDirty ? (
+                            <span className="text-amber-600">Unsaved…</span>
+                        ) : savedAt ? (
+                            <span className="text-emerald-600 inline-flex items-center gap-1"><CheckCircle2 size={12} /> Saved</span>
+                        ) : (
+                            <span className="text-gray-300">Auto-saves</span>
+                        )}
+                    </span>
+                    <button type="submit" disabled={processing || ! isDirty} title="Changes save automatically — this saves now" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[13px] font-bold hover:bg-gray-800 transition-colors disabled:opacity-40">
+                        <Save size={13} /> Save now
                     </button>
                 </div>
             </div>
@@ -164,6 +196,9 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
                         </F>
                         <F label="Medical reference number">
                             <input type="text" value={data.inz_medical_ref} onChange={(e) => setData("inz_medical_ref", e.target.value)} className={IC} maxLength={60} placeholder="Not supplied" />
+                        </F>
+                        <F label="NZER number">
+                            <input type="text" value={data.nzer_number} onChange={(e) => setData("nzer_number", e.target.value)} className={IC} maxLength={60} placeholder="Not supplied" />
                         </F>
                         <F label="Suffix">
                             <input type="text" value={data.suffix} onChange={(e) => setData("suffix", e.target.value)} className={IC} maxLength={20} placeholder="Jr., Sr., III…" />

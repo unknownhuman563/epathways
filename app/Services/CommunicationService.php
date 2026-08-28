@@ -398,12 +398,21 @@ class CommunicationService
             'phone' => $lead->phone ?? '',
             'stage' => $lead->stage ?? ($lead->status ?? ''),
             'visa_type' => $lead->inz_visa_type ?? '',
+            // The case's most recent invoice number (blank if none issued yet);
+            // an invoice-event context can override with a specific one.
+            'invoice_number' => optional(
+                \App\Models\LeadDocument::where('lead_id', $lead->id)
+                    ->whereNotNull('invoice_number')->latest('id')->first()
+            )->invoice_number ?? '',
             'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
             'client_portal_url' => $this->clientPortalUrl($lead),
             // Portal sign-in link + username (their email) — for templates that
             // ask the client to log in and act (e.g. re-upload a document).
             'portal_login_url' => rtrim((string) config('app.url'), '/').'/login',
             'portal_username' => $lead->email ?? '',
+            // Plaintext password only exists at credential-generation time; it is
+            // never stored, so it stays blank unless the calling action passes it.
+            'password' => '',
             'has_portal_account' => $lead->portalUser()->exists() ? 'yes' : 'no',
             'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
         ], $eventCtx, $extra);

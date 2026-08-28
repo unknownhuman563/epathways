@@ -116,7 +116,7 @@ const caseMatchesQuery = (c, q) =>
         c.name, c.lead_id, c.email, c.phone, c.country,
         c.inz_visa_type, c.inz_reference, c.inz_status, c.immigration_stage,
         c.passport_number, c.passport_expiry,
-        c.inz_client_number, c.inz_application_number, c.inz_medical_ref,
+        c.inz_client_number, c.inz_application_number, c.inz_medical_ref, c.nzer_number,
     ].some((v) => (v || '').toString().toLowerCase().includes(q));
 
 const tabKeyForStage = (stage) => {

@@ -1402,11 +1402,14 @@ class CaseProfileController extends Controller
             'inz_client_number' => 'nullable|string|max:60',
             'inz_application_number' => 'nullable|string|max:60',
             'inz_medical_ref' => 'nullable|string|max:60',
+            'nzer_number' => 'nullable|string|max:60',
         ]);
 
         $lead->update($validated);
 
-        return back()->with('success', 'Personal details updated.');
+        // No flash — the Personal tab auto-saves and shows its own inline
+        // "Saved" indicator, so a toast on every keystroke-debounce would spam.
+        return back();
     }
 
     /** Same policy as Build 10's case-analysis gate. */
@@ -1630,6 +1633,7 @@ class CaseProfileController extends Controller
             'inz_client_number' => $lead->inz_client_number,
             'inz_application_number' => $lead->inz_application_number,
             'inz_medical_ref' => $lead->inz_medical_ref,
+            'nzer_number' => $lead->nzer_number,
             'inz_status' => $lead->inz_status,
             'inz_lodged_at' => $lead->inz_lodged_at,
             'inz_decision_at' => $lead->inz_decision_at,
