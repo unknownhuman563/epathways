@@ -8,29 +8,44 @@ use Illuminate\Support\Facades\Schema;
 /**
  * NZER number — another INZ-side identifier staff record on a case and search by.
  *
- * The `leads` table has grown wide enough that adding another VARCHAR hits
- * InnoDB's ~8126-byte in-row limit ("Row size too large", SQLSTATE 1118). The
- * fix is to switch the table to ROW_FORMAT=DYNAMIC, which stores long varchars
- * off-page (only a 20-byte pointer counts toward the in-row size), freeing room
- * for this and future columns. Done first, then the column is added.
+ * The `leads` table is very wide (200+ columns) and utf8mb4, so adding another
+ * VARCHAR overflowed InnoDB's ~8126-byte in-row limit on production
+ * ("Row size too large", SQLSTATE 1118). The error's own hint is the fix:
+ *   "The maximum row size … NOT COUNTING BLOBs, is 8126 … change some columns
+ *    to TEXT or BLOBs."
+ * TEXT is a BLOB type stored off-page, so it does not count toward that limit and
+ * adds cleanly no matter the MySQL version or row format. nzer_number only ever
+ * holds a short id; TEXT is searched with LIKE exactly like a VARCHAR would be.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        if (DB::getDriverName() === 'mysql') {
-            DB::statement('ALTER TABLE `leads` ROW_FORMAT=DYNAMIC');
+        if (Schema::hasColumn('leads', 'nzer_number')) {
+            // A prior run (or local dev) may have created it as VARCHAR — normalise
+            // to TEXT so every environment matches and it's off the in-row budget.
+            if (DB::getDriverName() === 'mysql') {
+                try {
+                    DB::statement('ALTER TABLE `leads` MODIFY `nzer_number` TEXT NULL');
+                } catch (\Throwable $e) {
+                    // leave it as-is if it can't be modified
+                }
+            }
+
+            return;
         }
 
         Schema::table('leads', function (Blueprint $table) {
-            $table->string('nzer_number', 60)->nullable()->after('inz_medical_ref');
+            $table->text('nzer_number')->nullable();
         });
     }
 
     public function down(): void
     {
-        Schema::table('leads', function (Blueprint $table) {
-            $table->dropColumn('nzer_number');
-        });
+        if (Schema::hasColumn('leads', 'nzer_number')) {
+            Schema::table('leads', function (Blueprint $table) {
+                $table->dropColumn('nzer_number');
+            });
+        }
     }
 };
