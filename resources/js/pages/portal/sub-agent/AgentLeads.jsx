@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Upload, Plus, Mail, Phone, FileText, X, ChevronRight } from 'lucide-react';
 // Reuse the colour-coded stage picker + shared helpers so the pipeline reads
@@ -307,6 +307,7 @@ export default function AgentLeads({ agent = {}, leads = [], statuses = [], port
                                         {expanded && (
                                             <ExpandedPanel
                                                 lead={lead}
+                                                portalBase={portalBase}
                                                 onPriority={(p) => changePriority(lead, p)}
                                                 draft={draft}
                                                 setDraft={setDraft}
@@ -333,7 +334,79 @@ export default function AgentLeads({ agent = {}, leads = [], statuses = [], port
 }
 
 // ─── Expanded row ─────────────────────────────────────────────────────
-function ExpandedPanel({ lead, onPriority, draft, setDraft, noteKind, setNoteKind, onPost, posting, me }) {
+// The four documents a sub-agent collects on a referral lead — upload + view,
+// scoped server-side to this agent's leads. Slots are fetched on expand.
+function DocumentsSection({ leadId, portalBase }) {
+    const [slots, setSlots] = useState(null);
+    const [busyType, setBusyType] = useState(null);
+
+    const load = () => {
+        fetch(`${portalBase}/leads/${leadId}/documents`, { headers: { Accept: 'application/json' } })
+            .then((r) => (r.ok ? r.json() : { slots: [] }))
+            .then((d) => setSlots(d.slots || []))
+            .catch(() => setSlots([]));
+    };
+    useEffect(() => { load(); }, [leadId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const upload = (type, file) => {
+        if (! file) return;
+        setBusyType(type);
+        router.post(`${portalBase}/leads/${leadId}/documents`, { type, file }, {
+            forceFormData: true,
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => load(),
+            onFinish: () => setBusyType(null),
+        });
+    };
+
+    const fileInput = (type) => (
+        <input
+            type="file"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            className="hidden"
+            disabled={busyType === type}
+            onChange={(e) => upload(type, e.target.files?.[0])}
+        />
+    );
+
+    return (
+        <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400 mb-2">
+                Documents <span className="text-gray-300 font-medium normal-case tracking-normal">· Passport · CV · Diploma · TOR</span>
+            </p>
+            {slots === null ? (
+                <p className="text-[11px] text-gray-400">Loading…</p>
+            ) : (
+                <div className="space-y-1.5">
+                    {slots.map((s) => (
+                        <div key={s.type} className="flex items-center gap-2 bg-white rounded-lg border border-gray-100 px-3 py-2">
+                            <FileText size={13} className="text-gray-400 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                                <span className="block text-[12px] text-gray-800 truncate">{s.label}</span>
+                                {s.file && <span className="block text-[10.5px] text-gray-400 truncate">{s.file.name}</span>}
+                            </div>
+                            {s.file ? (
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <a href={s.file.url} className="text-[11px] font-semibold text-gray-500 hover:text-gray-900">View</a>
+                                    <label className="text-[11px] font-semibold text-gray-400 hover:text-gray-700 cursor-pointer">
+                                        {busyType === s.type ? 'Uploading…' : 'Replace'}{fileInput(s.type)}
+                                    </label>
+                                </div>
+                            ) : (
+                                <label className={`inline-flex items-center gap-1 text-[11px] font-semibold cursor-pointer shrink-0 ${busyType === s.type ? 'text-gray-300' : 'text-gray-900 hover:text-black'}`}>
+                                    <Upload size={12} /> {busyType === s.type ? 'Uploading…' : 'Upload'}{fileInput(s.type)}
+                                </label>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ExpandedPanel({ lead, portalBase, onPriority, draft, setDraft, noteKind, setNoteKind, onPost, posting, me }) {
     const notes = lead.recent_notes || [];
     const detail = [
         ['Source', lead.source],
@@ -398,10 +471,10 @@ function ExpandedPanel({ lead, onPriority, draft, setDraft, noteKind, setNoteKin
                     >
                         <Phone size={13} /> Log a call
                     </button>
-                    <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-400">
-                        <FileText size={13} /> Documents
-                    </span>
                 </div>
+
+                {/* Documents — Passport / CV / Diploma / TOR, upload + view */}
+                <DocumentsSection leadId={lead.id} portalBase={portalBase} />
             </div>
 
             {/* Right — internal notes */}
