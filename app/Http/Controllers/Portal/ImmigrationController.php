@@ -420,6 +420,7 @@ class ImmigrationController extends Controller
                         'inz_client_number' => $l->inz_client_number,
                         'inz_application_number' => $l->inz_application_number,
                         'inz_medical_ref' => $l->inz_medical_ref,
+                        'nzer_number' => $l->nzer_number,
                         // Immigration-team sub-stage. Drives both the inline
                         // status picker on each row and the distribution graph
                         // up top. Pre-existing leads still on `inz_status`
@@ -1378,6 +1379,16 @@ class ImmigrationController extends Controller
 
         if ($stageMoved) {
             $recordStageNote();
+
+            // Email automation — the legacy path sets the stage directly (it does
+            // not go through advanceImmigrationStage, and reaches here when the case
+            // is off the chain or the chain can't jump to this stage), so fire the
+            // per-stage event here too. Guarded on a non-null stage.
+            if ($newStage !== null) {
+                app(\App\Services\EmailAutomationService::class)->fire(
+                    'immigration.stage.'.\Illuminate\Support\Str::slug($newStage, '_'), $lead, ['stage' => $newStage]
+                );
+            }
         }
 
         // Re-evaluate findings off the request path when the stage moves (§8d).
@@ -1473,6 +1484,91 @@ class ImmigrationController extends Controller
         \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
         return back()->with('success', 'Case moved to Decline Visa.');
+    }
+
+    /**
+     * Positive / interim outcome — moves the case to "Approved Visa",
+     * "Interim Visa Issued" or "Approved in Principle" with an optional shared
+     * document and note (same modal as decline). Unlike decline, the client
+     * email is the configured stage automation, so staff control the wording.
+     */
+    public function recordOutcome(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'stage' => ['required', 'string', \Illuminate\Validation\Rule::in(['Approved Visa', 'Interim Visa Issued', 'Approved in Principle'])],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
+            'notify' => ['nullable', 'boolean'],
+        ]);
+
+        $stage = $data['stage'];
+        $note = trim((string) ($data['note'] ?? ''));
+
+        // Set the stage (chain jump when on the process chain, else legacy write).
+        $steps = app(\App\Services\Immigration\CaseStepService::class);
+        $movedViaChain = $steps->hasChain($lead) && $steps->jumpToStage($lead, $stage, auth()->user());
+        if (! $movedViaChain && ($lead->immigration_stage ?? null) !== $stage) {
+            $lead->immigration_stage = $stage;
+            $lead->stage_updated_at = now();
+            $lead->stage_updated_by = auth()->id();
+            $lead->pushStageHistory('immigration', $stage, $lead->immigration_assignee);
+        }
+        // Approved visa is done — clear the working priority so it stops competing.
+        if ($stage === 'Approved Visa' && $lead->immigration_priority !== 'done') {
+            $lead->immigration_priority = 'done';
+        }
+        $lead->save();
+
+        // Optional document — StaffShared so it surfaces on the Documents tab and
+        // in the client portal's "shared with you" list.
+        $doc = null;
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $path = $file->store("lead-documents/{$lead->id}", 'local');
+            $doc = \App\Models\LeadDocument::create([
+                'lead_id' => $lead->id,
+                'checklist_key' => null,
+                'original_name' => $file->getClientOriginalName() ?: ($stage.' document'),
+                'file_path' => $path,
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'source' => 'upload',
+                'source_variant' => 'outcome:'.\Illuminate\Support\Str::slug($stage, '_'),
+                'status' => \App\Models\LeadDocument::STATUS_STAFF_SHARED,
+                'uploaded_by' => auth()->id(),
+                'note' => $note ?: null,
+            ]);
+        }
+
+        // Record the note on the case timeline.
+        if ($note !== '') {
+            $user = auth()->user();
+            \App\Models\LeadNote::create([
+                'lead_id' => $lead->id,
+                'user_id' => $user?->id,
+                'author_name' => $user?->name,
+                'author_role' => $user?->role,
+                'kind' => 'note',
+                'body' => "Stage → {$stage}: {$note}",
+            ]);
+        }
+
+        // Email the client via the configured stage automation (the template staff
+        // set up), passing the note as {{status_detail}}. Skipped when unticked.
+        if (! empty($data['notify'])) {
+            app(\App\Services\EmailAutomationService::class)->fire(
+                'immigration.stage.'.\Illuminate\Support\Str::slug($stage, '_'),
+                $lead,
+                ['stage' => $stage, 'status_detail' => $note]
+            );
+        }
+
+        $lead->recordStaffActivity("Moved to {$stage}".($doc ? ' + shared document' : ''));
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', "Case moved to {$stage}.");
     }
 
     /**

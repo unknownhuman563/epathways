@@ -116,7 +116,7 @@ const caseMatchesQuery = (c, q) =>
         c.name, c.lead_id, c.email, c.phone, c.country,
         c.inz_visa_type, c.inz_reference, c.inz_status, c.immigration_stage,
         c.passport_number, c.passport_expiry,
-        c.inz_client_number, c.inz_application_number, c.inz_medical_ref,
+        c.inz_client_number, c.inz_application_number, c.inz_medical_ref, c.nzer_number,
     ].some((v) => (v || '').toString().toLowerCase().includes(q));
 
 const tabKeyForStage = (stage) => {
@@ -1490,6 +1490,8 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
     const [declineOpen, setDeclineOpen] = useState(false);
     // Stages that capture an optional note when the case is moved into them.
     const [noteStage, setNoteStage] = useState(null);
+    // Positive/interim outcomes open the same attach-document + note modal.
+    const [outcomeStage, setOutcomeStage] = useState(null);
     const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
@@ -1548,6 +1550,13 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
         if (stage === "Request to Lodge" || stage === "Withdrawn") {
             onClose();
             setNoteStage(stage);
+            return;
+        }
+        // Positive/interim outcomes — attach a document + optional note, then the
+        // configured stage automation emails the client.
+        if (["Approved Visa", "Interim Visa Issued", "Approved in Principle"].includes(stage)) {
+            onClose();
+            setOutcomeStage(stage);
             return;
         }
         setSaving(true);
@@ -1628,6 +1637,10 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
 
             {noteStage && (
                 <StageNoteModal caseId={caseId} stage={noteStage} onClose={() => setNoteStage(null)} />
+            )}
+
+            {outcomeStage && (
+                <OutcomeModal caseId={caseId} stage={outcomeStage} onClose={() => setOutcomeStage(null)} />
             )}
         </>
     );
@@ -1802,6 +1815,110 @@ function DeclineVisaModal({ caseId, onClose }) {
                     >
                         {saving ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
                         Confirm decline
+                    </button>
+                </footer>
+            </div>
+        </div>,
+        document.body
+    );
+}
+
+// ─── Outcome modal (Approved / Interim / Approved in Principle) ──────────
+// Same shape as the decline modal — attach a document + optional note — but the
+// client email is the configured stage automation (staff-authored template),
+// so the note rides along as {{status_detail}}.
+function OutcomeModal({ caseId, stage, onClose }) {
+    const [file, setFile] = useState(null);
+    const [note, setNote] = useState("");
+    const [notify, setNotify] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+
+    const submit = () => {
+        if (saving) return;
+        setSaving(true);
+        router.post(
+            `/portal/immigration/cases/${caseId}/outcome`,
+            { stage, document: file, note, notify: notify ? 1 : 0 },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => { toast.success(`Case moved to ${stage}`); onClose(); },
+                onError: (e) => toast.error(Object.values(e)[0] || "Could not save"),
+                onFinish: () => setSaving(false),
+            }
+        );
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+                <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${STAGE_COLORS[stage] || 'bg-gray-400'}`} /> Move to {stage}
+                        </h2>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Attach a document and note. Both are optional.</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+                </header>
+
+                <div className="px-5 py-4 space-y-4">
+                    {/* Document upload */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Document (optional)</label>
+                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-400 text-[12px] text-gray-600">
+                            <Paperclip size={14} className="text-gray-400" />
+                            <span className="truncate">{file ? file.name : "Choose a file (PDF, DOC, image)"}</span>
+                            <input
+                                type="file"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                            />
+                        </label>
+                        {file && (
+                            <button type="button" onClick={() => setFile(null)} className="mt-1 text-[11px] text-gray-400 hover:text-rose-600">Remove file</button>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-1">Shared to the client's portal and shown on the Documents tab.</p>
+                    </div>
+
+                    {/* Note */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Note to include (optional)</label>
+                        <textarea
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            rows={4}
+                            maxLength={2000}
+                            placeholder="Any message for the record and the client email…"
+                            className="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900 resize-none"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">Included in the email as {"{{status_detail}}"} if your template uses it.</p>
+                    </div>
+
+                    {/* Email toggle */}
+                    <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="rounded border-gray-300" />
+                        <Mail size={13} className="text-gray-400" /> Email the client (uses the “Moved to {stage}” automation)
+                    </label>
+                </div>
+
+                <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                    <button
+                        type="button"
+                        onClick={submit}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold bg-gray-900 text-white hover:bg-black disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 size={12} className="animate-spin" /> : null}
+                        Move to {stage}
                     </button>
                 </footer>
             </div>

@@ -194,6 +194,41 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Re-send the "please upload this document" email for a single existing
+     * request — one click from the Documents tab. Uses the SAME single source as
+     * the original request: the configured "Document requested" automation
+     * message, falling back to the built-in email only when none is set.
+     */
+    public function resendRequest(Request $request, $leadId, $requestId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $docRequest = LeadDocumentRequest::where('lead_id', $lead->id)->findOrFail($requestId);
+
+        $firedClient = app(\App\Services\EmailAutomationService::class)
+            ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+
+        if (! $firedClient && ! empty($lead->email)) {
+            try {
+                $res = app(\App\Services\CommunicationService::class)
+                    ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
+                if (! $res['email']) {
+                    Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+                }
+            } catch (\Throwable $e) {
+                Log::error('Resend document request failed', ['lead_id' => $lead->id, 'request_id' => $docRequest->id, 'error' => $e->getMessage()]);
+
+                return back()->withErrors(['error' => 'Could not send the reminder.']);
+            }
+        }
+
+        if (empty($lead->email)) {
+            return back()->withErrors(['error' => 'No email on file for this client.']);
+        }
+
+        return back()->with('success', "Reminder sent for “{$docRequest->label}”.");
+    }
+
+    /**
      * Flat JSON list of every file on a case, with its review status.
      *
      * Feeds the "Files" popover on the immigration Cases table so staff can
@@ -288,19 +323,27 @@ class LeadDocumentController extends Controller
             // Email automation — payment verified (no-op unless configured).
             app(\App\Services\EmailAutomationService::class)->fire('immigration.invoice.paid', $doc->lead, []);
 
-            // Mark the specific invoice this proof settles as paid, so only that
-            // invoice row flips to "Paid" (not every invoice on the case). The
-            // invoice's reviewed_at doubles as the paid date shown on the badge.
+            // Mark the invoice this proof settles as paid so its row flips to
+            // "Paid" (reviewed_at doubles as the paid date on the badge). When a
+            // specific invoice_id is given (case-profile flow), only that invoice
+            // flips. When none is given (the Invoice module's "confirm payment"),
+            // settle the case's pending invoice document(s) so the case profile
+            // reflects it — otherwise the proof reads Approved but the invoice
+            // never shows verified.
+            $invoiceQuery = LeadDocument::where('lead_id', $leadId)
+                ->whereIn('status', [LeadDocument::STATUS_STAFF_SHARED, LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]);
             if (! empty($validated['invoice_id'])) {
-                LeadDocument::where('lead_id', $leadId)
-                    ->where('id', $validated['invoice_id'])
-                    ->whereIn('status', [LeadDocument::STATUS_STAFF_SHARED, LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW])
-                    ->update([
-                        'status' => LeadDocument::STATUS_APPROVED,
-                        'reviewed_by' => Auth::id(),
-                        'reviewed_at' => now(),
-                    ]);
+                $invoiceQuery->where('id', $validated['invoice_id']);
+            } else {
+                $invoiceQuery->where(function ($q) {
+                    $q->where('source_variant', 'invoice')->orWhere('source_variant', 'like', 'invoice:%');
+                });
             }
+            $invoiceQuery->update([
+                'status' => LeadDocument::STATUS_APPROVED,
+                'reviewed_by' => Auth::id(),
+                'reviewed_at' => now(),
+            ]);
         }
 
         // Tell the lead their document was approved / rejected. Prefer the
@@ -315,14 +358,19 @@ class LeadDocumentController extends Controller
 
         // Email automation — document approved / needs attention (a proof of
         // payment is handled by immigration.invoice.paid above, so exclude it).
+        // The configured automation message is the single source: it returns
+        // whether it emailed the client, so the built-in email below only sends
+        // as a fallback when no client automation message is set (no double-send).
+        $firedClient = false;
         if ($lead && $doc->source_variant !== 'proof_of_payment') {
             if ($validated['status'] === LeadDocument::STATUS_APPROVED) {
-                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.approved', $lead, ['document_name' => $doc->original_name]);
+                $firedClient = app(\App\Services\EmailAutomationService::class)->fire('immigration.document.approved', $lead, ['document_name' => $doc->original_name]);
             } elseif ($validated['status'] === LeadDocument::STATUS_REJECTED) {
-                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.rejected', $lead, ['document_name' => $doc->original_name, 'reason' => $validated['note'] ?? '']);
+                $firedClient = app(\App\Services\EmailAutomationService::class)->fire('immigration.document.rejected', $lead, ['document_name' => $doc->original_name, 'reason' => $validated['note'] ?? '']);
             }
         }
-        if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
+        if (! $firedClient
+            && in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
                 // Needs-attention → the "please re-upload" template (asks the
