@@ -92,6 +92,96 @@ class SubAgentController extends Controller
         return app(LeadNoteController::class)->store($request, $id);
     }
 
+    /**
+     * The only document types a sub-agent handles on a referral lead. Fixed set —
+     * they collect these four from the applicant, nothing else.
+     */
+    private const DOC_TYPES = [
+        'subagent_passport' => 'Passport',
+        'subagent_cv'       => 'CV / Resume',
+        'subagent_diploma'  => 'Diploma',
+        'subagent_tor'      => 'Transcript of Records (TOR)',
+    ];
+
+    /** JSON: the four document slots for a lead, with the uploaded file (if any). */
+    public function documents($id)
+    {
+        $lead = $this->findScoped($id);
+
+        $docs = \App\Models\LeadDocument::where('lead_id', $lead->id)
+            ->whereIn('checklist_key', array_keys(self::DOC_TYPES))
+            ->latest('id')->get()->keyBy('checklist_key');
+
+        $slots = [];
+        foreach (self::DOC_TYPES as $key => $label) {
+            $d = $docs->get($key);
+            $slots[] = [
+                'type'  => $key,
+                'label' => $label,
+                'file'  => $d ? [
+                    'id'   => $d->id,
+                    'name' => $d->original_name,
+                    'url'  => "/portal/sub-agent/leads/{$lead->id}/documents/{$d->id}/download",
+                ] : null,
+            ];
+        }
+
+        return response()->json(['slots' => $slots]);
+    }
+
+    /** Upload (or replace) one of the four documents for a scoped lead. */
+    public function storeDocument(Request $request, $id)
+    {
+        $lead = $this->findScoped($id);
+
+        $data = $request->validate([
+            'type' => ['required', \Illuminate\Validation\Rule::in(array_keys(self::DOC_TYPES))],
+            'file' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
+        ]);
+
+        // Replace any existing file of this type (upload = latest wins).
+        \App\Models\LeadDocument::where('lead_id', $lead->id)
+            ->where('checklist_key', $data['type'])
+            ->get()
+            ->each(function (\App\Models\LeadDocument $old) {
+                if ($old->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($old->file_path)) {
+                    \Illuminate\Support\Facades\Storage::disk('local')->delete($old->file_path);
+                }
+                $old->delete();
+            });
+
+        $file = $request->file('file');
+        $path = $file->store("lead-documents/{$lead->id}", 'local');
+        \App\Models\LeadDocument::create([
+            'lead_id'        => $lead->id,
+            'checklist_key'  => $data['type'],
+            'original_name'  => $file->getClientOriginalName(),
+            'file_path'      => $path,
+            'mime'           => $file->getClientMimeType(),
+            'size'           => $file->getSize(),
+            'status'         => \App\Models\LeadDocument::STATUS_SUBMITTED,
+            'source'         => \App\Models\LeadDocument::SOURCE_UPLOAD,
+            'uploaded_by'    => Auth::id(),
+        ]);
+
+        return back()->with('success', self::DOC_TYPES[$data['type']].' uploaded.');
+    }
+
+    /** Stream a scoped document from the private disk (never a public URL). */
+    public function downloadDocument($id, $docId)
+    {
+        $lead = $this->findScoped($id);
+
+        $doc = \App\Models\LeadDocument::where('lead_id', $lead->id)
+            ->whereIn('checklist_key', array_keys(self::DOC_TYPES))
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        abort_unless($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path), 404);
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->download($doc->file_path, $doc->original_name);
+    }
+
     /** Set a lead's priority (Urgent/Normal/Low) — ownership re-checked. */
     public function updatePriority(Request $request, $id)
     {
