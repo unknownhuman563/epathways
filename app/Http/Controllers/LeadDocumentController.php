@@ -323,19 +323,27 @@ class LeadDocumentController extends Controller
             // Email automation — payment verified (no-op unless configured).
             app(\App\Services\EmailAutomationService::class)->fire('immigration.invoice.paid', $doc->lead, []);
 
-            // Mark the specific invoice this proof settles as paid, so only that
-            // invoice row flips to "Paid" (not every invoice on the case). The
-            // invoice's reviewed_at doubles as the paid date shown on the badge.
+            // Mark the invoice this proof settles as paid so its row flips to
+            // "Paid" (reviewed_at doubles as the paid date on the badge). When a
+            // specific invoice_id is given (case-profile flow), only that invoice
+            // flips. When none is given (the Invoice module's "confirm payment"),
+            // settle the case's pending invoice document(s) so the case profile
+            // reflects it — otherwise the proof reads Approved but the invoice
+            // never shows verified.
+            $invoiceQuery = LeadDocument::where('lead_id', $leadId)
+                ->whereIn('status', [LeadDocument::STATUS_STAFF_SHARED, LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]);
             if (! empty($validated['invoice_id'])) {
-                LeadDocument::where('lead_id', $leadId)
-                    ->where('id', $validated['invoice_id'])
-                    ->whereIn('status', [LeadDocument::STATUS_STAFF_SHARED, LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW])
-                    ->update([
-                        'status' => LeadDocument::STATUS_APPROVED,
-                        'reviewed_by' => Auth::id(),
-                        'reviewed_at' => now(),
-                    ]);
+                $invoiceQuery->where('id', $validated['invoice_id']);
+            } else {
+                $invoiceQuery->where(function ($q) {
+                    $q->where('source_variant', 'invoice')->orWhere('source_variant', 'like', 'invoice:%');
+                });
             }
+            $invoiceQuery->update([
+                'status' => LeadDocument::STATUS_APPROVED,
+                'reviewed_by' => Auth::id(),
+                'reviewed_at' => now(),
+            ]);
         }
 
         // Tell the lead their document was approved / rejected. Prefer the

@@ -420,6 +420,7 @@ class ImmigrationController extends Controller
                         'inz_client_number' => $l->inz_client_number,
                         'inz_application_number' => $l->inz_application_number,
                         'inz_medical_ref' => $l->inz_medical_ref,
+                        'nzer_number' => $l->nzer_number,
                         // Immigration-team sub-stage. Drives both the inline
                         // status picker on each row and the distribution graph
                         // up top. Pre-existing leads still on `inz_status`
