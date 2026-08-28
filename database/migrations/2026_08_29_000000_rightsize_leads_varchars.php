@@ -34,10 +34,7 @@ return new class extends Migration
         'has_passport'          => "VARCHAR(20) NULL",
         'country'               => "VARCHAR(120) NULL",
         'country_of_birth'      => "VARCHAR(120) NULL",
-        'place_of_birth'        => "VARCHAR(120) NULL",
         'citizenship'           => "VARCHAR(120) NULL",
-        'residence_city'        => "VARCHAR(120) NULL",
-        'residence_state'       => "VARCHAR(120) NULL",
         'residence_country'     => "VARCHAR(120) NULL",
         'referral'              => "VARCHAR(191) NULL",
         'branch'                => "VARCHAR(80) NULL",
@@ -47,9 +44,11 @@ return new class extends Migration
         'english_assignee'      => "VARCHAR(60) NULL",
         'immigration_assignee'  => "VARCHAR(60) NULL",
         'student_payment'       => "VARCHAR(60) NULL",
-        'student_school'        => "VARCHAR(191) NULL",
         'student_coop'          => "VARCHAR(60) NULL",
         'student_oop'           => "VARCHAR(60) NULL",
+        // NOTE: other_names, place_of_birth, residence_city, residence_state and
+        // student_school are converted to TEXT by the nzer migration (they're on
+        // its off-page batch), so they're intentionally omitted here.
     ];
 
     public function up(): void

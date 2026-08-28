@@ -1190,6 +1190,10 @@ Route::middleware(['auth'])->group(function () {
             // Static segments declared before /leads/{id} so they win.
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeNote'])->name('leads.notes.store');
             Route::post('/leads/{id}/priority', [\App\Http\Controllers\Portal\SubAgentController::class, 'updatePriority'])->name('leads.priority');
+            // Referral-lead documents — Passport / CV / Diploma / TOR only.
+            Route::get('/leads/{id}/documents', [\App\Http\Controllers\Portal\SubAgentController::class, 'documents'])->name('leads.documents');
+            Route::post('/leads/{id}/documents', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeDocument'])->name('leads.documents.store');
+            Route::get('/leads/{id}/documents/{doc}/download', [\App\Http\Controllers\Portal\SubAgentController::class, 'downloadDocument'])->name('leads.documents.download');
             Route::post('/leads/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateLead'])->name('leads.update');
             Route::get('/profile', [\App\Http\Controllers\Portal\SubAgentController::class, 'profile'])->name('profile');
         });
