@@ -872,15 +872,15 @@ function StepHeader({ n, label, hint, trailing = null }) {
     );
 }
 
-// PhP-prefixed number input with an inline peso pill that matches the
-// brand emerald. Handles the parseInt-guard so the caller stays clean.
-function FeeInput({ label, value, onChange, step = 1000 }) {
+// Currency-prefixed number input with an inline symbol pill that matches
+// the brand emerald. Handles the parseInt-guard so the caller stays clean.
+function FeeInput({ label, value, onChange, step = 1000, symbol = '₱' }) {
     return (
         <label className="block">
             <span className="block text-[10px] font-semibold text-gray-600 mb-1">{label}</span>
             <div className="relative flex items-center rounded-lg bg-white ring-1 ring-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:border-emerald-600 transition-all overflow-hidden">
                 <span className="pl-2.5 pr-1.5 py-1.5 text-[11px] font-black text-[#436235] bg-emerald-50 border-r border-emerald-100 tabular-nums">
-                    ₱
+                    {symbol}
                 </span>
                 <input
                     type="number"
@@ -889,6 +889,27 @@ function FeeInput({ label, value, onChange, step = 1000 }) {
                     value={value}
                     onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
                     className="w-full px-2.5 py-1.5 text-sm bg-transparent focus:outline-none tabular-nums font-semibold text-gray-900"
+                />
+            </div>
+        </label>
+    );
+}
+
+// Editable single-line bank-detail field with an optional prefix pill
+// (used for the "#reference" line). Always editable — presets just fill it.
+function BankField({ label, value, onChange, placeholder = '', prefix = null }) {
+    return (
+        <label className="block">
+            <span className="block text-[10px] font-semibold text-gray-600 mb-1">{label}</span>
+            <div className="flex items-center rounded-lg bg-white ring-1 ring-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:border-emerald-600 transition-all overflow-hidden">
+                {prefix && <span className="pl-2.5 pr-0.5 py-1.5 text-[12px] font-bold text-gray-400">{prefix}</span>}
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={placeholder}
+                    maxLength={120}
+                    className={`w-full ${prefix ? 'pl-0' : 'pl-2.5'} pr-2.5 py-1.5 text-sm bg-transparent focus:outline-none text-gray-900`}
                 />
             </div>
         </label>
@@ -1140,17 +1161,48 @@ const DOC_TYPES = [
     { value: 'consultancy_voucher_couple_150',    label: 'With Voucher · Couple · 150,000',                hint: 'Applicant + partner. Inclusive of the INZ visa application fee (voucher).',                   backendType: 'consultancy_voucher_150', applicantMode: 'couple', defaultSchoolFee: 150000 },
     { value: 'consultancy_english_single_100',    label: 'With English · Single · 100,000',                hint: 'Sole applicant with English review add-on.',                                                  backendType: 'consultancy_english_100', applicantMode: 'single', defaultSchoolFee: 100000 },
 
+    { value: 'consultancy_onshore',               label: 'Onshore · Single',                               hint: 'Applicant already in NZ. Single package fee — Documentation, School Enrolment & Visa Application. Defaults to NZ$ + ANZ.', backendType: 'consultancy_onshore', applicantMode: 'single', defaultSchoolFee: 3500, singleFee: true },
+
     { value: 'english_engagement',                label: 'English Engagement Agreement',                   hint: 'PTE preparation services (separate document).' },
 ];
 const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType).map((t) => t.value));
 const MAX_PROPOSED_PROGRAMS = 5;
 const DEFAULT_ENGLISH_FEE = 14500;
 
+// Currency options for the generated documents. `code` labels the fee panel
+// and rides to the backend (php | nzd); `symbol` prefixes every amount in the
+// UI + PDF; `locale` drives thousands separators. PHP is the default so
+// existing documents are unchanged. Amounts are NOT converted — staff type the
+// correct figure for the chosen currency (see the fee inputs).
+const CURRENCIES = {
+    php: { code: 'php', label: 'Philippine Peso', short: 'PhP', symbol: '₱',   locale: 'en-PH' },
+    nzd: { code: 'nzd', label: 'NZ Dollar',       short: 'NZ$', symbol: 'NZ$', locale: 'en-NZ' },
+};
+
+// Bank-detail presets for the consultancy agreement's payment block. Picking
+// one fills the fields (which stay editable); "Other" blanks them for a fully
+// custom bank. RCBC is the default so existing documents are unchanged. The
+// reference is left to the per-client default (their slug) unless staff type one.
+const BANK_PRESETS = {
+    rcbc:  { label: 'RCBC',  heading: 'Payment for School Enrollment and Documentation Fee',              bank_name: 'RCBC', account_name: 'Dinah Suarin',          account_number: '9045440503' },
+    anz:   { label: 'ANZ',   heading: 'Payment for Documentation, School Enrolment, and Visa Application Fee', bank_name: 'ANZ',  account_name: 'EMPLOYMENT PATHWAYS LTD', account_number: '06-0185-0987269-01' },
+    other: { label: 'Other', heading: '',                                                                 bank_name: '',     account_name: '',                     account_number: '' },
+};
+
 function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null }) {
     const [leadId, setLeadId] = useState('');
     // No default — staff must actively pick a doc type. Empty string
     // keeps the preview area empty and the Generate button disabled.
     const [type, setType] = useState('');
+    // Currency for the generated document — chosen before the doc type.
+    // PHP by default so existing documents render exactly as before.
+    const [currency, setCurrency] = useState('php');
+    const cur = CURRENCIES[currency] || CURRENCIES.php;
+    // Editable bank details (consultancy agreements). A preset fills the
+    // fields; every field stays editable. RCBC default = unchanged docs.
+    const [bank, setBank] = useState(() => ({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' }));
+    const applyBankPreset = (preset) => setBank((b) => ({ ...b, preset, ...BANK_PRESETS[preset] }));
+    const setBankField = (key, val) => setBank((b) => ({ ...b, [key]: val }));
     const [leadSearch, setLeadSearch] = useState('');
     const [programSearch, setProgramSearch] = useState('');
     const [pickedProgramIds, setPickedProgramIds] = useState([]);
@@ -1183,6 +1235,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         setPickedProgramIds([]);
         setProgramSearch('');
         setNotify(true);
+        setCurrency('php');
+        setBank({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' });
     }, [open, prefill]);
 
     // Reset the fee amounts to the scenario's defaults whenever the type
@@ -1192,6 +1246,12 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         const meta = DOC_TYPES.find((t) => t.value === type);
         setSchoolFee(meta?.defaultSchoolFee ?? 100000);
         setEnglishFee(DEFAULT_ENGLISH_FEE);
+        // Onshore is a NZ-based agreement — default it to NZ$ + ANZ. Staff
+        // can still switch both afterwards.
+        if (type === 'consultancy_onshore') {
+            setCurrency('nzd');
+            setBank({ preset: 'anz', ...BANK_PRESETS.anz, reference: '' });
+        }
     }, [type]);
 
     // Resolve the selected doc-type entry once — used for backendType +
@@ -1241,9 +1301,15 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                     school_enrolment_fee: schoolFee,
                     english_proficiency_fee: englishFee,
                     applicant_mode: typeMeta?.applicantMode || 'single',
+                    currency,
+                    bank_heading: bank.heading,
+                    bank_name: bank.bank_name,
+                    bank_account_name: bank.account_name,
+                    bank_account_number: bank.account_number,
+                    bank_reference: bank.reference,
                     notify: wantNotify,
                 }
-                : { notify: wantNotify });
+                : { currency, notify: wantNotify });
 
         const finish = () => {
             setSubmitting(false);
@@ -1317,14 +1383,24 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         // applicant_mode; everything else passes through as-is.
         const routeType = typeMeta?.backendType || type;
         const base = `/admin/leads/${leadId}/generate/${routeType}/preview`;
-        if (! isConsultancyType) return base;
+        // Currency rides on every preview (not just consultancy) so the symbol
+        // updates live for English Engagement too.
+        if (! isConsultancyType) {
+            return `${base}?${new URLSearchParams({ currency }).toString()}`;
+        }
         const params = new URLSearchParams({
             school_enrolment_fee: String(schoolFee || 0),
             english_proficiency_fee: String(englishFee || 0),
             applicant_mode: typeMeta?.applicantMode || 'single',
+            currency,
+            bank_heading: bank.heading || '',
+            bank_name: bank.bank_name || '',
+            bank_account_name: bank.account_name || '',
+            bank_account_number: bank.account_number || '',
+            bank_reference: bank.reference || '',
         });
         return `${base}?${params.toString()}`;
-    }, [leadId, type, isConsultancyType, schoolFee, englishFee, typeMeta]);
+    }, [leadId, type, isConsultancyType, schoolFee, englishFee, typeMeta, currency, bank]);
 
     // Reset the loading flag every time the URL swings — the iframe's
     // onLoad callback will clear it once the new content is painted.
@@ -1420,6 +1496,32 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             )}
                         </div>
 
+                        {/* Currency section — chosen before the doc type. Drives the
+                            symbols in the fee panel, live preview and generated PDF.
+                            Amounts aren't converted; staff enter the right figure. */}
+                        <div className="px-5 py-4 border-b border-gray-100">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Currency</div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {Object.values(CURRENCIES).map((c) => (
+                                    <button
+                                        key={c.code}
+                                        type="button"
+                                        onClick={() => setCurrency(c.code)}
+                                        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                                            currency === c.code
+                                                ? 'border-gray-900 bg-gray-900 text-white'
+                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+                                        }`}
+                                    >
+                                        {c.short}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
+                                Sets the currency on the document. Enter fees in this currency — amounts aren&rsquo;t converted.
+                            </p>
+                        </div>
+
                         {/* Document type section */}
                         <div className="px-5 py-4 border-b border-gray-100">
                             <div className="flex items-center justify-between mb-2">
@@ -1454,6 +1556,9 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                         <option value="consultancy_std_couple_150">Standard · 150,000</option>
                                         <option value="consultancy_voucher_couple_150">With Voucher · 150,000</option>
                                     </optgroup>
+                                    <optgroup label="Consultancy · Onshore">
+                                        <option value="consultancy_onshore">Standard · Onshore</option>
+                                    </optgroup>
                                     <optgroup label="Other">
                                         <option value="english_engagement">English Engagement Agreement</option>
                                     </optgroup>
@@ -1471,32 +1576,82 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                         {isConsultancyType && (
                             <div className="px-5 py-4 border-b border-gray-100">
                                 <div className="flex items-center justify-between mb-2">
-                                    <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Fees · PhP</div>
+                                    <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Fees · {cur.short}</div>
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-500">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                         LIVE
                                     </span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
+                                {typeMeta?.singleFee ? (
+                                    // Onshore: one package fee, no English add-on / combined line.
                                     <FeeInput
-                                        label="School Enrolment"
+                                        label="Package fee"
                                         value={schoolFee}
                                         onChange={setSchoolFee}
-                                        step={1000}
-                                    />
-                                    <FeeInput
-                                        label="English Proficiency"
-                                        value={englishFee}
-                                        onChange={setEnglishFee}
                                         step={500}
+                                        symbol={cur.symbol}
                                     />
+                                ) : (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <FeeInput
+                                                label="School Enrolment"
+                                                value={schoolFee}
+                                                onChange={setSchoolFee}
+                                                step={1000}
+                                                symbol={cur.symbol}
+                                            />
+                                            <FeeInput
+                                                label="English Proficiency"
+                                                value={englishFee}
+                                                onChange={setEnglishFee}
+                                                step={500}
+                                                symbol={cur.symbol}
+                                            />
+                                        </div>
+                                        <div className="mt-3 flex items-baseline justify-between border-t border-gray-100 pt-2.5">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Combined</span>
+                                            <span className="text-base font-black text-gray-900 tabular-nums">
+                                                {cur.symbol}{(schoolFee + englishFee).toLocaleString(cur.locale)}
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Bank details section — consultancy only. A preset fills
+                            the fields; every field stays editable. "Other" blanks
+                            them for a fully custom bank. */}
+                        {isConsultancyType && (
+                            <div className="px-5 py-4 border-b border-gray-100">
+                                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Bank details</div>
+                                <div className="grid grid-cols-3 gap-2 mb-3">
+                                    {Object.entries(BANK_PRESETS).map(([key, p]) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => applyBankPreset(key)}
+                                            className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold transition-colors ${
+                                                bank.preset === key
+                                                    ? 'border-gray-900 bg-gray-900 text-white'
+                                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+                                            }`}
+                                        >
+                                            {p.label}
+                                        </button>
+                                    ))}
                                 </div>
-                                <div className="mt-3 flex items-baseline justify-between border-t border-gray-100 pt-2.5">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Combined</span>
-                                    <span className="text-base font-black text-gray-900 tabular-nums">
-                                        ₱{(schoolFee + englishFee).toLocaleString('en-PH')}
-                                    </span>
+                                <div className="space-y-2">
+                                    <BankField label="Heading" value={bank.heading} onChange={(v) => setBankField('heading', v)} placeholder="Payment for…" />
+                                    <BankField label="Bank name" value={bank.bank_name} onChange={(v) => setBankField('bank_name', v)} placeholder="e.g. ANZ" />
+                                    <BankField label="Account name" value={bank.account_name} onChange={(v) => setBankField('account_name', v)} placeholder="Account holder" />
+                                    <BankField label="Account number" value={bank.account_number} onChange={(v) => setBankField('account_number', v)} placeholder="00-0000-0000000-00" />
+                                    <BankField label="Reference" value={bank.reference} onChange={(v) => setBankField('reference', v)} placeholder="Defaults to the client's name" prefix="#" />
                                 </div>
+                                <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+                                    Pick a preset to fill these, then edit any field. Leave Reference blank to use the client&rsquo;s name.
+                                </p>
                             </div>
                         )}
 

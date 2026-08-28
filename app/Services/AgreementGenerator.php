@@ -27,7 +27,7 @@ class AgreementGenerator
      * English Engagement Agreement — PTE preparation services. No variant
      * (just one template). Stored against checklist_key='agree.engagement_english'.
      */
-    public function englishEngagement(Lead $lead): LeadDocument
+    public function englishEngagement(Lead $lead, string $currency = 'php'): LeadDocument
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '');
@@ -37,6 +37,8 @@ class AgreementGenerator
         // Company signatory — pre-sign with the current staff member.
         $signer = Auth::user();
 
+        $currency = $currency === 'nzd' ? 'nzd' : 'php';
+
         $payload = [
             'client_name' => $clientName,
             'client_reference' => $clientReference ?: 'ClientName',
@@ -45,6 +47,8 @@ class AgreementGenerator
             'signer_signature' => method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null,
             'generated_at' => $today,
             'generated_at_formatted' => $dateLine,
+            'currency' => $currency,
+            'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
         ];
 
         $pdf = Pdf::loadView('agreements.engagement-english', $payload)->setPaper('a4');
@@ -139,6 +143,22 @@ class AgreementGenerator
         $schoolFee = (int) ($overrides['school_enrolment_fee'] ?? $s['default_school_fee']);
         $englishFee = (int) ($overrides['english_proficiency_fee'] ?? 14500);
 
+        // Currency for the staff-entered fees (php | nzd). Only the symbol
+        // changes — amounts are never converted. The static reference
+        // breakdown stays in PHP (canonical template estimates).
+        $currency = ($overrides['currency'] ?? 'php') === 'nzd' ? 'nzd' : 'php';
+        $currencySymbol = $currency === 'nzd' ? 'NZ$' : 'Php';
+
+        // Bank details — staff pick a preset (ANZ / RCBC) or "Other" and may
+        // edit every field. Defaults reproduce the original RCBC block so
+        // documents generated without overrides are unchanged. The reference
+        // falls back to the client's slug (e.g. #neilescaner).
+        $bankHeading = trim((string) ($overrides['bank_heading'] ?? '')) ?: 'Payment for School Enrollment and Documentation Fee';
+        $bankName = trim((string) ($overrides['bank_name'] ?? '')) ?: 'RCBC';
+        $bankAccountName = trim((string) ($overrides['bank_account_name'] ?? '')) ?: 'Dinah Suarin';
+        $bankAccountNumber = trim((string) ($overrides['bank_account_number'] ?? '')) ?: '9045440503';
+        $bankReference = trim((string) ($overrides['bank_reference'] ?? '')) ?: $clientReference;
+
         // Applicant mode — Single or Couple. Only meaningful for scenarios
         // that support both (Std 150, Voucher 150). Single-only scenarios
         // ignore the override and pin to 'single'. Drives both the
@@ -189,6 +209,13 @@ class AgreementGenerator
             'school_enrolment_fee' => $schoolFee,
             'english_proficiency_fee' => $englishFee,
             'inz_voucher_fee' => 30600,
+            'currency' => $currency,
+            'currency_symbol' => $currencySymbol,
+            'bank_heading' => $bankHeading,
+            'bank_name' => $bankName,
+            'bank_account_name' => $bankAccountName,
+            'bank_account_number' => $bankAccountNumber,
+            'bank_reference' => $bankReference,
             'client_name' => $clientName,
             'client_reference' => $clientReference,
             'signer_name' => $signerName,
@@ -199,6 +226,88 @@ class AgreementGenerator
         ];
 
         return [$payload, $s];
+    }
+
+    /**
+     * Consultancy Agreement — ONSHORE variant. A single package fee
+     * (Documentation, School Enrolment & Visa Application) with no cost
+     * breakdown; defaults to NZ$ + ANZ (a NZ-based agreement). Shares the
+     * editable currency + bank overrides with the standard consultancy flow.
+     */
+    public function buildOnshorePayload(Lead $lead, array $overrides = []): array
+    {
+        $clientName = trim("{$lead->first_name} {$lead->last_name}");
+        $clientReference = Str::slug($clientName ?: 'ClientName', '') ?: 'ClientName';
+        $today = now();
+
+        $packageFee = (int) ($overrides['school_enrolment_fee'] ?? 3500);
+
+        // Onshore is a NZ-based agreement — default NZ$ + ANZ. Staff can
+        // still switch either in the modal.
+        $currency = ($overrides['currency'] ?? 'nzd') === 'php' ? 'php' : 'nzd';
+        $currencySymbol = $currency === 'php' ? 'Php' : 'NZ$';
+
+        $bankHeading = trim((string) ($overrides['bank_heading'] ?? '')) ?: 'Payment for Documentation, School Enrolment, and Visa Application Fee';
+        $bankName = trim((string) ($overrides['bank_name'] ?? '')) ?: 'ANZ';
+        $bankAccountName = trim((string) ($overrides['bank_account_name'] ?? '')) ?: 'EMPLOYMENT PATHWAYS LTD';
+        $bankAccountNumber = trim((string) ($overrides['bank_account_number'] ?? '')) ?: '06-0185-0987269-01';
+        $bankReference = trim((string) ($overrides['bank_reference'] ?? '')) ?: $clientReference;
+
+        $signer = null;
+        if (! empty($overrides['signer_id'])) {
+            $signer = \App\Models\User::find($overrides['signer_id']);
+        }
+        if (! $signer) {
+            $signer = Auth::user();
+        }
+
+        return [
+            'package_fee' => $packageFee,
+            'currency' => $currency,
+            'currency_symbol' => $currencySymbol,
+            'bank_heading' => $bankHeading,
+            'bank_name' => $bankName,
+            'bank_account_name' => $bankAccountName,
+            'bank_account_number' => $bankAccountNumber,
+            'bank_reference' => $bankReference,
+            'client_name' => $clientName,
+            'client_reference' => $clientReference,
+            'signer_name' => $signer?->name ?: 'Neil Bryan Escaner',
+            'signer_mobile' => $signer?->phone ?: '+63945 107 6871',
+            'signer_signature' => $signer && method_exists($signer, 'signatureDataUri') ? $signer->signatureDataUri() : null,
+            'generated_at' => $today,
+            'generated_at_formatted' => $today->format('jS').' day of '.$today->format('F Y'),
+        ];
+    }
+
+    public function consultancyOnshore(Lead $lead, array $overrides = []): LeadDocument
+    {
+        $payload = $this->buildOnshorePayload($lead, $overrides);
+
+        $pdf = Pdf::loadView('agreements.consultancy-onshore', $payload)
+            ->setPaper('a4')
+            ->setOption('isPhpEnabled', true);
+        $binary = $pdf->output();
+
+        $safeName = $this->safeBaseName($payload['client_name'] ?: 'Client');
+        $filename = "CA-{$safeName}-onshore.pdf";
+        $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
+
+        Storage::disk(self::DISK)->put($path, $binary);
+
+        return LeadDocument::create([
+            'lead_id' => $lead->id,
+            'request_id' => null,
+            'checklist_key' => 'agree.consultancy',
+            'original_name' => $filename,
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($binary),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'source' => LeadDocument::SOURCE_GENERATED,
+            'source_variant' => 'consultancy:onshore:single',
+            'uploaded_by' => Auth::id(),
+        ]);
     }
 
     /**
