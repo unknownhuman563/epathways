@@ -29,6 +29,8 @@ class MessageTemplate extends Model
         'design_json',
         'from_email',
         'from_name',
+        'reply_to_email',
+        'reply_to_name',
         'banner_image',
         'footer_image',
         'branding',

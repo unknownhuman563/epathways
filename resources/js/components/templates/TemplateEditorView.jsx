@@ -80,6 +80,8 @@ export default function TemplateEditorView({
         email_subject: template?.email_subject ?? "",
         from_email: template?.from_email ?? "",
         from_name: template?.from_name ?? "",
+        reply_to_email: template?.reply_to_email ?? "",
+        reply_to_name: template?.reply_to_name ?? "",
         email_body: template?.email_body ?? "",
         design_json: template?.design_json ?? null,
         sms_body: template?.sms_body ?? "",
@@ -326,6 +328,19 @@ export default function TemplateEditorView({
                                     <input value={data.from_name} onChange={(e) => setData("from_name", e.target.value)} placeholder="ePathways Philippines" className={inp} />
                                 </label>
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Blank = default sender. The address must be verified in your mail provider (Brevo).</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">Reply-to address <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.reply_to_email} onChange={(e) => setData("reply_to_email", e.target.value)} placeholder="you@epathways.co.nz" className={inp} />
+                                    {errors.reply_to_email && <span className="text-xs text-rose-600">{errors.reply_to_email}</span>}
+                                </label>
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">Reply-to name <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.reply_to_name} onChange={(e) => setData("reply_to_name", e.target.value)} placeholder="Your Name - ePathways" className={inp} />
+                                    {errors.reply_to_name && <span className="text-xs text-rose-600">{errors.reply_to_name}</span>}
+                                </label>
+                                <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Where client replies land. Blank = the shared reply inbox, then the From address.</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <label className="block col-span-2">
