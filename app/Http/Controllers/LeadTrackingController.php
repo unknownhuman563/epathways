@@ -1389,6 +1389,22 @@ class LeadTrackingController extends Controller
         'Agreements',
     ];
 
+    /**
+     * Map a staff-set checklist status (leads.document_checklist) to the value
+     * the tracker shows. Only the client-relevant review states surface; legacy
+     * internal planning statuses (available/in_progress/…) are ignored so the
+     * tracker falls back to file-based status for those.
+     */
+    private function trackerStaffStatus(?string $status): ?string
+    {
+        return match ($status) {
+            'accepted' => 'accepted',
+            'under_review' => 'under_review',
+            'needs_attention' => 'needs_attention',
+            default => null,
+        };
+    }
+
     private function resolveGeneralChecklist(Lead $lead): array
     {
         // Only the client-facing sections, and only those (drops the internal
@@ -1403,6 +1419,11 @@ class LeadTrackingController extends Controller
             ->groupBy('checklist_key');
 
         $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+
+        // Staff-set per-item status (leads.document_checklist JSON) — the same
+        // status shown on the staff Documents tab. When set, the tracker shows
+        // this exact status instead of deriving one from file presence.
+        $staffChecklist = is_array($lead->document_checklist) ? $lead->document_checklist : [];
 
         $decorated = [];
         foreach ($sections as $section) {
@@ -1430,6 +1451,7 @@ class LeadTrackingController extends Controller
                     'hint' => $item['hint'] ?? null,
                     'required' => ($item['required'] ?? true) ? true : false,
                     'status' => $status,
+                    'staff_status' => $this->trackerStaffStatus($staffChecklist[$key]['status'] ?? null),
                     'count' => $docs->count(),
                 ];
             }
@@ -1462,6 +1484,7 @@ class LeadTrackingController extends Controller
                 'hint' => null,
                 'required' => true,
                 'status' => $status,
+                'staff_status' => $this->trackerStaffStatus($staffChecklist[$key]['status'] ?? null),
                 'count' => $docs->count(),
             ];
         }

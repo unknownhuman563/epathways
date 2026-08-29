@@ -1554,6 +1554,10 @@ function DocumentsHubTab({
             doc,
             docs,
             state,
+            // Staff-set status from the Documents tab (accepted / under_review /
+            // needs_attention). When present it drives the STATUS badge so the
+            // tracker mirrors exactly what staff see.
+            staffStatus: it.staff_status || null,
             rejectedDoc: state === 'rejected' ? doc : null,
         };
     };
@@ -1885,6 +1889,19 @@ const UPLOAD_STATUS_LABEL = {
     Rejected:    'Required attention',
 };
 
+// Staff-set checklist status (leads.document_checklist) → tracker badge. Mirrors
+// the labels/tones on the staff Documents tab so both surfaces read the same.
+const STAFF_STATUS_TONE = {
+    accepted:        'bg-emerald-50 text-emerald-700 border-emerald-200',
+    under_review:    'bg-amber-50 text-amber-700 border-amber-200',
+    needs_attention: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+const STAFF_STATUS_LABEL = {
+    accepted:        'Accepted',
+    under_review:    'Under Review',
+    needs_attention: 'Required Attention',
+};
+
 // Lower index = higher priority (sorted to top).
 const UPLOAD_STATUS_RANK = {
     Rejected:    0,
@@ -2143,7 +2160,13 @@ function ChecklistRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
 
     const dot = isRejected ? 'bg-red-500' : hasFile ? 'bg-emerald-500' : 'bg-gray-300';
 
-    const statusBadge = hasFile ? (
+    // Staff-set status wins — the tracker mirrors the staff Documents tab.
+    // Falls back to the file-based status when staff haven't set one.
+    const statusBadge = row.staffStatus ? (
+        <span className={`inline-flex items-center px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em] uppercase border ${STAFF_STATUS_TONE[row.staffStatus] || 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+            {STAFF_STATUS_LABEL[row.staffStatus] || row.staffStatus}
+        </span>
+    ) : hasFile ? (
         <span className={`inline-flex items-center px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em] uppercase border ${UPLOAD_STATUS_TONE[doc.status] || 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
             {UPLOAD_STATUS_LABEL[doc.status] || doc.status}
         </span>
