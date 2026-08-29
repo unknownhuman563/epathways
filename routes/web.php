@@ -513,6 +513,10 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.agents.agreement.preview');
         Route::post('/admin/agents/{agent}/agreement/generate', [\App\Http\Controllers\Admin\AgentModuleController::class, 'generateAgreement'])
             ->name('admin.agents.agreement.generate');
+        Route::post('/admin/agents/{agent}/agreement/sign', [\App\Http\Controllers\Admin\AgentModuleController::class, 'signAgreement'])
+            ->name('admin.agents.agreement.sign');
+        Route::get('/admin/agents/{agent}/agreement/view', [\App\Http\Controllers\Admin\AgentModuleController::class, 'viewAgreement'])
+            ->name('admin.agents.agreement.view');
         Route::get('/admin/agents/{agent}/agreement/download', [\App\Http\Controllers\Admin\AgentModuleController::class, 'downloadAgreement'])
             ->name('admin.agents.agreement.download');
     });
@@ -1201,6 +1205,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
             Route::get('/agreement', [\App\Http\Controllers\Portal\AgentController::class, 'agreement'])->name('agreement');
+            Route::post('/agreement/sign', [\App\Http\Controllers\Portal\AgentController::class, 'signAgreement'])->name('agreement.sign');
+            Route::get('/agreement/view', [\App\Http\Controllers\Portal\AgentController::class, 'viewAgreement'])->name('agreement.view');
             Route::get('/agreement/download', [\App\Http\Controllers\Portal\AgentController::class, 'downloadAgreement'])->name('agreement.download');
         });
 

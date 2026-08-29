@@ -111,18 +111,65 @@ class AgentAgreementService
         return $out;
     }
 
-    private function payload(User $agent, array $fields): array
+    /**
+     * Build the blade payload. $signatures may carry either party's captured
+     * signature: ['agent' => ['data','name','date'], 'company' => [...]]. The
+     * company signature falls back to the current staff member's signature-on-
+     * file when nothing explicit has been captured (preview / first generate).
+     */
+    private function payload(User $agent, array $fields, array $signatures = []): array
     {
         $signer = Auth::user();
+
+        $companyData = $signatures['company']['data']
+            ?? ($signer && method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null);
 
         return [
             'fields' => $fields,
             'agent_name' => $agent->name,
             'signer_name' => $signer?->name,
-            'signer_signature' => $signer && method_exists($signer, 'signatureDataUriTrimmed')
-                ? $signer->signatureDataUriTrimmed()
-                : null,
+            // "For ePathways" cell — explicit company signature if signed, else
+            // the staff signer's signature-on-file (legacy behaviour).
+            'signer_signature' => $companyData,
+            'company_signed_date' => $signatures['company']['date'] ?? null,
+            // "For the Agent" cell — the agent's e-signature once they sign.
+            'agent_signature' => $signatures['agent']['data'] ?? null,
+            'agent_signed_name' => $signatures['agent']['name'] ?? null,
+            'agent_signed_date' => $signatures['agent']['date'] ?? null,
         ];
+    }
+
+    /** Signatures captured so far on a stored agreement, for a re-render. */
+    private function signaturesFrom(AgentAgreement $agreement): array
+    {
+        $sigs = [];
+        if ($agreement->isSignedByAgent()) {
+            $sigs['agent'] = [
+                'data' => $agreement->agent_signature_data,
+                'name' => $agreement->agent_signer_name,
+                'date' => $agreement->agent_signed_at->format('j M Y'),
+            ];
+        }
+        if ($agreement->isSignedByCompany()) {
+            $sigs['company'] = [
+                'data' => $agreement->company_signature_data,
+                'name' => $agreement->company_signer_name,
+                'date' => $agreement->company_signed_at->format('j M Y'),
+            ];
+        }
+
+        return $sigs;
+    }
+
+    /** Re-render the stored agreement PDF with whatever signatures exist. */
+    private function rebuild(AgentAgreement $agreement): void
+    {
+        $payload = $this->payload($agreement->agent, (array) $agreement->fields, $this->signaturesFrom($agreement));
+        $binary = Pdf::loadView('agreements.agent-referral', $payload)->setPaper('a4')->output();
+
+        Storage::disk(self::DISK)->put($agreement->file_path, $binary);
+        $agreement->size = strlen($binary);
+        $agreement->save();
     }
 
     /** Render the agreement as HTML for the live preview (no dompdf). */
@@ -165,5 +212,41 @@ class AgentAgreementService
             'size' => strlen($binary),
             'generated_by' => Auth::id(),
         ]);
+    }
+
+    /**
+     * Record the agent's e-signature and re-render the PDF with it embedded in
+     * the "For the Agent" cell. Mirrors the tracker signing flow: typed legal
+     * name + base64 signature (drawn or uploaded) + IP/UA audit.
+     */
+    public function recordAgentSignature(AgentAgreement $agreement, string $signerName, string $signatureData, string $ip, ?string $userAgent): AgentAgreement
+    {
+        $agreement->agent_signer_name = $signerName;
+        $agreement->agent_signature_data = $signatureData;
+        $agreement->agent_signed_at = now();
+        $agreement->agent_signed_ip = $ip;
+        $agreement->agent_signed_user_agent = $userAgent;
+        $agreement->save();
+
+        $this->rebuild($agreement);
+
+        return $agreement;
+    }
+
+    /**
+     * Record the ePathways (staff) e-signature on the "For ePathways" cell —
+     * same draw/upload capture as the agent side.
+     */
+    public function recordCompanySignature(AgentAgreement $agreement, string $signerName, string $signatureData): AgentAgreement
+    {
+        $agreement->company_signer_name = $signerName;
+        $agreement->company_signature_data = $signatureData;
+        $agreement->company_signed_at = now();
+        $agreement->company_signed_by = Auth::id();
+        $agreement->save();
+
+        $this->rebuild($agreement);
+
+        return $agreement;
     }
 }

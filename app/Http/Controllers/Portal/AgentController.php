@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AgentAgreement;
 use App\Models\Lead;
 use App\Models\Program;
+use App\Services\AgentAgreementService;
 use App\Traits\BuildsLeadRow;
 use App\Traits\CreatesDashboardLead;
 use Illuminate\Http\Request;
@@ -89,8 +90,8 @@ class AgentController extends Controller
         ]);
     }
 
-    /** The agent's own Referral Agent Agreement — view + download only. Staff
-     *  generate it from the Agents module; the agent just sees the result. */
+    /** The agent's own Referral Agent Agreement — view, sign, and download.
+     *  Staff generate it from the Agents module; the agent signs it here. */
     public function agreement()
     {
         $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->first();
@@ -101,8 +102,51 @@ class AgentController extends Controller
                 'size' => $agreement->size,
                 'created_at' => optional($agreement->created_at)?->toIso8601String(),
                 'download_url' => '/portal/agent/agreement/download',
+                'view_url' => '/portal/agent/agreement/view',
+                'signed' => $agreement->isSignedByAgent(),
+                'signer_name' => $agreement->agent_signer_name,
+                'signed_at' => optional($agreement->agent_signed_at)?->toIso8601String(),
             ] : null,
         ]);
+    }
+
+    /** Stream the agent's own agreement PDF inline (viewable in the browser). */
+    public function viewAgreement()
+    {
+        $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->firstOrFail();
+
+        abort_unless(Storage::disk('local')->exists($agreement->file_path), 404);
+
+        return response()->file(Storage::disk('local')->path($agreement->file_path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$agreement->original_name.'"',
+        ]);
+    }
+
+    /** Record the agent's e-signature on their own agreement (same capture
+     *  method as the tracker agreement signing). */
+    public function signAgreement(Request $request, AgentAgreementService $service)
+    {
+        $validated = $request->validate([
+            'signer_name' => ['required', 'string', 'max:200'],
+            'signature_data' => ['required', 'string', 'max:5000000'],
+            'terms_accepted' => ['required', 'accepted'],
+        ]);
+
+        $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->firstOrFail();
+
+        // Already signed — don't overwrite an existing signature.
+        abort_if($agreement->isSignedByAgent(), 422, 'This agreement is already signed.');
+
+        $service->recordAgentSignature(
+            $agreement,
+            trim($validated['signer_name']),
+            $validated['signature_data'],
+            $request->ip(),
+            $request->userAgent(),
+        );
+
+        return back()->with('success', 'Agreement signed. Thank you!');
     }
 
     /** Stream the agent's own agreement PDF (scoped to Auth::id()). */

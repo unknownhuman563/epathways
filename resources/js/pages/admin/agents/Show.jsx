@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import {
     ArrowLeft, Mail, Phone, MapPin, Users, FileSignature, Download, Eye,
-    Wand2, X, Loader, Plus, FileText, RefreshCw, UsersRound,
+    Wand2, X, Loader, Plus, FileText, RefreshCw, UsersRound, PenTool,
+    CheckCircle2, Circle,
 } from "lucide-react";
+import AgreementSignModal from "@/components/AgreementSignModal";
+import PdfViewerModal from "@/components/PdfViewerModal";
 
 export default function AgentShow({
     agent = {},
@@ -15,6 +18,8 @@ export default function AgentShow({
     previewBase = "",
 }) {
     const [modalOpen, setModalOpen] = useState(false);
+    const [signOpen, setSignOpen] = useState(false);
+    const [viewOpen, setViewOpen] = useState(false);
 
     // Same rule as the Sales agent-leads screen: everything not closed out.
     const inPipeline = leads.filter((l) => l.status !== "Closed" && l.status !== "Not Qualified").length;
@@ -102,9 +107,17 @@ export default function AgentShow({
                     <div className="flex items-center gap-2">
                         {agreement && (
                             <>
+                                <button type="button" onClick={() => setViewOpen(true)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50">
+                                    <Eye size={14} /> View
+                                </button>
                                 <a href={agreement.download_url} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50">
                                     <Download size={14} /> Download
                                 </a>
+                                {! agreement.company_signed && (
+                                    <button type="button" onClick={() => setSignOpen(true)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-bold hover:bg-black transition-colors">
+                                        <PenTool size={14} /> Sign (ePathways)
+                                    </button>
+                                )}
                                 <button type="button" onClick={() => setModalOpen(true)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50">
                                     <RefreshCw size={14} /> Regenerate
                                 </button>
@@ -117,6 +130,14 @@ export default function AgentShow({
                         )}
                     </div>
                 </div>
+
+                {/* Signature status — both parties */}
+                {agreement && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <SignStatus label="ePathways" signed={agreement.company_signed} name={agreement.company_signer_name} at={agreement.company_signed_at} fmtDate={fmtDate} />
+                        <SignStatus label="Agent" signed={agreement.agent_signed} name={agreement.agent_signer_name} at={agreement.agent_signed_at} fmtDate={fmtDate} />
+                    </div>
+                )}
             </div>
 
             {/* Leads */}
@@ -174,6 +195,45 @@ export default function AgentShow({
                     onClose={() => setModalOpen(false)}
                 />
             )}
+
+            {signOpen && agreement && (
+                <AgreementSignModal
+                    postUrl={agreement.sign_url}
+                    title="Sign for ePathways"
+                    reviewUrl={agreement.view_url}
+                    onClose={() => setSignOpen(false)}
+                />
+            )}
+
+            {viewOpen && agreement && (
+                <PdfViewerModal
+                    url={agreement.view_url}
+                    title="Referral Agent Agreement"
+                    downloadUrl={agreement.download_url}
+                    onClose={() => setViewOpen(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+// Per-party signature status line.
+function SignStatus({ label, signed, name, at, fmtDate }) {
+    return (
+        <div className={`flex items-start gap-2.5 rounded-xl border px-4 py-2.5 ${signed ? "border-emerald-200 bg-emerald-50/60" : "border-gray-200 bg-gray-50/60"}`}>
+            {signed
+                ? <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 shrink-0" />
+                : <Circle size={16} className="text-gray-300 mt-0.5 shrink-0" />}
+            <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
+                {signed ? (
+                    <p className="text-[13px] font-semibold text-emerald-900 truncate">
+                        Signed by {name} <span className="text-[11px] font-normal text-emerald-700">· {fmtDate(at)}</span>
+                    </p>
+                ) : (
+                    <p className="text-[13px] text-gray-500">Not signed yet</p>
+                )}
+            </div>
         </div>
     );
 }

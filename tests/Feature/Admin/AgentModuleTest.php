@@ -96,4 +96,74 @@ class AgentModuleTest extends TestCase
         $this->actingAs($agent)->get('/portal/agent/agreement')->assertOk();
         $this->actingAs($agent)->get('/portal/agent/agreement/download')->assertNotFound();
     }
+
+    public function test_agent_can_sign_their_own_agreement(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", ['agent_full_name' => 'Lillian']);
+
+        $png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        $this->actingAs($agent)
+            ->post('/portal/agent/agreement/sign', [
+                'signer_name' => 'Lillian Ejorango',
+                'signature_data' => $png,
+                'terms_accepted' => 1,
+            ])
+            ->assertRedirect();
+
+        $agreement = AgentAgreement::where('agent_id', $agent->id)->first();
+        $this->assertTrue($agreement->isSignedByAgent());
+        $this->assertSame('Lillian Ejorango', $agreement->agent_signer_name);
+        $this->assertNotNull($agreement->agent_signed_at);
+        $this->assertNotNull($agreement->agent_signed_ip);
+    }
+
+    public function test_signing_requires_name_signature_and_terms(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", ['agent_full_name' => 'X']);
+
+        $this->actingAs($agent)
+            ->post('/portal/agent/agreement/sign', ['signer_name' => '', 'signature_data' => '', 'terms_accepted' => 0])
+            ->assertSessionHasErrors(['signer_name', 'signature_data', 'terms_accepted']);
+    }
+
+    public function test_already_signed_agreement_cannot_be_re_signed(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", ['agent_full_name' => 'X']);
+
+        $png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        $payload = ['signer_name' => 'A', 'signature_data' => $png, 'terms_accepted' => 1];
+
+        $this->actingAs($agent)->post('/portal/agent/agreement/sign', $payload)->assertRedirect();
+        $this->actingAs($agent)->post('/portal/agent/agreement/sign', $payload)->assertStatus(422);
+    }
+
+    public function test_staff_can_sign_the_company_side_and_view_inline(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", ['agent_full_name' => 'X']);
+
+        // Inline view works.
+        $this->actingAs($super)->get("/admin/agents/{$agent->id}/agreement/view")->assertOk();
+
+        $png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        $this->actingAs($super)
+            ->post("/admin/agents/{$agent->id}/agreement/sign", ['signer_name' => 'Dinah Suarin', 'signature_data' => $png])
+            ->assertRedirect();
+
+        $agreement = AgentAgreement::where('agent_id', $agent->id)->first();
+        $this->assertTrue($agreement->isSignedByCompany());
+        $this->assertSame('Dinah Suarin', $agreement->company_signer_name);
+    }
 }

@@ -217,15 +217,18 @@
                 <div class="sig-label">TITLE</div>
             </td>
             <td style="text-align:center; height:70px;">
-                <div class="sig-name" style="margin-top:20px;">{!! $fld('agent_full_name', '[Agent full name]') !!}</div>
+                @if (! empty($agent_signature))
+                    <img src="{{ $agent_signature }}" alt="Agent signature" style="max-height:46px; max-width:150px; margin:0 auto 2px auto; display:block;">
+                @endif
+                <div class="sig-name" style="margin-top:{{ ! empty($agent_signature) ? '0' : '20px' }};">{!! $fld('agent_full_name', '[Agent full name]') !!}</div>
                 <div class="sig-label">FULL NAME</div>
                 <div style="margin-top:8px;">{!! $fld('agent_title', 'Agent') !!}</div>
                 <div class="sig-label">TITLE</div>
             </td>
         </tr>
         <tr>
-            <td style="padding:8px 12px;"><strong>Date:</strong> {!! $fld('company_date', '____________________') !!}</td>
-            <td style="padding:8px 12px;"><strong>Date:</strong> {!! $fld('agent_date', '____________________') !!}</td>
+            <td style="padding:8px 12px;"><strong>Date:</strong> {!! ! empty($company_signed_date) ? e($company_signed_date) : $fld('company_date', '____________________') !!}</td>
+            <td style="padding:8px 12px;"><strong>Date:</strong> {!! ! empty($agent_signed_date) ? e($agent_signed_date) : $fld('agent_date', '____________________') !!}</td>
         </tr>
     </tbody>
 </table>

@@ -84,6 +84,14 @@ class AgentModuleController extends Controller
                 'fields' => $agreement->fields,
                 'created_at' => optional($agreement->created_at)?->toIso8601String(),
                 'download_url' => "/admin/agents/{$agent->id}/agreement/download",
+                'view_url' => "/admin/agents/{$agent->id}/agreement/view",
+                'sign_url' => "/admin/agents/{$agent->id}/agreement/sign",
+                'agent_signed' => $agreement->isSignedByAgent(),
+                'agent_signer_name' => $agreement->agent_signer_name,
+                'agent_signed_at' => optional($agreement->agent_signed_at)?->toIso8601String(),
+                'company_signed' => $agreement->isSignedByCompany(),
+                'company_signer_name' => $agreement->company_signer_name,
+                'company_signed_at' => optional($agreement->company_signed_at)?->toIso8601String(),
             ] : null,
             'agreementFieldGroups' => AgentAgreementService::fieldGroups(),
             'agreementDefaults' => $agreement->fields ?? $service->defaultFields($agent),
@@ -126,5 +134,37 @@ class AgentModuleController extends Controller
         abort_unless(Storage::disk('local')->exists($agreement->file_path), 404);
 
         return Storage::disk('local')->download($agreement->file_path, $agreement->original_name);
+    }
+
+    /** Stream the agreement PDF inline (viewable in the browser, no download). */
+    public function viewAgreement(Request $request, User $agent)
+    {
+        abort_unless($agent->role === 'agent', 404);
+
+        $agreement = AgentAgreement::where('agent_id', $agent->id)->latest()->firstOrFail();
+        abort_unless(Storage::disk('local')->exists($agreement->file_path), 404);
+
+        return response()->file(Storage::disk('local')->path($agreement->file_path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$agreement->original_name.'"',
+        ]);
+    }
+
+    /** Staff signs the "For ePathways" side — same draw/upload capture. */
+    public function signAgreement(Request $request, User $agent, AgentAgreementService $service)
+    {
+        abort_unless($agent->role === 'agent', 404);
+
+        $validated = $request->validate([
+            'signer_name' => ['required', 'string', 'max:200'],
+            'signature_data' => ['required', 'string', 'max:5000000'],
+        ]);
+
+        $agreement = AgentAgreement::where('agent_id', $agent->id)->latest()->firstOrFail();
+        abort_if($agreement->isSignedByCompany(), 422, 'The ePathways side is already signed.');
+
+        $service->recordCompanySignature($agreement, trim($validated['signer_name']), $validated['signature_data']);
+
+        return back()->with('success', 'Agreement signed for ePathways.');
     }
 }
