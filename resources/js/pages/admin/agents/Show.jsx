@@ -3,7 +3,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
     ArrowLeft, Mail, Phone, MapPin, Users, FileSignature, Download, Eye,
     Wand2, X, Loader, Plus, FileText, RefreshCw, UsersRound, PenTool,
-    CheckCircle2, Circle,
+    CheckCircle2, Circle, Wallet, GraduationCap, TrendingUp,
 } from "lucide-react";
 import AgreementSignModal from "@/components/AgreementSignModal";
 import PdfViewerModal from "@/components/PdfViewerModal";
@@ -16,6 +16,7 @@ export default function AgentShow({
     agreementFieldGroups = [],
     agreementDefaults = {},
     previewBase = "",
+    commission = null,
 }) {
     const [modalOpen, setModalOpen] = useState(false);
     const [signOpen, setSignOpen] = useState(false);
@@ -96,7 +97,7 @@ export default function AgentShow({
                             <FileSignature size={18} />
                         </div>
                         <div>
-                            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800">Referral Agent Agreement</h2>
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800">Affiliate Partner Agreement</h2>
                             <p className="text-[12px] text-gray-500 mt-0.5">
                                 {agreement
                                     ? `Generated ${fmtDate(agreement.created_at)} · ${fmtSize(agreement.size)}`
@@ -139,6 +140,9 @@ export default function AgentShow({
                     </div>
                 )}
             </div>
+
+            {/* Commission dashboard */}
+            {commission && <CommissionSection commission={commission} hasAgreement={!! agreement} />}
 
             {/* Leads */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -208,7 +212,7 @@ export default function AgentShow({
             {viewOpen && agreement && (
                 <PdfViewerModal
                     url={agreement.view_url}
-                    title="Referral Agent Agreement"
+                    title="Affiliate Partner Agreement"
                     downloadUrl={agreement.download_url}
                     onClose={() => setViewOpen(false)}
                 />
@@ -218,6 +222,91 @@ export default function AgentShow({
 }
 
 // Per-party signature status line.
+// Commission dashboard — qualifying (started-course) students + the two
+// Schedule A tier cards, with the active tier highlighted, and an estimated
+// total pulled from the generated agreement's rates.
+function CommissionSection({ commission, hasAgreement }) {
+    const { qualifying, currency, tiers, total, per_student_amount } = commission;
+    const fmtMoney = (n) => (n === null || n === undefined)
+        ? "—"
+        : new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(n);
+    const cur = currency ? currency : "";
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <Wallet size={18} />
+                </div>
+                <div>
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800">Commission</h2>
+                    <p className="text-[12px] text-gray-500 mt-0.5">
+                        Based on referred students who have <strong>started their course</strong>, at the rates in this agent&rsquo;s agreement.
+                    </p>
+                </div>
+            </div>
+
+            {! hasAgreement && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800">
+                    No agreement yet — generate one to set the commission rates. Qualifying students are still counted below.
+                </div>
+            )}
+
+            {/* Top row: qualifying students + estimated total */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4 flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><GraduationCap size={20} /></div>
+                    <div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Students started course</div>
+                        <div className="text-3xl font-black text-gray-900 tabular-nums leading-none mt-1">{qualifying}</div>
+                    </div>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4 flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><TrendingUp size={20} /></div>
+                    <div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Estimated commission</div>
+                        <div className="text-2xl font-black text-gray-900 tabular-nums leading-none mt-1">
+                            {total === null ? "—" : fmtMoney(total)}
+                            {cur && total !== null && <span className="text-[11px] font-semibold text-gray-400 ml-1.5">{cur}</span>}
+                        </div>
+                        {per_student_amount !== null && qualifying > 0 && (
+                            <div className="text-[11px] text-gray-400 mt-0.5">{qualifying} × {fmtMoney(per_student_amount)}</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Tier cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {tiers.map((t) => (
+                    <div key={t.key} className={`rounded-xl border p-4 ${t.active ? "border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200" : "border-gray-200 bg-white"}`}>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-600">{t.label}</div>
+                            {t.active && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-600 text-white">
+                                    <CheckCircle2 size={10} /> Applies now
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-end gap-4">
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Percentage</div>
+                                <div className="text-lg font-black text-gray-900">{t.percent || "—"}</div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Per student</div>
+                                <div className="text-lg font-black text-gray-900">
+                                    {t.amount || "—"}{t.amount && cur && <span className="text-[11px] font-semibold text-gray-400 ml-1">{cur}</span>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function SignStatus({ label, signed, name, at, fmtDate }) {
     return (
         <div className={`flex items-start gap-2.5 rounded-xl border px-4 py-2.5 ${signed ? "border-emerald-200 bg-emerald-50/60" : "border-gray-200 bg-gray-50/60"}`}>
@@ -295,27 +384,50 @@ function AgreementModal({ agentId, fieldGroups, defaults, previewBase, isRegener
                             <div key={group.group}>
                                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500 mb-2">{group.group}</p>
                                 <div className="space-y-2.5">
-                                    {group.fields.map((f) => (
-                                        <label key={f.key} className="block">
-                                            <span className="block text-[11px] font-semibold text-gray-600 mb-1">{f.label}</span>
-                                            {f.type === "textarea" ? (
-                                                <textarea
-                                                    rows={2}
-                                                    value={fields[f.key] ?? ""}
-                                                    onChange={(e) => setField(f.key, e.target.value)}
-                                                    placeholder={f.placeholder}
-                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400"
-                                                />
-                                            ) : (
-                                                <input
-                                                    type="text"
-                                                    value={fields[f.key] ?? ""}
-                                                    onChange={(e) => setField(f.key, e.target.value)}
-                                                    placeholder={f.placeholder}
-                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400"
-                                                />
-                                            )}
-                                        </label>
+                                    {group.fields.map((f, i) => (
+                                        f.type === "pair" ? (
+                                            // Percentage | amount side by side under one row label.
+                                            <div key={i} className="block">
+                                                <span className="block text-[11px] font-semibold text-gray-600 mb-1">{f.label}</span>
+                                                <div className="grid grid-cols-[100px_1fr] gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={fields[f.left.key] ?? ""}
+                                                        onChange={(e) => setField(f.left.key, e.target.value)}
+                                                        placeholder={f.left.placeholder}
+                                                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={fields[f.right.key] ?? ""}
+                                                        onChange={(e) => setField(f.right.key, e.target.value)}
+                                                        placeholder={f.right.placeholder}
+                                                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <label key={f.key} className="block">
+                                                <span className="block text-[11px] font-semibold text-gray-600 mb-1">{f.label}</span>
+                                                {f.type === "textarea" ? (
+                                                    <textarea
+                                                        rows={2}
+                                                        value={fields[f.key] ?? ""}
+                                                        onChange={(e) => setField(f.key, e.target.value)}
+                                                        placeholder={f.placeholder}
+                                                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400"
+                                                    />
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        value={fields[f.key] ?? ""}
+                                                        onChange={(e) => setField(f.key, e.target.value)}
+                                                        placeholder={f.placeholder}
+                                                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400"
+                                                    />
+                                                )}
+                                            </label>
+                                        )
                                     ))}
                                 </div>
                             </div>
@@ -327,7 +439,7 @@ function AgreementModal({ agentId, fieldGroups, defaults, previewBase, isRegener
                         <div className="px-4 py-2.5 border-b border-gray-100 bg-white flex items-center gap-2 shrink-0">
                             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">Preview</span>
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-900 text-white text-[11px] font-semibold">
-                                <FileText size={11} /> Referral Agent Agreement
+                                <FileText size={11} /> Affiliate Partner Agreement
                             </span>
                         </div>
                         <div className="flex-1 relative min-h-0">

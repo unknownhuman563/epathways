@@ -66,6 +66,7 @@ class AgentModuleController extends Controller
         $agreement = AgentAgreement::where('agent_id', $agent->id)->latest()->first();
 
         return inertia('admin/agents/Show', [
+            'commission' => $this->commissionSummary($agent, $agreement),
             'agent' => [
                 'id' => $agent->id,
                 'name' => $agent->name,
@@ -99,6 +100,67 @@ class AgentModuleController extends Controller
         ]);
     }
 
+    /**
+     * Commission dashboard for an agent: how many of their referred students
+     * have started their course (education_stage = 'Started Course'), which
+     * Schedule A tier that qualifies for (1–5 vs 6+), and the resulting
+     * per-student rate + estimated total — all read from the signed/generated
+     * agreement's editable fields (blank until an agreement exists).
+     */
+    private function commissionSummary(User $agent, ?AgentAgreement $agreement): array
+    {
+        // Qualifying students = the agent's referred leads who have started
+        // their course. Each one counts as 1 toward the commission.
+        $qualifying = Lead::where('agent_id', $agent->id)
+            ->where('education_stage', 'Started Course')
+            ->count();
+
+        $fields = is_array($agreement?->fields) ? $agreement->fields : [];
+        // Parse a "20,000" style string to a number; non-numeric (e.g.
+        // "Negotiable") yields null so the card shows the text as-is.
+        $num = function ($s) {
+            $clean = preg_replace('/[^\d.]/', '', (string) $s);
+
+            return $clean === '' ? null : (float) $clean;
+        };
+
+        // Tier is set by the TOTAL count: 6+ qualifying students moves every
+        // qualifying student to the higher New Zealand rate (per Schedule A).
+        $tier = $qualifying >= 6 ? '6plus' : '1_5';
+
+        $tiers = [
+            [
+                'key' => '1_5',
+                'label' => 'New Zealand — 1 to 5 students',
+                'percent' => trim((string) ($fields['nz_1_5_percent'] ?? '')),
+                'amount' => trim((string) ($fields['nz_1_5_amount'] ?? '')),
+                'amount_num' => $num($fields['nz_1_5_amount'] ?? ''),
+                'active' => $tier === '1_5',
+            ],
+            [
+                'key' => '6plus',
+                'label' => 'New Zealand — 6 or more students',
+                'percent' => trim((string) ($fields['nz_6plus_percent'] ?? '')),
+                'amount' => trim((string) ($fields['nz_6plus_amount'] ?? '')),
+                'amount_num' => $num($fields['nz_6plus_amount'] ?? ''),
+                'active' => $tier === '6plus',
+            ],
+        ];
+
+        $activeAmount = $tier === '6plus' ? ($tiers[1]['amount_num']) : ($tiers[0]['amount_num']);
+        $total = $activeAmount !== null ? $activeAmount * $qualifying : null;
+
+        return [
+            'has_agreement' => $agreement !== null,
+            'qualifying' => $qualifying,
+            'tier' => $tier,
+            'currency' => trim((string) ($fields['currency'] ?? '')),
+            'tiers' => $tiers,
+            'per_student_amount' => $activeAmount,
+            'total' => $total,
+        ];
+    }
+
     /** Live HTML preview of the agreement with the current field values. */
     public function previewAgreement(Request $request, User $agent, AgentAgreementService $service)
     {
@@ -122,7 +184,7 @@ class AgentModuleController extends Controller
 
         $service->generate($agent, $validated);
 
-        return back()->with('success', "Referral Agent Agreement generated for {$agent->name}.");
+        return back()->with('success', "Affiliate Partner Agreement generated for {$agent->name}.");
     }
 
     public function downloadAgreement(Request $request, User $agent)

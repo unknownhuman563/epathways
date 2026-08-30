@@ -1205,7 +1205,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
             Route::get('/agreement', [\App\Http\Controllers\Portal\AgentController::class, 'agreement'])->name('agreement');
+            Route::post('/agreement/details', [\App\Http\Controllers\Portal\AgentController::class, 'updateAgreementDetails'])->name('agreement.details');
             Route::post('/agreement/sign', [\App\Http\Controllers\Portal\AgentController::class, 'signAgreement'])->name('agreement.sign');
+            Route::get('/agreement/preview', [\App\Http\Controllers\Portal\AgentController::class, 'previewAgreement'])->name('agreement.preview');
             Route::get('/agreement/view', [\App\Http\Controllers\Portal\AgentController::class, 'viewAgreement'])->name('agreement.view');
             Route::get('/agreement/download', [\App\Http\Controllers\Portal\AgentController::class, 'downloadAgreement'])->name('agreement.download');
         });

@@ -31,16 +31,23 @@ class AgentAgreementService
             ['group' => 'Agreement', 'fields' => [
                 ['key' => 'effective_date', 'label' => 'Effective date', 'placeholder' => 'e.g. 30th day of June, 2026'],
             ]],
-            ['group' => 'Agent details', 'fields' => [
-                ['key' => 'agent_full_name', 'label' => 'Agent full name', 'placeholder' => 'e.g. Lillian Novida Ejorango'],
+            ['group' => 'Affiliate Partner details', 'fields' => [
+                ['key' => 'agent_full_name', 'label' => 'Affiliate Partner full name', 'placeholder' => 'e.g. Lillian Novida Ejorango'],
                 ['key' => 'agent_citizenship', 'label' => 'Citizenship', 'placeholder' => 'e.g. Canada'],
                 ['key' => 'agent_passport', 'label' => 'Passport number', 'placeholder' => 'e.g. AK341265'],
                 ['key' => 'agent_city', 'label' => 'City, country', 'placeholder' => 'e.g. Vancouver, Canada'],
             ]],
             ['group' => 'Schedule A — Commission rates', 'fields' => [
-                ['key' => 'nz_1_5_rate', 'label' => 'New Zealand — 1 to 5 students', 'placeholder' => 'PhP 20,000'],
-                ['key' => 'nz_6plus_rate', 'label' => 'New Zealand — 6 or more students', 'placeholder' => 'PhP 30,000'],
-                ['key' => 'australia_rate', 'label' => 'Australia — all students', 'placeholder' => 'Negotiable (agreed in writing, case-by-case)'],
+                // Each rate row is a pair: percentage | amount, side by side.
+                ['type' => 'pair', 'label' => 'New Zealand — 1 to 5 students',
+                    'left' => ['key' => 'nz_1_5_percent', 'placeholder' => 'e.g. 10%'],
+                    'right' => ['key' => 'nz_1_5_amount', 'placeholder' => 'e.g. 20,000']],
+                ['type' => 'pair', 'label' => 'New Zealand — 6 or more students',
+                    'left' => ['key' => 'nz_6plus_percent', 'placeholder' => 'e.g. 15%'],
+                    'right' => ['key' => 'nz_6plus_amount', 'placeholder' => 'e.g. 30,000']],
+                ['type' => 'pair', 'label' => 'Australia — all students',
+                    'left' => ['key' => 'au_percent', 'placeholder' => 'e.g. Negotiable'],
+                    'right' => ['key' => 'au_amount', 'placeholder' => 'e.g. 25,000 or Negotiable']],
             ]],
             ['group' => 'Schedule A — Payment & other terms', 'fields' => [
                 ['key' => 'commission_basis', 'label' => 'Commission basis', 'placeholder' => 'Per-student fee'],
@@ -50,13 +57,47 @@ class AgentAgreementService
                 ['key' => 'australia_students', 'label' => 'Australia students', 'placeholder' => 'Commission is negotiable and agreed in writing before the referral is processed.', 'type' => 'textarea'],
                 ['key' => 'refunds_withdrawals', 'label' => 'Refunds & withdrawals', 'placeholder' => 'No commission is payable where a student does not commence, withdraws, or whose fees are refunded.', 'type' => 'textarea'],
             ]],
-            ['group' => 'Execution', 'fields' => [
-                ['key' => 'company_signatory', 'label' => 'ePathways signatory', 'placeholder' => 'Dinah Suarin'],
-                ['key' => 'company_title', 'label' => 'ePathways title', 'placeholder' => 'Founder'],
-                ['key' => 'company_date', 'label' => 'ePathways date', 'placeholder' => 'e.g. June 30th 2026'],
-                ['key' => 'agent_title', 'label' => 'Agent title', 'placeholder' => 'Agent'],
-                ['key' => 'agent_date', 'label' => 'Agent date', 'placeholder' => 'Signed on…'],
+            ['group' => 'Schedule A — Comment', 'fields' => [
+                ['key' => 'schedule_a_comment', 'label' => 'Comment', 'placeholder' => 'Any comments, clarifications, or supplementary terms agreed between eP and the Affiliate Partner.', 'type' => 'textarea'],
             ]],
+            ['group' => 'Schedule B — Affiliate Partner bank account', 'fields' => [
+                ['key' => 'bank_name', 'label' => 'Bank name', 'placeholder' => 'Insert bank'],
+                ['key' => 'account_holder', 'label' => 'Account holder name', 'placeholder' => 'As registered with the bank'],
+                ['key' => 'account_number', 'label' => 'Account number', 'placeholder' => 'Insert account number'],
+                ['key' => 'swift_bic', 'label' => 'SWIFT / BIC code', 'placeholder' => 'Insert SWIFT / BIC code'],
+            ]],
+            ['group' => 'Execution — eP', 'fields' => [
+                ['key' => 'company_signatory', 'label' => 'eP signatory', 'placeholder' => 'Dinah Suarin'],
+                ['key' => 'company_title', 'label' => 'eP title', 'placeholder' => 'Founder'],
+                ['key' => 'company_date', 'label' => 'eP date', 'placeholder' => 'e.g. June 30th 2026'],
+            ]],
+            ['group' => 'Execution — Affiliate Partner', 'fields' => [
+                ['key' => 'agent_title', 'label' => 'Affiliate Partner title', 'placeholder' => 'Affiliate Partner'],
+                ['key' => 'agent_date', 'label' => 'Affiliate Partner date', 'placeholder' => 'Signed on…'],
+                ['key' => 'affiliate_business_address', 'label' => 'Business address', 'placeholder' => 'Affiliate Partner business address', 'type' => 'textarea'],
+                ['key' => 'affiliate_email', 'label' => 'Email', 'placeholder' => 'Affiliate Partner email'],
+                ['key' => 'affiliate_contact', 'label' => 'Contact number', 'placeholder' => 'Affiliate Partner contact number'],
+            ]],
+        ];
+    }
+
+    /**
+     * Fields the Affiliate Partner fills in themselves (Schedule B bank account
+     * + their execution contact details). Surfaced on the agent's own signing
+     * step so they provide their own banking + contact info.
+     *
+     * @return array<int, array{key:string,label:string,placeholder:string,type?:string}>
+     */
+    public static function affiliateFields(): array
+    {
+        return [
+            ['key' => 'bank_name', 'label' => 'Bank name', 'placeholder' => 'Your bank'],
+            ['key' => 'account_holder', 'label' => 'Account holder name', 'placeholder' => 'As registered with the bank'],
+            ['key' => 'account_number', 'label' => 'Account number', 'placeholder' => 'Your account number'],
+            ['key' => 'swift_bic', 'label' => 'SWIFT / BIC code', 'placeholder' => 'Your bank SWIFT / BIC'],
+            ['key' => 'affiliate_business_address', 'label' => 'Business address', 'placeholder' => 'Your business address', 'type' => 'textarea'],
+            ['key' => 'affiliate_email', 'label' => 'Email', 'placeholder' => 'you@example.com'],
+            ['key' => 'affiliate_contact', 'label' => 'Contact number', 'placeholder' => 'Your contact number'],
         ];
     }
 
@@ -64,7 +105,14 @@ class AgentAgreementService
     public static function fieldKeys(): array
     {
         return collect(self::fieldGroups())
-            ->flatMap(fn ($g) => array_column($g['fields'], 'key'))
+            ->flatMap(fn ($g) => collect($g['fields'])->flatMap(function ($f) {
+                // A "pair" field carries two sub-keys (percentage | amount).
+                if (($f['type'] ?? null) === 'pair') {
+                    return [$f['left']['key'], $f['right']['key']];
+                }
+
+                return [$f['key']];
+            }))
             ->all();
     }
 
@@ -81,20 +129,34 @@ class AgentAgreementService
             'agent_citizenship' => '',
             'agent_passport' => '',
             'agent_city' => $agent->location ?? '',
-            'nz_1_5_rate' => 'PhP 20,000',
-            'nz_6plus_rate' => 'PhP 30,000',
-            'australia_rate' => 'Negotiable (agreed in writing, case-by-case)',
+            // Schedule A percent/amount — blank so the grey "Percentage" /
+            // "Insert Amount" placeholder guides show until staff fill them.
+            'nz_1_5_percent' => '',
+            'nz_1_5_amount' => '',
+            'nz_6plus_percent' => '',
+            'nz_6plus_amount' => '',
+            'au_percent' => '',
+            'au_amount' => '',
             'commission_basis' => 'Per-student fee',
             'payment_trigger' => 'Enrolment and commencement of the course',
             'payment_timing' => 'Within 15 days after the student commences the course',
             'currency' => 'Philippine Peso (PhP)',
             'australia_students' => 'Commission is negotiable and agreed in writing before the referral is processed.',
             'refunds_withdrawals' => 'No commission is payable where a student does not commence, withdraws, or whose fees are refunded.',
+            'schedule_a_comment' => '',
+            // Schedule B — Affiliate Partner fills these in themselves.
+            'bank_name' => '',
+            'account_holder' => '',
+            'account_number' => '',
+            'swift_bic' => '',
             'company_signatory' => 'Dinah Suarin',
             'company_title' => 'Founder',
             'company_date' => '',
-            'agent_title' => 'Agent',
+            'agent_title' => 'Affiliate Partner',
             'agent_date' => '',
+            'affiliate_business_address' => '',
+            'affiliate_email' => $agent->email ?? '',
+            'affiliate_contact' => $agent->phone ?? '',
         ];
     }
 
@@ -112,31 +174,45 @@ class AgentAgreementService
     }
 
     /**
-     * Build the blade payload. $signatures may carry either party's captured
-     * signature: ['agent' => ['data','name','date'], 'company' => [...]]. The
-     * company signature falls back to the current staff member's signature-on-
-     * file when nothing explicit has been captured (preview / first generate).
+     * Build the blade payload. $signatures carries each party's captured
+     * signature: ['agent' => ['data','name','date'], 'company' => [...]]. Each
+     * cell only shows a signature once that party has explicitly signed — no
+     * Auth fallback, so a rebuild triggered by either side never leaks the
+     * wrong signature into the other party's cell.
      */
     private function payload(User $agent, array $fields, array $signatures = []): array
     {
-        $signer = Auth::user();
-
-        $companyData = $signatures['company']['data']
-            ?? ($signer && method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null);
-
         return [
             'fields' => $fields,
             'agent_name' => $agent->name,
-            'signer_name' => $signer?->name,
-            // "For ePathways" cell — explicit company signature if signed, else
-            // the staff signer's signature-on-file (legacy behaviour).
-            'signer_signature' => $companyData,
+            // "For eP" cell — the company signature once staff sign.
+            'signer_signature' => $signatures['company']['data'] ?? null,
             'company_signed_date' => $signatures['company']['date'] ?? null,
-            // "For the Agent" cell — the agent's e-signature once they sign.
+            // "For the Affiliate Partner" cell — the agent's e-signature.
             'agent_signature' => $signatures['agent']['data'] ?? null,
             'agent_signed_name' => $signatures['agent']['name'] ?? null,
             'agent_signed_date' => $signatures['agent']['date'] ?? null,
         ];
+    }
+
+    /**
+     * Render the stored agreement to HTML for a live preview, merging optional
+     * override field values (e.g. the agent's in-progress Schedule B edits) and
+     * keeping whatever signatures already exist.
+     */
+    public function previewHtmlForAgreement(AgentAgreement $agreement, array $override = []): string
+    {
+        $fields = is_array($agreement->fields) ? $agreement->fields : [];
+        foreach ($override as $key => $value) {
+            if (in_array($key, self::fieldKeys(), true) && is_string($value)) {
+                $fields[$key] = mb_substr(trim($value), 0, 500);
+            }
+        }
+
+        $payload = $this->payload($agreement->agent, $fields, $this->signaturesFrom($agreement));
+        $payload['preview'] = true;
+
+        return view('agreements.agent-referral', $payload)->render();
     }
 
     /** Signatures captured so far on a stored agreement, for a re-render. */
@@ -159,6 +235,27 @@ class AgentAgreementService
         }
 
         return $sigs;
+    }
+
+    /**
+     * Merge partial field updates onto the agreement (e.g. the Affiliate
+     * Partner's Schedule B bank + contact details) and re-render the PDF,
+     * preserving any signatures already captured.
+     */
+    public function updateFields(AgentAgreement $agreement, array $partial): AgentAgreement
+    {
+        $fields = is_array($agreement->fields) ? $agreement->fields : [];
+        foreach ($partial as $key => $value) {
+            if (in_array($key, self::fieldKeys(), true) && is_string($value)) {
+                $fields[$key] = mb_substr(trim($value), 0, 500);
+            }
+        }
+        $agreement->fields = $fields;
+        $agreement->save();
+
+        $this->rebuild($agreement);
+
+        return $agreement;
     }
 
     /** Re-render the stored agreement PDF with whatever signatures exist. */
@@ -191,7 +288,7 @@ class AgentAgreementService
         $binary = $pdf->output();
 
         $safeName = Str::slug($agent->name ?: 'Agent') ?: ('agent-'.$agent->id);
-        $filename = "Referral-Agent-Agreement-{$safeName}.pdf";
+        $filename = "Affiliate-Partner-Agreement-{$safeName}.pdf";
         $path = "agent-agreements/{$agent->id}/".Str::random(12)."-{$filename}";
 
         Storage::disk(self::DISK)->put($path, $binary);

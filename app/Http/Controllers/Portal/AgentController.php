@@ -96,6 +96,15 @@ class AgentController extends Controller
     {
         $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->first();
 
+        // Current values of the Affiliate-Partner-filled fields (Schedule B bank
+        // + contact) so the agent's sign step is pre-seeded with anything staff
+        // already entered or the agent previously provided.
+        $storedFields = is_array($agreement?->fields) ? $agreement->fields : [];
+        $affiliateFields = AgentAgreementService::affiliateFields();
+        $affiliateValues = collect($affiliateFields)
+            ->mapWithKeys(fn ($f) => [$f['key'] => (string) ($storedFields[$f['key']] ?? '')])
+            ->all();
+
         return inertia('portal/agent/Agreement', [
             'agreement' => $agreement ? [
                 'original_name' => $agreement->original_name,
@@ -107,7 +116,27 @@ class AgentController extends Controller
                 'signer_name' => $agreement->agent_signer_name,
                 'signed_at' => optional($agreement->agent_signed_at)?->toIso8601String(),
             ] : null,
+            // Schedule B + contact fields the Affiliate Partner completes themselves.
+            'affiliateFields' => $affiliateFields,
+            'affiliateValues' => $affiliateValues,
         ]);
+    }
+
+    /** Live HTML preview of the agent's agreement, reflecting their in-progress
+     *  Schedule B / contact edits (query params) over the stored fields. */
+    public function previewAgreement(Request $request, AgentAgreementService $service)
+    {
+        $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->firstOrFail();
+
+        $keys = collect(AgentAgreementService::affiliateFields())->pluck('key')->all();
+        $override = collect($keys)
+            ->filter(fn ($k) => $request->has($k))
+            ->mapWithKeys(fn ($k) => [$k => (string) $request->query($k)])
+            ->all();
+
+        $html = $service->previewHtmlForAgreement($agreement, $override);
+
+        return response($html)->header('Content-Type', 'text/html; charset=utf-8');
     }
 
     /** Stream the agent's own agreement PDF inline (viewable in the browser). */
@@ -123,20 +152,56 @@ class AgentController extends Controller
         ]);
     }
 
+    /** Affiliate Partner fills their own Schedule B bank + contact details.
+     *  After staff generate the agreement, this is the agent's part. Saved
+     *  independently of signing; re-renders the PDF (keeping any signatures). */
+    public function updateAgreementDetails(Request $request, AgentAgreementService $service)
+    {
+        $keys = collect(AgentAgreementService::affiliateFields())->pluck('key')->all();
+        $rules = [];
+        foreach ($keys as $key) {
+            $rules[$key] = ['nullable', 'string', 'max:500'];
+        }
+        $request->validate($rules);
+
+        $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->firstOrFail();
+        $service->updateFields($agreement, $request->only($keys));
+
+        return back()->with('success', 'Your details were saved.');
+    }
+
     /** Record the agent's e-signature on their own agreement (same capture
      *  method as the tracker agreement signing). */
     public function signAgreement(Request $request, AgentAgreementService $service)
     {
-        $validated = $request->validate([
+        // Signature + terms, plus the Affiliate-Partner-filled fields
+        // (Schedule B bank account + their execution contact details).
+        $affiliateKeys = collect(AgentAgreementService::affiliateFields())->pluck('key')->all();
+        $rules = [
             'signer_name' => ['required', 'string', 'max:200'],
             'signature_data' => ['required', 'string', 'max:5000000'],
             'terms_accepted' => ['required', 'accepted'],
-        ]);
+        ];
+        foreach ($affiliateKeys as $key) {
+            $rules[$key] = ['nullable', 'string', 'max:500'];
+        }
+        $validated = $request->validate($rules);
 
         $agreement = AgentAgreement::where('agent_id', Auth::id())->latest()->firstOrFail();
 
         // Already signed — don't overwrite an existing signature.
         abort_if($agreement->isSignedByAgent(), 422, 'This agreement is already signed.');
+
+        // Merge the agent's Schedule B + contact details into the stored fields
+        // so the re-rendered PDF (done inside recordAgentSignature) includes them.
+        $fields = is_array($agreement->fields) ? $agreement->fields : [];
+        foreach ($affiliateKeys as $key) {
+            if ($request->has($key)) {
+                $fields[$key] = mb_substr(trim((string) $request->input($key)), 0, 500);
+            }
+        }
+        $agreement->fields = $fields;
+        $agreement->save();
 
         $service->recordAgentSignature(
             $agreement,

@@ -43,14 +43,14 @@ class AgentModuleTest extends TestCase
             ->post("/admin/agents/{$agent->id}/agreement/generate", [
                 'agent_passport' => 'AK341265',
                 'agent_citizenship' => 'Canada',
-                'nz_6plus_rate' => 'PhP 35,000',
+                'nz_6plus_amount' => 'PhP 35,000',
             ])
             ->assertRedirect();
 
         $agreement = AgentAgreement::where('agent_id', $agent->id)->first();
         $this->assertNotNull($agreement);
         $this->assertSame('AK341265', $agreement->fields['agent_passport']);
-        $this->assertSame('PhP 35,000', $agreement->fields['nz_6plus_rate']);
+        $this->assertSame('PhP 35,000', $agreement->fields['nz_6plus_amount']);
         Storage::disk('local')->assertExists($agreement->file_path);
     }
 
@@ -145,6 +145,102 @@ class AgentModuleTest extends TestCase
 
         $this->actingAs($agent)->post('/portal/agent/agreement/sign', $payload)->assertRedirect();
         $this->actingAs($agent)->post('/portal/agent/agreement/sign', $payload)->assertStatus(422);
+    }
+
+    public function test_agent_provides_bank_details_when_signing(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", ['agent_full_name' => 'Lillian']);
+
+        $png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        $this->actingAs($agent)
+            ->post('/portal/agent/agreement/sign', [
+                'signer_name' => 'Lillian Ejorango',
+                'signature_data' => $png,
+                'terms_accepted' => 1,
+                'bank_name' => 'RCBC',
+                'account_number' => '9045440503',
+                'affiliate_email' => 'lil@example.com',
+            ])
+            ->assertRedirect();
+
+        $agreement = AgentAgreement::where('agent_id', $agent->id)->first();
+        $this->assertTrue($agreement->isSignedByAgent());
+        $this->assertSame('RCBC', $agreement->fields['bank_name']);
+        $this->assertSame('9045440503', $agreement->fields['account_number']);
+        $this->assertSame('lil@example.com', $agreement->fields['affiliate_email']);
+    }
+
+    public function test_agent_can_save_their_bank_details_separately(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", ['agent_full_name' => 'Lil']);
+
+        $this->actingAs($agent)
+            ->post('/portal/agent/agreement/details', [
+                'bank_name' => 'RCBC',
+                'account_holder' => 'Lillian Ejorango',
+                'account_number' => '9045440503',
+                'swift_bic' => 'RCBCPHMM',
+            ])
+            ->assertRedirect();
+
+        $agreement = AgentAgreement::where('agent_id', $agent->id)->first();
+        $this->assertSame('RCBC', $agreement->fields['bank_name']);
+        $this->assertSame('RCBCPHMM', $agreement->fields['swift_bic']);
+    }
+
+    public function test_commission_counts_started_course_students_and_picks_tier(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+
+        // 3 started-course + 2 other leads → 3 qualifying (1–5 tier).
+        for ($i = 0; $i < 3; $i++) {
+            \App\Models\Lead::create(['first_name' => "S$i", 'last_name' => 'T', 'agent_id' => $agent->id, 'education_stage' => 'Started Course']);
+        }
+        \App\Models\Lead::create(['first_name' => 'X', 'last_name' => 'T', 'agent_id' => $agent->id, 'education_stage' => 'Conditional Offer']);
+
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", [
+            'nz_1_5_amount' => '20,000',
+            'nz_6plus_amount' => '30,000',
+            'currency' => 'Philippine Peso (PhP)',
+        ]);
+
+        $this->actingAs($super)->get("/admin/agents/{$agent->id}")
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p
+                ->where('commission.qualifying', 3)
+                ->where('commission.tier', '1_5')
+                ->where('commission.per_student_amount', 20000)
+                ->where('commission.total', 60000)
+            );
+    }
+
+    public function test_commission_moves_to_6plus_tier_at_six_students(): void
+    {
+        Storage::fake('local');
+        $super = User::factory()->create(['role' => 'super_admin']);
+        $agent = User::factory()->create(['role' => 'agent']);
+
+        for ($i = 0; $i < 6; $i++) {
+            \App\Models\Lead::create(['first_name' => "S$i", 'last_name' => 'T', 'agent_id' => $agent->id, 'education_stage' => 'Started Course']);
+        }
+        $this->actingAs($super)->post("/admin/agents/{$agent->id}/agreement/generate", [
+            'nz_1_5_amount' => '20,000', 'nz_6plus_amount' => '30,000',
+        ]);
+
+        $this->actingAs($super)->get("/admin/agents/{$agent->id}")
+            ->assertInertia(fn ($p) => $p
+                ->where('commission.qualifying', 6)
+                ->where('commission.tier', '6plus')
+                ->where('commission.total', 180000)
+            );
     }
 
     public function test_staff_can_sign_the_company_side_and_view_inline(): void
