@@ -229,12 +229,12 @@ class AgreementGenerator
     }
 
     /**
-     * Consultancy Agreement — ONSHORE variant. A single package fee
+     * Consultancy Agreement — OFFSHORE variant. A single package fee
      * (Documentation, School Enrolment & Visa Application) with no cost
      * breakdown; defaults to NZ$ + ANZ (a NZ-based agreement). Shares the
      * editable currency + bank overrides with the standard consultancy flow.
      */
-    public function buildOnshorePayload(Lead $lead, array $overrides = []): array
+    public function buildOffshorePayload(Lead $lead, array $overrides = []): array
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '') ?: 'ClientName';
@@ -242,7 +242,7 @@ class AgreementGenerator
 
         $packageFee = (int) ($overrides['school_enrolment_fee'] ?? 3500);
 
-        // Onshore is a NZ-based agreement — default NZ$ + ANZ. Staff can
+        // Offshore is a NZ-based agreement — default NZ$ + ANZ. Staff can
         // still switch either in the modal.
         $currency = ($overrides['currency'] ?? 'nzd') === 'php' ? 'php' : 'nzd';
         $currencySymbol = $currency === 'php' ? 'Php' : 'NZ$';
@@ -280,17 +280,78 @@ class AgreementGenerator
         ];
     }
 
-    public function consultancyOnshore(Lead $lead, array $overrides = []): LeadDocument
+    public function consultancyOffshore(Lead $lead, array $overrides = []): LeadDocument
     {
-        $payload = $this->buildOnshorePayload($lead, $overrides);
+        $payload = $this->buildOffshorePayload($lead, $overrides);
 
-        $pdf = Pdf::loadView('agreements.consultancy-onshore', $payload)
+        $pdf = Pdf::loadView('agreements.consultancy-offshore', $payload)
             ->setPaper('a4')
             ->setOption('isPhpEnabled', true);
         $binary = $pdf->output();
 
         $safeName = $this->safeBaseName($payload['client_name'] ?: 'Client');
-        $filename = "CA-{$safeName}-onshore.pdf";
+        $filename = "CA-{$safeName}-offshore.pdf";
+        $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
+
+        Storage::disk(self::DISK)->put($path, $binary);
+
+        return LeadDocument::create([
+            'lead_id' => $lead->id,
+            'request_id' => null,
+            'checklist_key' => 'agree.consultancy',
+            'original_name' => $filename,
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($binary),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'source' => LeadDocument::SOURCE_GENERATED,
+            'source_variant' => 'consultancy:offshore:single',
+            'uploaded_by' => Auth::id(),
+        ]);
+    }
+
+    /**
+     * Onshore Engagement Agreement — for applicants already in New Zealand.
+     * An EDUCATION engagement that is FREE OF CHARGE (no consultancy fees);
+     * eP acts as education agent and refers the client to a Licensed
+     * Immigration Adviser for visa matters. No fee/bank fields.
+     */
+    public function buildOnshoreEngagementPayload(Lead $lead, array $overrides = []): array
+    {
+        $clientName = trim("{$lead->first_name} {$lead->last_name}");
+        $clientReference = Str::slug($clientName ?: 'ClientName', '') ?: 'ClientName';
+        $today = now();
+
+        $signer = null;
+        if (! empty($overrides['signer_id'])) {
+            $signer = \App\Models\User::find($overrides['signer_id']);
+        }
+        if (! $signer) {
+            $signer = Auth::user();
+        }
+
+        return [
+            'client_name' => $clientName,
+            'client_reference' => $clientReference,
+            'business_number' => '9429050526901',
+            'agreement_date' => trim((string) ($overrides['agreement_date'] ?? '')) ?: $today->format('j F Y'),
+            'signer_name' => $signer?->name ?: 'Dinah Suarin',
+            'signer_signature' => $signer && method_exists($signer, 'signatureDataUri') ? $signer->signatureDataUri() : null,
+            'generated_at' => $today,
+        ];
+    }
+
+    public function onshoreEngagement(Lead $lead, array $overrides = []): LeadDocument
+    {
+        $payload = $this->buildOnshoreEngagementPayload($lead, $overrides);
+
+        $pdf = Pdf::loadView('agreements.onshore-engagement', $payload)
+            ->setPaper('a4')
+            ->setOption('isPhpEnabled', true);
+        $binary = $pdf->output();
+
+        $safeName = $this->safeBaseName($payload['client_name'] ?: 'Client');
+        $filename = "Onshore-Engagement-{$safeName}.pdf";
         $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
 
         Storage::disk(self::DISK)->put($path, $binary);

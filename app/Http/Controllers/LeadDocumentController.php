@@ -614,9 +614,11 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            if ($consultancyScenario !== null || $type === 'consultancy_onshore') {
+            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore'], true)) {
                 if ($type === 'consultancy_onshore') {
-                    $generator->consultancyOnshore($lead, $overrides);
+                    $generator->onshoreEngagement($lead, $overrides);
+                } elseif ($type === 'consultancy_offshore') {
+                    $generator->consultancyOffshore($lead, $overrides);
                 } else {
                     $generator->consultancy($lead, $consultancyScenario, $overrides);
                 }
@@ -1432,9 +1434,13 @@ class LeadDocumentController extends Controller
         $consultancyScenario = $this->consultancyScenarioForType($type);
 
         if ($type === 'consultancy_onshore') {
-            $payload = $generator->buildOnshorePayload($lead, $overrides);
+            $payload = $generator->buildOnshoreEngagementPayload($lead, $overrides);
             $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
-            $view = 'agreements.consultancy-onshore';
+            $view = 'agreements.onshore-engagement';
+        } elseif ($type === 'consultancy_offshore') {
+            $payload = $generator->buildOffshorePayload($lead, $overrides);
+            $payload['preview'] = true;
+            $view = 'agreements.consultancy-offshore';
         } elseif ($consultancyScenario !== null) {
             [$payload] = $generator->buildConsultancyPayload($lead, $consultancyScenario, $overrides);
             $payload['preview'] = true;   // in-flow logo, no PDF-only running footer

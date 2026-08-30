@@ -1,9 +1,9 @@
 {{--
-    Consultancy Agreement — ONSHORE variant.
+    Consultancy Agreement — OFFSHORE variant.
 
     Same visual shell and Articles 2–6 + Execution as agreements/consultancy.blade.php,
     but Article 1 is a single package fee (Documentation, School Enrolment & Visa
-    Application) with no indicative cost-breakdown table, and the onshore refund
+    Application) with no indicative cost-breakdown table, and the offshore refund
     wording. Fee + bank details + currency come from the payload (staff-editable in
     the "New" modal). Defaults: NZ$ + ANZ.
 

@@ -456,6 +456,9 @@ function variantToTypeKey(doc) {
         const parts = (doc.variant || '').split(':');
         const scenario = parts[1] || 'std_100';
         const mode = parts[2] === 'couple' ? 'couple' : 'single';
+        // Onshore engagement + offshore each map to their own single DOC_TYPE.
+        if (scenario === 'onshore') return 'consultancy_onshore';
+        if (scenario === 'offshore') return 'consultancy_offshore';
         const backend = `consultancy_${scenario}`;
         const match = DOC_TYPES.find((t) => t.backendType === backend && t.applicantMode === mode);
         return match?.value || 'consultancy_std_single_100';
@@ -1151,29 +1154,38 @@ function NotifyLeadModal({ target, onClose }) {
 // server route knows; `applicantMode` gets sent alongside so the PDF
 // swaps the applicant line + cost breakdown. `defaultSchoolFee` is
 // the fee that pre-fills the Settings panel — staff can override.
+// `category` groups doc types under the Category selector. `all` = shown in
+// every category (Study Proposal). `free` doc types have no fee/bank panel.
 const DOC_TYPES = [
-    { value: 'proposal',                          label: 'Study Proposal',                                 hint: 'Suggest up to 5 programs — the lead picks one on their tracker.' },
+    { value: 'proposal',                          label: 'Study Proposal',                                 category: 'all',         hint: 'Suggest up to 5 programs — the lead picks one on their tracker.' },
 
-    { value: 'consultancy_std_single_100',        label: 'Standard · Single · 100,000',                    hint: 'Sole applicant. School Enrolment + Documentation Fee.',                                       backendType: 'consultancy_std_100',     applicantMode: 'single', defaultSchoolFee: 100000 },
-    { value: 'consultancy_std_single_150',        label: 'Standard · Single · 150,000',                    hint: 'Sole applicant. School Enrolment + INZ visa application fee.',                                backendType: 'consultancy_std_150',     applicantMode: 'single', defaultSchoolFee: 150000 },
-    { value: 'consultancy_std_couple_150',        label: 'Standard · Couple · 150,000',                    hint: 'Applicant + partner. School Enrolment + INZ visa application fee.',                           backendType: 'consultancy_std_150',     applicantMode: 'couple', defaultSchoolFee: 150000 },
-    { value: 'consultancy_voucher_single_150',    label: 'With Voucher · Single · 150,000',                hint: 'Sole applicant. Inclusive of the INZ visa application fee (voucher).',                        backendType: 'consultancy_voucher_150', applicantMode: 'single', defaultSchoolFee: 150000 },
-    { value: 'consultancy_voucher_couple_150',    label: 'With Voucher · Couple · 150,000',                hint: 'Applicant + partner. Inclusive of the INZ visa application fee (voucher).',                   backendType: 'consultancy_voucher_150', applicantMode: 'couple', defaultSchoolFee: 150000 },
-    { value: 'consultancy_english_single_100',    label: 'With English · Single · 100,000',                hint: 'Sole applicant with English review add-on.',                                                  backendType: 'consultancy_english_100', applicantMode: 'single', defaultSchoolFee: 100000 },
+    { value: 'consultancy_std_single_100',        label: 'Standard · Single · 100,000',                    category: 'philippines', hint: 'Sole applicant. School Enrolment + Documentation Fee.',                                       backendType: 'consultancy_std_100',     applicantMode: 'single', defaultSchoolFee: 100000 },
+    { value: 'consultancy_std_single_150',        label: 'Standard · Single · 150,000',                    category: 'philippines', hint: 'Sole applicant. School Enrolment + INZ visa application fee.',                                backendType: 'consultancy_std_150',     applicantMode: 'single', defaultSchoolFee: 150000 },
+    { value: 'consultancy_std_couple_150',        label: 'Standard · Couple · 150,000',                    category: 'philippines', hint: 'Applicant + partner. School Enrolment + INZ visa application fee.',                           backendType: 'consultancy_std_150',     applicantMode: 'couple', defaultSchoolFee: 150000 },
+    { value: 'consultancy_voucher_single_150',    label: 'With Voucher · Single · 150,000',                category: 'philippines', hint: 'Sole applicant. Inclusive of the INZ visa application fee (voucher).',                        backendType: 'consultancy_voucher_150', applicantMode: 'single', defaultSchoolFee: 150000 },
+    { value: 'consultancy_voucher_couple_150',    label: 'With Voucher · Couple · 150,000',                category: 'philippines', hint: 'Applicant + partner. Inclusive of the INZ visa application fee (voucher).',                   backendType: 'consultancy_voucher_150', applicantMode: 'couple', defaultSchoolFee: 150000 },
+    { value: 'consultancy_english_single_100',    label: 'With English · Single · 100,000',                category: 'philippines', hint: 'Sole applicant with English review add-on.',                                                  backendType: 'consultancy_english_100', applicantMode: 'single', defaultSchoolFee: 100000 },
+    { value: 'english_engagement',                label: 'English Engagement Agreement',                   category: 'philippines', hint: 'PTE preparation services (separate document).' },
 
-    { value: 'consultancy_onshore',               label: 'Onshore · Single',                               hint: 'Applicant already in NZ. Single package fee — Documentation, School Enrolment & Visa Application. Defaults to NZ$ + ANZ.', backendType: 'consultancy_onshore', applicantMode: 'single', defaultSchoolFee: 3500, singleFee: true },
+    { value: 'consultancy_onshore',               label: 'Onshore Engagement (free)',                      category: 'onshore',     hint: 'Applicant already in NZ. Education engagement — FREE OF CHARGE (no consultancy fees). Refers to a Licensed Immigration Adviser.', backendType: 'consultancy_onshore', free: true },
 
-    { value: 'english_engagement',                label: 'English Engagement Agreement',                   hint: 'PTE preparation services (separate document).' },
+    { value: 'consultancy_offshore',              label: 'Standard · Offshore',                            category: 'offshore',    hint: 'Applicant offshore. Single package fee — Documentation, School Enrolment & Visa Application. NZ$ + ANZ.', backendType: 'consultancy_offshore', applicantMode: 'single', defaultSchoolFee: 3500, singleFee: true },
 ];
-const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType).map((t) => t.value));
+// Consultancy types that carry a fee/bank panel (excludes the free onshore).
+const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType && ! t.free).map((t) => t.value));
 const MAX_PROPOSED_PROGRAMS = 5;
 const DEFAULT_ENGLISH_FEE = 14500;
 
-// Currency options for the generated documents. `code` labels the fee panel
-// and rides to the backend (php | nzd); `symbol` prefixes every amount in the
-// UI + PDF; `locale` drives thousands separators. PHP is the default so
-// existing documents are unchanged. Amounts are NOT converted — staff type the
-// correct figure for the chosen currency (see the fee inputs).
+// Category → currency. Selecting a category sets the document currency
+// automatically (no separate currency picker). Philippines = PhP; Onshore &
+// Offshore are NZ-based = NZ$.
+const CATEGORIES = {
+    philippines: { code: 'philippines', label: 'Philippines', currency: 'php' },
+    onshore:     { code: 'onshore',     label: 'Onshore',     currency: 'nzd' },
+    offshore:    { code: 'offshore',    label: 'Offshore',    currency: 'nzd' },
+};
+
+// Currency metadata keyed by code — drives the fee symbol + locale in the UI.
 const CURRENCIES = {
     php: { code: 'php', label: 'Philippine Peso', short: 'PhP', symbol: '₱',   locale: 'en-PH' },
     nzd: { code: 'nzd', label: 'NZ Dollar',       short: 'NZ$', symbol: 'NZ$', locale: 'en-NZ' },
@@ -1194,9 +1206,10 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // No default — staff must actively pick a doc type. Empty string
     // keeps the preview area empty and the Generate button disabled.
     const [type, setType] = useState('');
-    // Currency for the generated document — chosen before the doc type.
-    // PHP by default so existing documents render exactly as before.
-    const [currency, setCurrency] = useState('php');
+    // Category chosen before the doc type — filters which doc types show and
+    // sets the currency automatically (Philippines = PhP, Onshore/Offshore = NZ$).
+    const [category, setCategory] = useState('philippines');
+    const currency = (CATEGORIES[category] || CATEGORIES.philippines).currency;
     const cur = CURRENCIES[currency] || CURRENCIES.php;
     // Editable bank details (consultancy agreements). A preset fills the
     // fields; every field stays editable. RCBC default = unchanged docs.
@@ -1228,14 +1241,17 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         if (prefill) {
             setLeadId(prefill.leadId);
             setType(prefill.type);
+            // Jump to the category the prefilled type belongs to.
+            const meta = DOC_TYPES.find((t) => t.value === prefill.type);
+            setCategory(meta && meta.category !== 'all' ? meta.category : 'philippines');
         } else {
             setLeadId('');
             setType('');
+            setCategory('philippines');
         }
         setPickedProgramIds([]);
         setProgramSearch('');
         setNotify(true);
-        setCurrency('php');
         setBank({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' });
     }, [open, prefill]);
 
@@ -1246,17 +1262,23 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         const meta = DOC_TYPES.find((t) => t.value === type);
         setSchoolFee(meta?.defaultSchoolFee ?? 100000);
         setEnglishFee(DEFAULT_ENGLISH_FEE);
-        // Onshore is a NZ-based agreement — default it to NZ$ + ANZ. Staff
-        // can still switch both afterwards.
-        if (type === 'consultancy_onshore') {
-            setCurrency('nzd');
+        // Offshore uses the ANZ bank block by default; PH consultancy uses RCBC.
+        if (type === 'consultancy_offshore') {
             setBank({ preset: 'anz', ...BANK_PRESETS.anz, reference: '' });
+        } else if (meta?.backendType && ! meta.free) {
+            setBank({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' });
         }
     }, [type]);
 
     // Resolve the selected doc-type entry once — used for backendType +
     // applicantMode when building the preview URL and the submit body.
     const typeMeta = useMemo(() => DOC_TYPES.find((t) => t.value === type) || null, [type]);
+
+    // Doc types available for the chosen category ('all' shows everywhere).
+    const visibleTypes = useMemo(
+        () => DOC_TYPES.filter((t) => t.category === category || t.category === 'all'),
+        [category],
+    );
 
     const filteredPicker = useMemo(() => {
         const q = leadSearch.trim().toLowerCase();
@@ -1324,11 +1346,11 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         router.post(url, payload, {
             preserveScroll: true,
             onSuccess: () => {
-                // Consultancy agreements already emailed the client inside the
-                // generate endpoint above, so they skip the second POST (no
-                // double-send). Everything else (proposals save a shortlist;
-                // English Engagement has no self-send) still notifies here.
-                if (wantNotify && ! isConsultancyType) {
+                // Consultancy/onshore/offshore agreements already emailed the
+                // client inside the generate endpoint above, so they skip the
+                // second POST (no double-send). Everything else (proposals save a
+                // shortlist; English Engagement has no self-send) still notifies.
+                if (wantNotify && ! isAgreementType) {
                     router.post(`/admin/leads/${leadId}/notify-document-ready`, {
                         kind: isProposal ? 'proposal' : 'agreement',
                     }, {
@@ -1370,7 +1392,12 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // require at least one picked program.
     const canSubmit = leadId && type && (! isProposalType || pickedProgramIds.length > 0);
 
+    // Consultancy = has a fee/bank panel (excludes the free onshore engagement).
     const isConsultancyType = CONSULTANCY_TYPES.has(type);
+    // Any agreement whose generate endpoint self-emails the client (all
+    // consultancy scenarios + onshore + offshore) — so the modal skips the
+    // second notify POST for these.
+    const isAgreementType = !! typeMeta?.backendType;
 
     // Live iframe preview URL — same lead + type params the generate
     // endpoint uses, but hits the preview route which renders the Blade
@@ -1496,29 +1523,29 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             )}
                         </div>
 
-                        {/* Currency section — chosen before the doc type. Drives the
-                            symbols in the fee panel, live preview and generated PDF.
-                            Amounts aren't converted; staff enter the right figure. */}
+                        {/* Category section — chosen before the doc type. Filters
+                            which document types show, and sets the currency
+                            automatically (Philippines = PhP, Onshore/Offshore = NZ$). */}
                         <div className="px-5 py-4 border-b border-gray-100">
-                            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Currency</div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {Object.values(CURRENCIES).map((c) => (
+                            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Category</div>
+                            <div className="grid grid-cols-3 gap-2">
+                                {Object.values(CATEGORIES).map((c) => (
                                     <button
                                         key={c.code}
                                         type="button"
-                                        onClick={() => setCurrency(c.code)}
-                                        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
-                                            currency === c.code
+                                        onClick={() => { setCategory(c.code); setType(''); }}
+                                        className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[13px] font-semibold transition-colors ${
+                                            category === c.code
                                                 ? 'border-gray-900 bg-gray-900 text-white'
                                                 : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
                                         }`}
                                     >
-                                        {c.short}
+                                        {c.label}
                                     </button>
                                 ))}
                             </div>
                             <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
-                                Sets the currency on the document. Enter fees in this currency — amounts aren&rsquo;t converted.
+                                Sets the available documents and the currency ({cur.short}). Amounts aren&rsquo;t converted.
                             </p>
                         </div>
 
@@ -1543,25 +1570,9 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                     className={`w-full appearance-none pl-3 pr-9 py-2 rounded-lg text-sm bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 transition-all font-semibold ${type ? 'text-gray-900' : 'text-gray-400'}`}
                                 >
                                     <option value="" disabled>Select a document type…</option>
-                                    <optgroup label="Proposal">
-                                        <option value="proposal">Study Proposal</option>
-                                    </optgroup>
-                                    <optgroup label="Consultancy · Single">
-                                        <option value="consultancy_std_single_100">Standard · 100,000</option>
-                                        <option value="consultancy_std_single_150">Standard · 150,000</option>
-                                        <option value="consultancy_voucher_single_150">With Voucher · 150,000</option>
-                                        <option value="consultancy_english_single_100">With English · 100,000</option>
-                                    </optgroup>
-                                    <optgroup label="Consultancy · Couple">
-                                        <option value="consultancy_std_couple_150">Standard · 150,000</option>
-                                        <option value="consultancy_voucher_couple_150">With Voucher · 150,000</option>
-                                    </optgroup>
-                                    <optgroup label="Consultancy · Onshore">
-                                        <option value="consultancy_onshore">Standard · Onshore</option>
-                                    </optgroup>
-                                    <optgroup label="Other">
-                                        <option value="english_engagement">English Engagement Agreement</option>
-                                    </optgroup>
+                                    {visibleTypes.map((t) => (
+                                        <option key={t.value} value={t.value}>{t.label}</option>
+                                    ))}
                                 </select>
                                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
