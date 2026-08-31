@@ -3542,6 +3542,12 @@ function ProposalShortlist({ proposal, code }) {
                                 {p.price_text && (
                                     <p className="text-[11px] font-semibold text-gray-700 mb-3">{p.price_text}</p>
                                 )}
+                                {p.reason && (
+                                    <div className="mb-3 rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">Why we suggested this</p>
+                                        <p className="text-[12px] text-emerald-900 leading-relaxed">{p.reason}</p>
+                                    </div>
+                                )}
                                 <div className="mt-auto flex items-center gap-2">
                                     {isChosen ? (
                                         <button

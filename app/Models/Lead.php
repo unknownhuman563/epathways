@@ -273,6 +273,8 @@ class Lead extends Model
         // the "Proposal" tab on the Proposal & Agreements page and the
         // program shortlist rendered on the tracker.
         'proposed_program_ids',
+        // Per-program "why this program" reasons, keyed by program id.
+        'proposed_program_reasons',
         // Lead's chosen program (FK to programs.id) from that shortlist,
         // set by the tracker's "Choose this one" action.
         'preferred_program_id', 'preferred_program_chosen_at',
@@ -399,6 +401,7 @@ class Lead extends Model
         'hidden_track_documents' => 'array',
         'custom_documents' => 'array',
         'proposed_program_ids' => 'array',
+        'proposed_program_reasons' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',

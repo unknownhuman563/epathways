@@ -735,7 +735,7 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
 // ── Program picker — replaces the PDF preview on the left of the New
 //    modal when Proposal type is selected. Cap is enforced in the parent
 //    (togglePicked drops the oldest pick to make room for a fourth). ───
-function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedIds, togglePicked, max }) {
+function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedIds, togglePicked, max, reasons = {}, setReason }) {
     const pickedSet = new Set(pickedIds);
     // Look up picked-program details from the FULL catalogue so the
     // "Selected" chips keep their titles even when an active search
@@ -757,41 +757,47 @@ function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedId
                     </span>
                 </div>
 
-                {/* Selected programs — shown as chips so staff can see at
-                    a glance what they've picked, and can un-pick without
-                    scrolling back through the list. */}
+                {/* Selected programs — each with a "why this program" reason the
+                    client sees on their tracker. Removable per row. */}
                 {pickedIds.length > 0 && (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-2">
                             Selected · {pickedIds.length}
                         </p>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="space-y-2">
                             {pickedIds.map((id) => {
                                 const p = pickedById.get(id);
                                 return (
-                                    <span
-                                        key={id}
-                                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white border border-emerald-200 text-[11px] font-semibold text-gray-800 shadow-sm max-w-full"
-                                    >
-                                        {p ? (
-                                            <>
-                                                <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
-                                                    L{p.level}
-                                                </span>
-                                                <span className="truncate max-w-[220px]" title={p.title}>{p.title}</span>
-                                            </>
-                                        ) : (
-                                            <span className="text-gray-500">Program #{id}</span>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => togglePicked(id)}
-                                            className="ml-0.5 -mr-0.5 w-4 h-4 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
-                                            title="Remove from proposal"
-                                        >
-                                            <X size={11} />
-                                        </button>
-                                    </span>
+                                    <div key={id} className="rounded-md bg-white border border-emerald-200 shadow-sm p-2">
+                                        <div className="flex items-center gap-1.5">
+                                            {p ? (
+                                                <>
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
+                                                        L{p.level}
+                                                    </span>
+                                                    <span className="text-[12px] font-semibold text-gray-800 truncate" title={p.title}>{p.title}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-[12px] text-gray-500">Program #{id}</span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => togglePicked(id)}
+                                                className="ml-auto w-5 h-5 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors shrink-0"
+                                                title="Remove from proposal"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                        <textarea
+                                            rows={2}
+                                            value={reasons[id] ?? ''}
+                                            onChange={(e) => setReason?.(id, e.target.value)}
+                                            placeholder="Why this program? (the client sees this on their tracker)"
+                                            maxLength={1000}
+                                            className="w-full mt-1.5 px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-gray-400 resize-y"
+                                        />
+                                    </div>
                                 );
                             })}
                         </div>
@@ -1219,6 +1225,9 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     const [leadSearch, setLeadSearch] = useState('');
     const [programSearch, setProgramSearch] = useState('');
     const [pickedProgramIds, setPickedProgramIds] = useState([]);
+    // Per-program "why this program" reasons, keyed by program id.
+    const [pickedReasons, setPickedReasons] = useState({});
+    const setReason = (id, text) => setPickedReasons((r) => ({ ...r, [id]: text }));
     const [submitting, setSubmitting] = useState(false);
     // Editable amounts on the Settings panel — only surfaced for the 4
     // consultancy scenarios. Defaults come from the selected DOC_TYPE.
@@ -1250,6 +1259,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             setCategory('philippines');
         }
         setPickedProgramIds([]);
+        setPickedReasons({});
         setProgramSearch('');
         setNotify(true);
         setBank({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' });
@@ -1317,7 +1327,15 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         // rides along in the payload instead of a second POST.
         const wantNotify = notify && canNotify;
         const payload = isProposal
-            ? { program_ids: pickedProgramIds }
+            ? {
+                program_ids: pickedProgramIds,
+                // Only reasons for currently-picked programs, blanks dropped.
+                reasons: Object.fromEntries(
+                    pickedProgramIds
+                        .filter((id) => (pickedReasons[id] || '').trim())
+                        .map((id) => [id, pickedReasons[id].trim()]),
+                ),
+            }
             : (isConsultancyType
                 ? {
                     school_enrolment_fee: schoolFee,
@@ -1340,6 +1358,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             setType('');
             setLeadSearch('');
             setPickedProgramIds([]);
+            setPickedReasons({});
             setNotify(true);
         };
 
@@ -1378,9 +1397,15 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
 
     const togglePickedProgram = (id) => {
         setPickedProgramIds((prev) => {
-            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            if (prev.includes(id)) {
+                // Unpicking — drop its reason too.
+                setPickedReasons((r) => { const n = { ...r }; delete n[id]; return n; });
+                return prev.filter((x) => x !== id);
+            }
             if (prev.length >= MAX_PROPOSED_PROGRAMS) {
-                // Hard cap — drop the oldest pick to make room for the new one.
+                // Hard cap — drop the oldest pick (and its reason) to make room.
+                const dropped = prev[0];
+                setPickedReasons((r) => { const n = { ...r }; delete n[dropped]; return n; });
                 return [...prev.slice(1), id];
             }
             return [...prev, id];
@@ -1704,6 +1729,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                         pickedIds={pickedProgramIds}
                                         togglePicked={togglePickedProgram}
                                         max={MAX_PROPOSED_PROGRAMS}
+                                        reasons={pickedReasons}
+                                        setReason={setReason}
                                     />
                                 </div>
                             ) : previewUrl ? (
