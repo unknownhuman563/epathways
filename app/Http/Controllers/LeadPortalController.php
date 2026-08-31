@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\FacebookLiveSession;
 use App\Models\Lead;
 use App\Models\LeadDocument;
+use App\Models\LeadDocumentRequest;
 use App\Services\LeadPhaseService;
 use App\Services\NewsFeedService;
 use Illuminate\Support\Facades\Auth;
@@ -796,6 +797,9 @@ class LeadPortalController extends Controller
             'lead'               => $this->leadPayload($lead),
             'submissionsCounts'  => $counts,
             'documentSummary'    => $docSummary,
+            // Documents the adviser has requested that the client still needs to
+            // act on — surfaced on the dashboard so it's the first thing they see.
+            'requestedDocuments' => $this->requestedDocumentsSummary($lead),
             'nextActivity'       => $this->upcomingEvents(1)->first(),
             'latestAnnouncement' => $this->announcementFeed(1)->first(),
             'roadmap'            => $roadmap,
@@ -1022,6 +1026,37 @@ class LeadPortalController extends Controller
             'pending'  => $docs->where('status', 'Submitted')->count(),
             'approved' => $docs->where('status', 'Approved')->count(),
             'rejected' => $docs->where('status', 'Rejected')->count(),
+        ];
+    }
+
+    /**
+     * Adviser-requested documents the client still needs to act on — nothing
+     * uploaded against the request yet, or the last upload was rejected. Drives
+     * the dashboard "action needed" card; uploading happens on the Documents page.
+     */
+    private function requestedDocumentsSummary(Lead $lead): array
+    {
+        $requests = $lead->documentRequests()
+            ->with('latestDocument')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $outstanding = $requests->filter(function (LeadDocumentRequest $r) {
+            $doc = $r->latestDocument;
+
+            return ! $doc || $doc->status === LeadDocument::STATUS_REJECTED;
+        })->values();
+
+        return [
+            'total'       => $requests->count(),
+            'outstanding' => $outstanding->count(),
+            'items'       => $outstanding->take(6)->map(fn (LeadDocumentRequest $r) => [
+                'id'           => $r->id,
+                'label'        => $r->label,
+                'requested_at' => optional($r->requested_at)->toIso8601String(),
+                // null = not uploaded yet; 'Rejected' = adviser asked for a new file.
+                'status'       => $r->latestDocument?->status,
+            ])->all(),
         ];
     }
 
