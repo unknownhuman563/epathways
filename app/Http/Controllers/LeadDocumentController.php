@@ -1520,6 +1520,9 @@ class LeadDocumentController extends Controller
         $validated = $request->validate([
             'program_ids' => 'nullable|array|max:5',
             'program_ids.*' => 'integer|exists:programs,id',
+            // Per-program "why this program" reasons, keyed by program id.
+            'reasons' => 'nullable|array',
+            'reasons.*' => 'nullable|string|max:1000',
         ]);
 
         try {
@@ -1527,6 +1530,17 @@ class LeadDocumentController extends Controller
             // Uniquify + reindex so the JSON stays clean regardless of
             // client-side ordering / duplicates.
             $ids = array_values(array_unique(array_map('intval', $validated['program_ids'] ?? [])));
+
+            // Keep only reasons for programs that are actually in the shortlist,
+            // keyed by (string) program id, trimmed, blanks dropped.
+            $reasons = [];
+            foreach (($validated['reasons'] ?? []) as $pid => $text) {
+                $pid = (int) $pid;
+                $text = trim((string) $text);
+                if ($text !== '' && in_array($pid, $ids, true)) {
+                    $reasons[(string) $pid] = $text;
+                }
+            }
 
             // Legacy safety: a lead whose active proposal predates versioning
             // has no history row yet. Snapshot that existing shortlist BEFORE
@@ -1560,6 +1574,7 @@ class LeadDocumentController extends Controller
             }
 
             $lead->proposed_program_ids = $ids ?: null;
+            $lead->proposed_program_reasons = $reasons ?: null;
             $lead->save();
 
             // Snapshot the new version. Clearing (empty list) only resets the
@@ -1568,6 +1583,7 @@ class LeadDocumentController extends Controller
                 \App\Models\LeadProposal::create([
                     'lead_id' => $lead->id,
                     'program_ids' => $ids,
+                    'reasons' => $reasons ?: null,
                     'created_by' => optional($request->user())->id,
                 ]);
             }
