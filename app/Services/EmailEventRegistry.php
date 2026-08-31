@@ -105,7 +105,7 @@ class EmailEventRegistry
                 ['key' => 'immigration.invoice.overdue', 'label' => 'Payment overdue', 'when' => '7 days after the invoice due date', 'vars' => ['first_name', 'invoice_total'], 'scheduled' => true],
             ]],
             ['group' => 'Documents', 'events' => [
-                ['key' => 'immigration.document.requested', 'label' => 'Document requested', 'when' => 'When staff request a document', 'vars' => ['first_name', 'document_name']],
+                ['key' => 'immigration.document.requested', 'label' => 'Document requested', 'when' => 'When staff request a document', 'vars' => ['first_name', 'document_name', 'document_list']],
                 ['key' => 'immigration.document.approved', 'label' => 'Document approved', 'when' => 'When a document is approved', 'vars' => ['first_name', 'document_name']],
                 ['key' => 'immigration.document.rejected', 'label' => 'Document needs attention', 'when' => 'When a document is rejected', 'vars' => ['first_name', 'document_name', 'reason']],
             ]],
