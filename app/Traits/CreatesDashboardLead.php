@@ -102,8 +102,8 @@ trait CreatesDashboardLead
             'call_update_form_link' => $data['call_update_form_link'] ?? null,
         ]);
 
-        // Human-friendly reference, matching the CSV importer's scheme.
-        $lead->lead_id = 'LP-' . str_pad((string) ((int) Lead::max('id') + 1001), 5, '0', STR_PAD_LEFT);
+        // Human-friendly reference — collision-safe (see Lead::generateLeadId).
+        $lead->lead_id = Lead::generateLeadId();
         $lead->save();
 
         // ASSESSMENT DATE → treat as the lead's creation date so it sorts and

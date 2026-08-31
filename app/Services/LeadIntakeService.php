@@ -99,7 +99,7 @@ class LeadIntakeService
     {
         $lead = Lead::create(array_merge(
             [
-                'lead_id' => $payload['lead_id'] ?? 'LP-'.rand(10000, 99999),
+                'lead_id' => $payload['lead_id'] ?? Lead::generateLeadId(),
                 'first_name' => $payload['first_name'] ?? '',
                 'last_name' => $payload['last_name'] ?? '',
                 'email' => $payload['email'] ?? null,
