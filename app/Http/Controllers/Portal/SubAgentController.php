@@ -109,6 +109,7 @@ class SubAgentController extends Controller
                 'stageUpdater:id,name', 'lastActivityUser:id,name',
                 'notes' => fn ($q) => $q->latest(),
                 'documents:id,lead_id,checklist_key,status',
+                'contactProfile',
             ])
             ->withCount(['notes', 'documents'])
             ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
@@ -166,7 +167,18 @@ class SubAgentController extends Controller
      */
     private function personalPayload(Lead $l): array
     {
-        $profile = is_array($l->contact_profile) ? $l->contact_profile : [];
+        // Contact facts live in the 1-to-1 lead_contact_profiles table, not on
+        // the lead row. Flatten to a keyed array so the rest of this method reads
+        // the same as before.
+        $l->loadMissing('contactProfile');
+        $cp = $l->contactProfile;
+        $profile = $cp ? [
+            'best_time_to_call' => $cp->best_time_to_call,
+            'preferred_channel' => $cp->preferred_channel,
+            'languages' => $cp->languages,
+            'emergency_contact' => $cp->emergency_contact,
+            'goal' => $cp->goal,
+        ] : [];
         // Join the parts that are actually present — nulls and blanks drop out
         // rather than leaving stray separators behind.
         $join = fn (array $parts, string $glue = ', ') => implode($glue, array_filter(
@@ -284,7 +296,7 @@ class SubAgentController extends Controller
         'english_test_date' => 'nullable|date',
     ];
 
-    /** Keys stored inside the `contact_profile` json column. */
+    /** Fields stored on the 1-to-1 lead_contact_profiles table. */
     private const EDITABLE_PROFILE = [
         'best_time_to_call' => 'nullable|string|max:120',
         'preferred_channel' => 'nullable|string|max:60',
@@ -306,17 +318,22 @@ class SubAgentController extends Controller
             }
         }
 
-        // Merge rather than replace — a tab that posts only the contact block
-        // must not blank the goal the user set from the other block.
-        $profile = is_array($lead->contact_profile) ? $lead->contact_profile : [];
+        $lead->save();
+
+        // Contact facts go to the 1-to-1 lead_contact_profiles table. Merge
+        // rather than replace — a tab that posts only the contact block must not
+        // blank the goal set from the other block — so only the keys actually
+        // present in the request are touched. Empty strings normalise to null.
+        $profileChanges = [];
         foreach (array_keys(self::EDITABLE_PROFILE) as $key) {
             if ($request->exists($key)) {
-                $profile[$key] = $data[$key] ?? null;
+                $val = $data[$key] ?? null;
+                $profileChanges[$key] = ($val === '') ? null : $val;
             }
         }
-        $lead->contact_profile = array_filter($profile, fn ($v) => $v !== null && $v !== '') ?: null;
-
-        $lead->save();
+        if ($profileChanges) {
+            $lead->contactProfile()->updateOrCreate([], $profileChanges);
+        }
 
         return back()->with('success', 'Lead details saved.');
     }
