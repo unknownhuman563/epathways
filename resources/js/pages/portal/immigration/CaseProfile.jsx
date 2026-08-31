@@ -87,7 +87,12 @@ export default function CaseProfile() {
         <div className="max-w-[1300px] mx-auto pb-12 space-y-5">
             <Head title={`${fullName} — Case profile`} />
 
-            <CaseProfileHeader lead={lead} intake={intake} attention={attention} tiedTo={tiedTo} engagement={engagement} visaTypes={visaTypes} />
+            <CaseProfileHeader
+                lead={lead} intake={intake} attention={attention} tiedTo={tiedTo} engagement={engagement}
+                visaTypes={visaTypes} financials={financials} tasks={tasks} dependents={dependents}
+                checklist={checklist} checklistProgress={checklistProgress}
+                onNavigate={setActiveTab}
+            />
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
                 <nav className="flex items-stretch min-w-max">

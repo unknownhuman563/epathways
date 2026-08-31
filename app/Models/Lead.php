@@ -483,6 +483,46 @@ class Lead extends Model
         return $this->hasOne(User::class, 'lead_id');
     }
 
+    /** Sub-agent contact profile (best time to call, channel, languages, …). */
+    public function contactProfile()
+    {
+        return $this->hasOne(LeadContactProfile::class);
+    }
+
+    /**
+     * A guaranteed-unique `LP-NNNNN` identifier.
+     *
+     * The old inline schemes (`LP-`.rand(...) and `LP-`.(max(id)+1000)) both
+     * collide: `rand` can repeat, and basing the number on the primary-key max
+     * breaks once the id and lead_id sequences drift apart (deletes, imports,
+     * other creation paths) — the number then lands on a lead_id that already
+     * exists and the insert dies on `leads_lead_id_unique`. Because a failed
+     * insert never advances max(id), every retry recomputes the SAME colliding
+     * value and fails forever (see the Sumit Kumar conversion loop).
+     *
+     * This derives the next number from the highest EXISTING `LP-` value (not
+     * the pk), then steps forward past anything already taken — checking
+     * soft-deleted rows too, since they still hold the unique lead_id.
+     */
+    public static function generateLeadId(): string
+    {
+        $maxLpNumber = (int) static::withTrashed()
+            ->where('lead_id', 'like', 'LP-%')
+            ->selectRaw('MAX(CAST(SUBSTRING(lead_id, 4) AS UNSIGNED)) as n')
+            ->value('n');
+
+        // Stay ahead of both the highest LP- number and the historical
+        // max(id)+1000 baseline, so numbers never move backwards.
+        $next = max($maxLpNumber + 1, (int) static::withTrashed()->max('id') + 1001);
+
+        do {
+            $candidate = 'LP-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+            $next++;
+        } while (static::withTrashed()->where('lead_id', $candidate)->exists());
+
+        return $candidate;
+    }
+
     /** Staff member who flipped is_student=true (or null on legacy rows). */
     public function studentConverter()
     {

@@ -1821,7 +1821,7 @@ class ImmigrationController extends Controller
 
                 if (! $lead) {
                     $lead = Lead::create([
-                        'lead_id' => 'LP-'.str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
+                        'lead_id' => Lead::generateLeadId(),
                         'first_name' => $intake->first_name ?? $assessment->applicant_first_name,
                         'last_name' => $lastName ?? $assessment->applicant_last_name,
                         'email' => $email,
@@ -1902,7 +1902,7 @@ class ImmigrationController extends Controller
             }
             if (! $lead) {
                 $lead = Lead::create([
-                    'lead_id' => 'LP-'.str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
+                    'lead_id' => Lead::generateLeadId(),
                     'first_name' => $intake->first_name,
                     'last_name' => $intake->last_name,
                     'email' => $intake->email,

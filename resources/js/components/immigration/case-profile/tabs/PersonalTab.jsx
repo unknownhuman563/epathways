@@ -5,6 +5,7 @@ import { Save, ClipboardList, Eye, Download, FileText, Sparkles, Loader2, CheckC
 
 const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || "");
 import { ASSESSMENT_SECTIONS, formatAssessmentValue } from "@/data/assessmentSections";
+import PhoneField from "@/components/PhoneField";
 
 // Case Profile "Personal" tab — the applicant's details in INZ-form-shaped
 // sections (left) with the document-verification / lodgement sidebar (right),
@@ -210,7 +211,12 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
                             <input type="email" required value={data.email} onChange={(e) => setData("email", e.target.value)} className={IC} maxLength={255} />
                         </F>
                         <F label="Mobile" badge={data.phone ? { text: "Preferred", tone: "ok" } : null}>
-                            <input type="text" value={data.phone} onChange={(e) => setData("phone", e.target.value)} className={IC} maxLength={40} />
+                            {/* Same international field the visa assessment uses — the
+                                country code is parsed from / stored back into the single
+                                `phone` value as "+<dial> <number>". */}
+                            <div className="px-3 rounded-lg border border-gray-200 bg-white [&_.border-b]:border-b-0">
+                                <PhoneField value={data.phone} onChange={(v) => setData("phone", v)} placeholder="Mobile number" />
+                            </div>
                         </F>
                         <F label="Citizenship">
                             <input type="text" value={data.citizenship} onChange={(e) => setData("citizenship", e.target.value)} className={IC} maxLength={120} />

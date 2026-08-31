@@ -179,6 +179,28 @@ class HandleInertiaRequests extends Middleware
             ];
         }
 
+        if (str_starts_with($path, 'portal/sub-agent')) {
+            // Scoped to the parent agent's referrals — the same row filter
+            // SubAgentController applies, so the badge can never count a lead
+            // the sub-agent is not allowed to open.
+            $parentId = $user->parent_agent_id;
+            $leadIds = $parentId ? \App\Models\Lead::where('agent_id', $parentId)->pluck('id') : collect();
+
+            $out['sub-agent'] = [
+                // Leads sitting in the "needs follow-up" end of the pipeline.
+                'needs_follow_up' => $leadIds->isEmpty() ? 0 : \App\Models\Lead::whereIn('id', $leadIds)
+                    ->whereIn('status', ['New Leads', 'Contact Attempted', 'Contacted for Booking', 'Missed the Meeting'])
+                    ->count(),
+                // Follow-up tasks that are due or past due and not snoozed.
+                'follow_ups_due' => \App\Models\LeadTask::where('completed', false)
+                    ->where(fn ($q) => $q->whereIn('lead_id', $leadIds)
+                        ->orWhere(fn ($q2) => $q2->whereNull('lead_id')->where('created_by', $user->id)))
+                    ->where(fn ($q) => $q->whereNull('snoozed_until')->orWhere('snoozed_until', '<=', now()))
+                    ->whereNotNull('due_at')->where('due_at', '<=', now()->endOfDay())
+                    ->count(),
+            ];
+        }
+
         if (str_starts_with($path, 'portal/agent')) {
             $todayStart = now()->startOfDay();
             $out['agent'] = [

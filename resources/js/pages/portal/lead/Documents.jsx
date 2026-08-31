@@ -38,47 +38,24 @@ export default function LeadDocumentsPage({
             {/* Header */}
             <div>
                 <p className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.32em] mb-1.5">
-                    Document submission journey
+                    Documents
                 </p>
                 <h1 className="text-2xl sm:text-3xl font-medium text-[#282728] tracking-tight">My documents</h1>
                 <p className="text-sm text-gray-500 font-light mt-1.5 max-w-2xl">
-                    Submit each section in order. Once your adviser verifies a section, the next one unlocks.
+                    Upload the documents your adviser has requested below.
                 </p>
             </div>
 
-            {/* Progress strip */}
-            <SectionProgressStrip sections={CHECKLIST} verifications={sectionVerifications} currentIdx={currentIdx} />
-
-            {/* Sections */}
-            <div className="space-y-4">
-                {CHECKLIST.map((section, idx) => {
-                    const ver = sectionVerifications[section.key];
-                    const verStatus = ver?.status;
-                    const state = idx < currentIdx
-                        ? 'done'
-                        : idx === currentIdx
-                            ? (currentIdx >= CHECKLIST.length ? 'done' : 'current')
-                            : 'locked';
-
-                    return (
-                        <SectionPanel
-                            key={section.key}
-                            section={section}
-                            sectionIndex={idx}
-                            state={state}
-                            verification={ver}
-                            verStatus={verStatus}
-                            files={Object.fromEntries(section.items.map(it => [it.id, checklistFiles[it.id] || []]))}
-                            lead={lead}
-                        />
-                    );
-                })}
-            </div>
-
-            {/* Legacy adviser-requested documents — kept for backwards compat
-                until your adviser fully migrates to the section flow. */}
-            {requests.length > 0 && (
+            {/* Documents your adviser requested — shown FIRST. Checklist items
+                they picked, or ad-hoc "other" documents — each is uploadable. */}
+            {requests.length > 0 ? (
                 <AdviserRequestsPanel requests={requests} />
+            ) : (
+                <section className="bg-white rounded-2xl border border-[#282728]/15 p-8 text-center">
+                    <Inbox size={28} className="mx-auto text-gray-300" />
+                    <p className="mt-2 text-sm font-semibold text-[#282728]">No documents requested yet</p>
+                    <p className="text-xs text-gray-500 mt-1">When your adviser asks for a document, it&apos;ll appear here to upload.</p>
+                </section>
             )}
 
             {/* Shared by staff */}
@@ -458,34 +435,111 @@ function ChecklistItemRow({ item, files, lead, sectionKey, readOnly = false }) {
 // ── Legacy panels (unchanged) ──────────────────────────────────────────────
 
 function AdviserRequestsPanel({ requests }) {
+    const uploadedCount = requests.filter((r) => r.latest_document && r.latest_document.status !== 'Rejected').length;
     return (
         <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
             <div className="px-6 py-4 border-b border-[#282728]/10 flex items-center gap-2.5">
                 <Inbox size={16} className="text-[#009688]" />
-                <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">Also requested by your adviser</h2>
+                <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">Documents your adviser requested</h2>
+                <span className="ml-auto text-[11px] font-bold text-[#282728]/50 tabular-nums">
+                    {uploadedCount} of {requests.length} uploaded
+                </span>
             </div>
-            <ul className="divide-y divide-[#282728]/10">
-                {requests.map((r) => {
-                    const doc = r.latest_document;
-                    const status = doc?.status;
-                    const badge = doc ? STATUS_BADGE[status] : null;
-                    return (
-                        <li key={r.id} className="p-5 flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="text-sm font-medium text-[#282728]">{r.label}</p>
-                                {r.description && <p className="text-xs text-gray-500 mt-0.5">{r.description}</p>}
-                            </div>
-                            {badge && (
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border ${badge.chip}`}>
-                                    <badge.icon size={11} strokeWidth={2.5} />
-                                    {badge.label}
-                                </span>
-                            )}
-                        </li>
-                    );
-                })}
+            <p className="px-6 pt-4 text-xs text-gray-500 font-light">
+                Upload each document your adviser asked for below. They&apos;re notified as soon as you submit.
+            </p>
+            <ul className="p-4 sm:p-5 space-y-2.5">
+                {requests.map((r) => <RequestUploadRow key={r.id} req={r} />)}
             </ul>
         </section>
+    );
+}
+
+// One adviser-requested document: shows the request, its current status, and an
+// upload control that POSTs the file tied to this request_id (leadUpload).
+function RequestUploadRow({ req }) {
+    const [uploading, setUploading] = useState(false);
+    const fileRef = useRef(null);
+    const doc = req.latest_document;
+    const status = doc?.status;
+    const badge = doc ? STATUS_BADGE[status] : null;
+    const approved = status === 'Approved';
+    const needsFile = !doc || status === 'Rejected';
+
+    const pick = () => fileRef.current?.click();
+    const onFile = (e) => {
+        const file = (e.target.files || [])[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('request_id', req.id);
+        setUploading(true);
+        router.post('/portal/lead/documents/upload', fd, {
+            preserveScroll: true,
+            preserveState: true,
+            forceFormData: true,
+            onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ''; },
+        });
+    };
+
+    return (
+        <li className={`rounded-xl border p-4 ${doc && !needsFile ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-200 bg-white'}`}>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-sm font-semibold text-[#282728]">{req.label}</p>
+                        {req.required && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-rose-50 text-rose-600 border border-rose-200">Required</span>
+                        )}
+                        {badge && (
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${badge.chip}`}>
+                                <badge.icon size={9} strokeWidth={2.5} /> {badge.label}
+                            </span>
+                        )}
+                    </div>
+                    {req.description && <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{req.description}</p>}
+                </div>
+
+                {/* Upload control — hidden once the file is approved (locked). */}
+                {!approved && (
+                    <>
+                        <input ref={fileRef} type="file" onChange={onFile} className="hidden" />
+                        <button
+                            type="button"
+                            onClick={pick}
+                            disabled={uploading}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#282728] text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-black transition-colors disabled:opacity-50"
+                        >
+                            {uploading ? <Loader size={11} className="animate-spin" /> : <Upload size={11} />}
+                            {uploading ? 'Uploading…' : needsFile ? 'Upload' : 'Replace'}
+                        </button>
+                    </>
+                )}
+            </div>
+
+            {/* The uploaded file — view / download. */}
+            {doc && (
+                <div className="mt-3 flex items-center gap-2 px-2 py-1.5 rounded-md bg-white border border-gray-200">
+                    <FileText size={12} className="text-gray-400 flex-shrink-0" />
+                    <a href={`/portal/lead/documents/${doc.id}/download?inline=1`} target="_blank" rel="noreferrer"
+                        className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-[#009688] truncate" title={`View ${doc.original_name}`}>
+                        {doc.original_name}
+                    </a>
+                    <span className="text-[10px] text-gray-400 tabular-nums">{fmtSize(doc.size)}</span>
+                    <a href={`/portal/lead/documents/${doc.id}/download?inline=1`} target="_blank" rel="noreferrer"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10" title="View"><Eye size={11} /></a>
+                    <a href={`/portal/lead/documents/${doc.id}/download`}
+                        className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10" title="Download"><Download size={11} /></a>
+                </div>
+            )}
+
+            {/* Adviser asked for a replacement. */}
+            {status === 'Rejected' && doc?.note && (
+                <p className="mt-2 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1.5">
+                    Your adviser asked for a new file: {doc.note}
+                </p>
+            )}
+        </li>
     );
 }
 
