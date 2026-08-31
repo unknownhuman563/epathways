@@ -1,6 +1,6 @@
 import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
-import { LayoutDashboard, Users, UserCircle, Mail } from "lucide-react";
+import { LayoutDashboard, Users, UserCircle, Mail, FileSignature } from "lucide-react";
 
 // Agent Portal sidebar — deliberately lean. Recruiting agents add leads and
 // edit their info; they don't run the pipeline, so no bookings/reports/etc.
@@ -18,6 +18,7 @@ export default function AgentLayout({ children }) {
 
         { name: "Account", section: true },
         { name: "My Profile", href: "/portal/agent/profile", icon: <UserCircle size={20} /> },
+        { name: "My Agreement", href: "/portal/agent/agreement", icon: <FileSignature size={20} /> },
     ];
 
     return (

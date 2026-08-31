@@ -12,13 +12,16 @@ class LeadTask extends Model
     use LogsActivity;
 
     public const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
-    public const TYPES      = ['call', 'email', 'meeting', 'document', 'follow_up', 'internal', 'other'];
+
+    public const TYPES = ['call', 'email', 'meeting', 'document', 'follow_up', 'internal', 'other'];
+
     public const DEPARTMENTS = ['sales', 'education', 'immigration', 'accommodation', 'finance', 'admin'];
-    public const STATUSES   = ['not_started', 'in_progress', 'in_review', 'completed'];
+
+    public const STATUSES = ['not_started', 'in_progress', 'in_review', 'completed'];
 
     protected $fillable = [
         'lead_id', 'additional_lead_ids', 'created_by', 'assignee_id', 'additional_assignee_ids',
-        'title', 'description', 'note', 'due_at', 'priority', 'progress',
+        'title', 'description', 'note', 'due_at', 'snoozed_until', 'priority', 'progress',
         'completed', 'completed_at', 'completed_by',
         'type', 'category', 'department', 'tags',
         'recurrence_config', 'cross_dept_reason',
@@ -26,13 +29,14 @@ class LeadTask extends Model
     ];
 
     protected $casts = [
-        'due_at'                  => 'datetime',
-        'completed_at'            => 'datetime',
-        'completed'               => 'boolean',
-        'tags'                    => 'array',
-        'recurrence_config'       => 'array',
+        'due_at' => 'datetime',
+        'snoozed_until' => 'datetime',
+        'completed_at' => 'datetime',
+        'completed' => 'boolean',
+        'tags' => 'array',
+        'recurrence_config' => 'array',
         'additional_assignee_ids' => 'array',
-        'additional_lead_ids'     => 'array',
+        'additional_lead_ids' => 'array',
     ];
 
     /**
@@ -72,7 +76,7 @@ class LeadTask extends Model
     protected static function booted(): void
     {
         static::saving(function (self $task) {
-            $statusDirty    = $task->isDirty('status');
+            $statusDirty = $task->isDirty('status');
             $completedDirty = $task->isDirty('completed');
 
             if ($statusDirty && ! $completedDirty) {

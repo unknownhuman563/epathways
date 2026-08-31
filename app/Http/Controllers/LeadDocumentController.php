@@ -141,8 +141,11 @@ class LeadDocumentController extends Controller
         ]);
 
         try {
+            // Create every requested item first, collecting the rows so the client
+            // is notified ONCE for the whole batch (not one email per document).
+            $requests = [];
             foreach ($data['items'] as $item) {
-                $docRequest = LeadDocumentRequest::create([
+                $requests[] = LeadDocumentRequest::create([
                     'lead_id' => $lead->id,
                     'label' => $item['label'],
                     'description' => $item['description'] ?? null,
@@ -150,28 +153,40 @@ class LeadDocumentController extends Controller
                     'requested_by' => Auth::id(),
                     'requested_at' => now(),
                 ]);
+            }
 
-                // The email-automation "Document requested" message is the single
-                // editable template for this — fire it per document so it can name
-                // the specific one ({{document_name}}). Returns true when it sent
-                // to the client, in which case we DON'T also send the built-in
-                // email below (no double-send).
-                $firedClient = app(\App\Services\EmailAutomationService::class)
-                    ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+            // One consolidated notification for the batch. {{document_name}} keeps
+            // working (a single label, or "N documents" when several); the new
+            // {{document_list}} lists them all. Comma-separated so it renders in
+            // both an HTML email body and a plaintext SMS.
+            $labels = array_map(fn ($r) => $r->label, $requests);
+            $ctx = [
+                'document_name' => count($labels) === 1 ? $labels[0] : count($labels).' documents',
+                'document_list' => implode(', ', $labels),
+            ];
 
-                // Fallback: no client automation message is configured, so send
-                // the built-in request email. Prefer the 'doc_request' template;
-                // fall back to the legacy Mailable.
-                if (! $firedClient && ! empty($lead->email)) {
-                    try {
-                        $res = app(\App\Services\CommunicationService::class)
-                            ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
-                        if (! $res['email']) {
-                            Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+            // The email-automation "Document requested" message is the single
+            // editable template for this. Returns true when it sent to the client,
+            // in which case we DON'T also send the built-in email (no double-send).
+            $firedClient = app(\App\Services\EmailAutomationService::class)
+                ->fire('immigration.document.requested', $lead, $ctx);
+
+            // Fallback when no automation message is configured: prefer the
+            // 'doc_request' template (also a single email, same variables), and
+            // only if it has no email channel fall back to the legacy Mailable.
+            if (! $firedClient && ! empty($lead->email)) {
+                try {
+                    $res = app(\App\Services\CommunicationService::class)
+                        ->sendTemplated('doc_request', $lead, $ctx);
+                    if (! $res['email']) {
+                        // The legacy Mailable is single-document; only in this rare
+                        // no-template path does it go out once per request.
+                        foreach ($requests as $r) {
+                            Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $r));
                         }
-                    } catch (\Throwable $e) {
-                        Log::error('DocumentRequestedFromLead dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
                     }
+                } catch (\Throwable $e) {
+                    Log::error('DocumentRequestedFromLead dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
                 }
             }
 
@@ -204,13 +219,16 @@ class LeadDocumentController extends Controller
         $lead = Lead::findOrFail($leadId);
         $docRequest = LeadDocumentRequest::where('lead_id', $lead->id)->findOrFail($requestId);
 
+        // A resend concerns one request, so {{document_name}} and {{document_list}}
+        // are both that single label (a template can use either).
+        $ctx = ['document_name' => $docRequest->label, 'document_list' => $docRequest->label];
         $firedClient = app(\App\Services\EmailAutomationService::class)
-            ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+            ->fire('immigration.document.requested', $lead, $ctx);
 
         if (! $firedClient && ! empty($lead->email)) {
             try {
                 $res = app(\App\Services\CommunicationService::class)
-                    ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
+                    ->sendTemplated('doc_request', $lead, $ctx);
                 if (! $res['email']) {
                     Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
                 }
@@ -614,8 +632,14 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            if ($consultancyScenario !== null) {
-                $generator->consultancy($lead, $consultancyScenario, $overrides);
+            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore'], true)) {
+                if ($type === 'consultancy_onshore') {
+                    $generator->onshoreEngagement($lead, $overrides);
+                } elseif ($type === 'consultancy_offshore') {
+                    $generator->consultancyOffshore($lead, $overrides);
+                } else {
+                    $generator->consultancy($lead, $consultancyScenario, $overrides);
+                }
                 $friendly = 'Consultancy Agreement';
 
                 // Generating the agreement emails the client the
@@ -639,7 +663,7 @@ class LeadDocumentController extends Controller
                     }
                 }
             } elseif ($type === 'english_engagement') {
-                $generator->englishEngagement($lead);
+                $generator->englishEngagement($lead, $overrides['currency'] ?? 'php');
                 $friendly = 'English Engagement';
             } else {
                 return back()->withErrors(['error' => "Unknown document type: {$type}"]);
@@ -1325,7 +1349,37 @@ class LeadDocumentController extends Controller
             $out['applicant_mode'] = $mode;
         }
 
+        // Currency for the document's amounts (php | nzd). Only the symbol
+        // changes — amounts are entered by staff, never converted. Default
+        // php keeps existing documents identical.
+        $currency = $request->input('currency');
+        if (in_array($currency, ['php', 'nzd'], true)) {
+            $out['currency'] = $currency;
+        }
+
+        // Editable bank details (ANZ / RCBC preset or fully custom). Blank
+        // fields are left unset so the generator falls back to its RCBC
+        // defaults. Capped so a stray value can't bloat the PDF.
+        foreach (['bank_heading', 'bank_name', 'bank_account_name', 'bank_account_number', 'bank_reference'] as $key) {
+            $val = $request->input($key);
+            if (is_string($val) && trim($val) !== '') {
+                $clean = mb_substr(trim($val), 0, 120);
+                // The reference already renders with a leading '#' — drop a
+                // pasted one so it doesn't double up (##ref).
+                if ($key === 'bank_reference') {
+                    $clean = ltrim($clean, '#');
+                }
+                $out[$key] = $clean;
+            }
+        }
+
         return $out;
+    }
+
+    /** Symbol for a currency code — 'NZ$' for nzd, 'Php' otherwise. */
+    private function currencySymbolFor(?string $currency): string
+    {
+        return $currency === 'nzd' ? 'NZ$' : 'Php';
     }
 
     /**
@@ -1397,13 +1451,21 @@ class LeadDocumentController extends Controller
         $overrides = $this->feeOverridesFromRequest($request);
         $consultancyScenario = $this->consultancyScenarioForType($type);
 
-        if ($consultancyScenario !== null) {
+        if ($type === 'consultancy_onshore') {
+            $payload = $generator->buildOnshoreEngagementPayload($lead, $overrides);
+            $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
+            $view = 'agreements.onshore-engagement';
+        } elseif ($type === 'consultancy_offshore') {
+            $payload = $generator->buildOffshorePayload($lead, $overrides);
+            $payload['preview'] = true;
+            $view = 'agreements.consultancy-offshore';
+        } elseif ($consultancyScenario !== null) {
             [$payload] = $generator->buildConsultancyPayload($lead, $consultancyScenario, $overrides);
             $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
             $view = 'agreements.consultancy';
         } elseif ($type === 'english_engagement') {
             $view = 'agreements.engagement-english';
-            $payload = $this->englishEngagementPayload($lead);
+            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php');
         } else {
             return response('<html><body style="font-family:sans-serif;padding:2rem;color:#666">Unknown document type.</body></html>', 400)
                 ->header('Content-Type', 'text/html; charset=utf-8');
@@ -1413,7 +1475,7 @@ class LeadDocumentController extends Controller
             ->header('Content-Type', 'text/html; charset=utf-8');
     }
 
-    private function englishEngagementPayload(Lead $lead): array
+    private function englishEngagementPayload(Lead $lead, string $currency = 'php'): array
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
 
@@ -1430,6 +1492,8 @@ class LeadDocumentController extends Controller
             'signer_signature' => method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null,
             'generated_at' => now(),
             'generated_at_formatted' => now()->format('jS').' day of '.now()->format('F Y'),
+            'currency' => $currency === 'nzd' ? 'nzd' : 'php',
+            'currency_symbol' => $this->currencySymbolFor($currency),
         ];
     }
 
