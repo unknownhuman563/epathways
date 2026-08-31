@@ -480,6 +480,12 @@ class Lead extends Model
         return $this->hasOne(User::class, 'lead_id');
     }
 
+    /** Sub-agent contact profile (best time to call, channel, languages, …). */
+    public function contactProfile()
+    {
+        return $this->hasOne(LeadContactProfile::class);
+    }
+
     /** Staff member who flipped is_student=true (or null on legacy rows). */
     public function studentConverter()
     {

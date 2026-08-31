@@ -550,7 +550,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
         Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
 
-
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);
 
@@ -1226,7 +1225,21 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads/{id}/documents', [\App\Http\Controllers\Portal\SubAgentController::class, 'documents'])->name('leads.documents');
             Route::post('/leads/{id}/documents', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeDocument'])->name('leads.documents.store');
             Route::get('/leads/{id}/documents/{doc}/download', [\App\Http\Controllers\Portal\SubAgentController::class, 'downloadDocument'])->name('leads.documents.download');
+            Route::post('/leads/{id}/documents/request', [\App\Http\Controllers\Portal\SubAgentController::class, 'requestDocuments'])->name('leads.documents.request');
+            // Ad-hoc document slots beyond the four required ones.
+            Route::post('/leads/{id}/documents/custom', [\App\Http\Controllers\Portal\SubAgentController::class, 'addCustomDocument'])->name('leads.documents.custom');
+            Route::delete('/leads/{id}/documents/custom/{key}', [\App\Http\Controllers\Portal\SubAgentController::class, 'removeCustomDocument'])->name('leads.documents.custom.destroy');
+            // Personal-tab field edits (tight allow-list) + the two lifecycle
+            // flags the sub-agent owns (unresponsive / ready for review).
+            Route::post('/leads/{id}/profile', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateLeadProfile'])->name('leads.profile');
+            Route::post('/leads/{id}/mark', [\App\Http\Controllers\Portal\SubAgentController::class, 'markLead'])->name('leads.mark');
             Route::post('/leads/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateLead'])->name('leads.update');
+            // Follow-ups — the same `lead_tasks` rows the Task Board works with,
+            // presented as a cadence. Scoped to the parent agent's leads (plus
+            // the sub-agent's own unlinked tasks) inside the controller.
+            Route::get('/follow-ups', [\App\Http\Controllers\Portal\SubAgentController::class, 'followUps'])->name('follow-ups');
+            Route::post('/follow-ups', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeFollowUp'])->name('follow-ups.store');
+            Route::post('/follow-ups/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateFollowUp'])->name('follow-ups.update');
             Route::get('/profile', [\App\Http\Controllers\Portal\SubAgentController::class, 'profile'])->name('profile');
         });
 

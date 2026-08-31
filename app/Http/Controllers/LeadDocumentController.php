@@ -138,11 +138,16 @@ class LeadDocumentController extends Controller
             'items.*.label' => 'required|string|max:120',
             'items.*.description' => 'nullable|string|max:500',
             'items.*.required' => 'sometimes|boolean',
+            // The staff member's optional "message to client" for this batch.
+            'message' => 'nullable|string|max:2000',
         ]);
 
         try {
+            // Create every requested item first, collecting the rows so the client
+            // is notified ONCE for the whole batch (not one email per document).
+            $requests = [];
             foreach ($data['items'] as $item) {
-                $docRequest = LeadDocumentRequest::create([
+                $requests[] = LeadDocumentRequest::create([
                     'lead_id' => $lead->id,
                     'label' => $item['label'],
                     'description' => $item['description'] ?? null,
@@ -150,28 +155,43 @@ class LeadDocumentController extends Controller
                     'requested_by' => Auth::id(),
                     'requested_at' => now(),
                 ]);
+            }
 
-                // The email-automation "Document requested" message is the single
-                // editable template for this — fire it per document so it can name
-                // the specific one ({{document_name}}). Returns true when it sent
-                // to the client, in which case we DON'T also send the built-in
-                // email below (no double-send).
-                $firedClient = app(\App\Services\EmailAutomationService::class)
-                    ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+            // One consolidated notification for the batch. {{document_name}} keeps
+            // working (a single label, or "N documents" when several); the new
+            // {{document_list}} lists them all. Comma-separated so it renders in
+            // both an HTML email body and a plaintext SMS.
+            $labels = array_map(fn ($r) => $r->label, $requests);
+            $ctx = [
+                'document_name' => count($labels) === 1 ? $labels[0] : count($labels).' documents',
+                'document_list' => implode(', ', $labels),
+                // The staff member's "message to client" — fills {{message}} in the
+                // template (blank string, never null, so the placeholder clears).
+                'message' => (string) ($data['message'] ?? ''),
+            ];
 
-                // Fallback: no client automation message is configured, so send
-                // the built-in request email. Prefer the 'doc_request' template;
-                // fall back to the legacy Mailable.
-                if (! $firedClient && ! empty($lead->email)) {
-                    try {
-                        $res = app(\App\Services\CommunicationService::class)
-                            ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
-                        if (! $res['email']) {
-                            Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+            // The email-automation "Document requested" message is the single
+            // editable template for this. Returns true when it sent to the client,
+            // in which case we DON'T also send the built-in email (no double-send).
+            $firedClient = app(\App\Services\EmailAutomationService::class)
+                ->fire('immigration.document.requested', $lead, $ctx);
+
+            // Fallback when no automation message is configured: prefer the
+            // 'doc_request' template (also a single email, same variables), and
+            // only if it has no email channel fall back to the legacy Mailable.
+            if (! $firedClient && ! empty($lead->email)) {
+                try {
+                    $res = app(\App\Services\CommunicationService::class)
+                        ->sendTemplated('doc_request', $lead, $ctx);
+                    if (! $res['email']) {
+                        // The legacy Mailable is single-document; only in this rare
+                        // no-template path does it go out once per request.
+                        foreach ($requests as $r) {
+                            Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $r));
                         }
-                    } catch (\Throwable $e) {
-                        Log::error('DocumentRequestedFromLead dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
                     }
+                } catch (\Throwable $e) {
+                    Log::error('DocumentRequestedFromLead dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
                 }
             }
 
@@ -204,13 +224,21 @@ class LeadDocumentController extends Controller
         $lead = Lead::findOrFail($leadId);
         $docRequest = LeadDocumentRequest::where('lead_id', $lead->id)->findOrFail($requestId);
 
+        // A resend concerns one request, so {{document_name}} and {{document_list}}
+        // are both that single label (a template can use either). {{message}} is
+        // the instruction saved with the original request.
+        $ctx = [
+            'document_name' => $docRequest->label,
+            'document_list' => $docRequest->label,
+            'message' => (string) ($docRequest->description ?? ''),
+        ];
         $firedClient = app(\App\Services\EmailAutomationService::class)
-            ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+            ->fire('immigration.document.requested', $lead, $ctx);
 
         if (! $firedClient && ! empty($lead->email)) {
             try {
                 $res = app(\App\Services\CommunicationService::class)
-                    ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
+                    ->sendTemplated('doc_request', $lead, $ctx);
                 if (! $res['email']) {
                     Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
                 }
