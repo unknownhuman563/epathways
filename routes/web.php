@@ -493,6 +493,32 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.maintenance.preview');
         Route::post('/admin/maintenance/tracker', [MaintenanceController::class, 'updateTracker'])
             ->name('admin.maintenance.tracker');
+
+        // Module Management — grant per-user access to restricted modules.
+        Route::get('/admin/module-management', [\App\Http\Controllers\Admin\ModuleManagementController::class, 'index'])
+            ->name('admin.module-management');
+        Route::post('/admin/module-management/{user}', [\App\Http\Controllers\Admin\ModuleManagementController::class, 'update'])
+            ->name('admin.module-management.update');
+    });
+
+    // Agents module — restricted (default super-admin-only, grantable per user
+    // via Module Management). Admin-area surface behind both portal:admin and
+    // the module gate.
+    Route::middleware(['portal:admin', 'module:agents'])->group(function () {
+        Route::get('/admin/agents', [\App\Http\Controllers\Admin\AgentModuleController::class, 'index'])
+            ->name('admin.agents.index');
+        Route::get('/admin/agents/{agent}', [\App\Http\Controllers\Admin\AgentModuleController::class, 'show'])
+            ->name('admin.agents.show');
+        Route::get('/admin/agents/{agent}/agreement/preview', [\App\Http\Controllers\Admin\AgentModuleController::class, 'previewAgreement'])
+            ->name('admin.agents.agreement.preview');
+        Route::post('/admin/agents/{agent}/agreement/generate', [\App\Http\Controllers\Admin\AgentModuleController::class, 'generateAgreement'])
+            ->name('admin.agents.agreement.generate');
+        Route::post('/admin/agents/{agent}/agreement/sign', [\App\Http\Controllers\Admin\AgentModuleController::class, 'signAgreement'])
+            ->name('admin.agents.agreement.sign');
+        Route::get('/admin/agents/{agent}/agreement/view', [\App\Http\Controllers\Admin\AgentModuleController::class, 'viewAgreement'])
+            ->name('admin.agents.agreement.view');
+        Route::get('/admin/agents/{agent}/agreement/download', [\App\Http\Controllers\Admin\AgentModuleController::class, 'downloadAgreement'])
+            ->name('admin.agents.agreement.download');
     });
 
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
@@ -1177,6 +1203,12 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
+            Route::get('/agreement', [\App\Http\Controllers\Portal\AgentController::class, 'agreement'])->name('agreement');
+            Route::post('/agreement/details', [\App\Http\Controllers\Portal\AgentController::class, 'updateAgreementDetails'])->name('agreement.details');
+            Route::post('/agreement/sign', [\App\Http\Controllers\Portal\AgentController::class, 'signAgreement'])->name('agreement.sign');
+            Route::get('/agreement/preview', [\App\Http\Controllers\Portal\AgentController::class, 'previewAgreement'])->name('agreement.preview');
+            Route::get('/agreement/view', [\App\Http\Controllers\Portal\AgentController::class, 'viewAgreement'])->name('agreement.view');
+            Route::get('/agreement/download', [\App\Http\Controllers\Portal\AgentController::class, 'downloadAgreement'])->name('agreement.download');
         });
 
         // Sub-agent portal — works ONE recruiting agent's referral leads

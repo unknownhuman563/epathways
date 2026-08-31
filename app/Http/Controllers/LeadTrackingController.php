@@ -997,19 +997,26 @@ class LeadTrackingController extends Controller
         $parts = explode(':', (string) $doc->source_variant);
         $scenario = $parts[1] ?? 'std_100';
         $mode = ($parts[2] ?? 'single') === 'couple' ? 'couple' : 'single';
+        $gen = app(\App\Services\AgreementGenerator::class);
 
-        // Signer stays whoever the staff was at generation time, if we
-        // stored a signer_id via engagement_signer_id (repurposed).
-        $overrides = ['applicant_mode' => $mode];
-        if ($doc->engagement_signer_id) {
-            $overrides['signer_id'] = $doc->engagement_signer_id;
+        $signerOpt = $doc->engagement_signer_id ? ['signer_id' => $doc->engagement_signer_id] : [];
+
+        // Onshore engagement (free) + offshore single-package each have their
+        // own blade; the standard scenarios share agreements.consultancy.
+        if ($scenario === 'onshore') {
+            $payload = $gen->buildOnshoreEngagementPayload($lead, $signerOpt);
+            $view = 'agreements.onshore-engagement';
+        } elseif ($scenario === 'offshore') {
+            $payload = $gen->buildOffshorePayload($lead, $signerOpt);
+            $view = 'agreements.consultancy-offshore';
+        } else {
+            [$payload] = $gen->buildConsultancyPayload($lead, $scenario, array_merge($signerOpt, ['applicant_mode' => $mode]));
+            $view = 'agreements.consultancy';
         }
-        [$payload] = app(\App\Services\AgreementGenerator::class)
-            ->buildConsultancyPayload($lead, $scenario, $overrides);
         $payload['preview'] = true;
         $payload['client_signature'] = $clientSig;
 
-        return ['agreements.consultancy', $payload];
+        return [$view, $payload];
     }
 
     private function englishEngagementPreviewFor(LeadDocument $doc, Lead $lead, ?string $clientSig): array
@@ -1091,20 +1098,34 @@ class LeadTrackingController extends Controller
                 $parts = explode(':', (string) $doc->source_variant);
                 $scenario = $parts[1] ?? 'std_100';
                 $mode = ($parts[2] ?? 'single') === 'couple' ? 'couple' : 'single';
-                [$payload, $s] = app(\App\Services\AgreementGenerator::class)->buildConsultancyPayload(
-                    $lead,
-                    $scenario,
-                    array_filter([
-                        'applicant_mode' => $mode,
-                        'signer_id' => $doc->engagement_signer_id,
-                    ])
-                );
-                $payload['client_signature'] = $clientSig;
-                $payload['acknowledged'] = $acknowledged;
-                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('agreements.consultancy', $payload)
-                    ->setPaper('a4')
-                    ->setOption('isPhpEnabled', true)
-                    ->output();
+                $gen = app(\App\Services\AgreementGenerator::class);
+                $opts = array_filter(['signer_id' => $doc->engagement_signer_id]);
+
+                if ($scenario === 'onshore') {
+                    // Onshore engagement (free) — its own blade.
+                    $payload = $gen->buildOnshoreEngagementPayload($lead, $opts);
+                    $payload['client_signature'] = $clientSig;
+                    $payload['acknowledged'] = $acknowledged;
+                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('agreements.onshore-engagement', $payload)
+                        ->setPaper('a4')->setOption('isPhpEnabled', true)->output();
+                } elseif ($scenario === 'offshore') {
+                    // Offshore single-package consultancy — its own blade.
+                    $payload = $gen->buildOffshorePayload($lead, $opts);
+                    $payload['client_signature'] = $clientSig;
+                    $payload['acknowledged'] = $acknowledged;
+                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('agreements.consultancy-offshore', $payload)
+                        ->setPaper('a4')->setOption('isPhpEnabled', true)->output();
+                } else {
+                    [$payload, $s] = $gen->buildConsultancyPayload(
+                        $lead,
+                        $scenario,
+                        array_merge($opts, ['applicant_mode' => $mode])
+                    );
+                    $payload['client_signature'] = $clientSig;
+                    $payload['acknowledged'] = $acknowledged;
+                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('agreements.consultancy', $payload)
+                        ->setPaper('a4')->setOption('isPhpEnabled', true)->output();
+                }
             } else { // english engagement
                 $payload = $this->englishEngagementPreviewFor($doc, $lead, $clientSig);
                 $payload['acknowledged'] = $acknowledged;
@@ -1389,6 +1410,22 @@ class LeadTrackingController extends Controller
         'Agreements',
     ];
 
+    /**
+     * Map a staff-set checklist status (leads.document_checklist) to the value
+     * the tracker shows. Only the client-relevant review states surface; legacy
+     * internal planning statuses (available/in_progress/…) are ignored so the
+     * tracker falls back to file-based status for those.
+     */
+    private function trackerStaffStatus(?string $status): ?string
+    {
+        return match ($status) {
+            'accepted' => 'accepted',
+            'under_review' => 'under_review',
+            'needs_attention' => 'needs_attention',
+            default => null,
+        };
+    }
+
     private function resolveGeneralChecklist(Lead $lead): array
     {
         // Only the client-facing sections, and only those (drops the internal
@@ -1403,6 +1440,11 @@ class LeadTrackingController extends Controller
             ->groupBy('checklist_key');
 
         $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+
+        // Staff-set per-item status (leads.document_checklist JSON) — the same
+        // status shown on the staff Documents tab. When set, the tracker shows
+        // this exact status instead of deriving one from file presence.
+        $staffChecklist = is_array($lead->document_checklist) ? $lead->document_checklist : [];
 
         $decorated = [];
         foreach ($sections as $section) {
@@ -1430,6 +1472,7 @@ class LeadTrackingController extends Controller
                     'hint' => $item['hint'] ?? null,
                     'required' => ($item['required'] ?? true) ? true : false,
                     'status' => $status,
+                    'staff_status' => $this->trackerStaffStatus($staffChecklist[$key]['status'] ?? null),
                     'count' => $docs->count(),
                 ];
             }
@@ -1462,6 +1505,7 @@ class LeadTrackingController extends Controller
                 'hint' => null,
                 'required' => true,
                 'status' => $status,
+                'staff_status' => $this->trackerStaffStatus($staffChecklist[$key]['status'] ?? null),
                 'count' => $docs->count(),
             ];
         }

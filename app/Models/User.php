@@ -68,6 +68,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'module_permissions',
         'referral_code',
         'parent_agent_id',
         'lead_id',
@@ -96,6 +97,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        // Exposed as the resolved `auth.modules` list instead (grantedModules()).
+        'module_permissions',
     ];
 
     /**
@@ -111,8 +114,37 @@ class User extends Authenticatable
             'iaa_licence_expiry' => 'date',
             'iaa_licence_verified_at' => 'date',
             'signature_updated_at' => 'datetime',
+            'module_permissions' => 'array',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Restricted modules (config/modules.php) this user may see. Super admins
+     * always see every restricted module; everyone else sees only those
+     * explicitly granted to them. Grandfathered modules aren't gated here.
+     *
+     * @return list<string>
+     */
+    public function grantedModules(): array
+    {
+        $restricted = array_keys(config('modules.restricted', []));
+
+        if ($this->isSuperAdmin()) {
+            return array_values($restricted);
+        }
+
+        return array_values(array_intersect((array) ($this->module_permissions ?? []), $restricted));
+    }
+
+    /** May this user see a specific restricted module key? */
+    public function canSeeModule(string $key): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return in_array($key, (array) ($this->module_permissions ?? []), true);
     }
 
     /**
@@ -457,6 +489,7 @@ class User extends Authenticatable
             $candidate = 'AGT-'.strtoupper(\Illuminate\Support\Str::random(6));
             if (! self::where('referral_code', $candidate)->exists()) {
                 $this->forceFill(['referral_code' => $candidate])->save();
+
                 return $candidate;
             }
         }

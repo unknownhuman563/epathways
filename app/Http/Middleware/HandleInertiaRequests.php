@@ -42,6 +42,12 @@ class HandleInertiaRequests extends Middleware
                 // Drives the topbar AI button + lead health badge. True only
                 // when the config kill switch AND the tenant toggle are on.
                 'ai_enabled' => (bool) config('ai.enabled') && (bool) \App\Models\Setting::get('ai_enabled', true),
+                // Restricted modules (config/modules.php) this user may see, so
+                // the sidebar can hide gated items. Grandfathered modules aren't
+                // listed here and stay visible by role. Super admins get all.
+                'modules' => $request->user()?->grantedModules() ?? [],
+                // Only super admins reach Module Management.
+                'can_manage_modules' => $request->user()?->isSuperAdmin() ?? false,
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),

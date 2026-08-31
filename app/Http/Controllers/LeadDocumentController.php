@@ -632,8 +632,14 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            if ($consultancyScenario !== null) {
-                $generator->consultancy($lead, $consultancyScenario, $overrides);
+            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore'], true)) {
+                if ($type === 'consultancy_onshore') {
+                    $generator->onshoreEngagement($lead, $overrides);
+                } elseif ($type === 'consultancy_offshore') {
+                    $generator->consultancyOffshore($lead, $overrides);
+                } else {
+                    $generator->consultancy($lead, $consultancyScenario, $overrides);
+                }
                 $friendly = 'Consultancy Agreement';
 
                 // Generating the agreement emails the client the
@@ -657,7 +663,7 @@ class LeadDocumentController extends Controller
                     }
                 }
             } elseif ($type === 'english_engagement') {
-                $generator->englishEngagement($lead);
+                $generator->englishEngagement($lead, $overrides['currency'] ?? 'php');
                 $friendly = 'English Engagement';
             } else {
                 return back()->withErrors(['error' => "Unknown document type: {$type}"]);
@@ -1343,7 +1349,37 @@ class LeadDocumentController extends Controller
             $out['applicant_mode'] = $mode;
         }
 
+        // Currency for the document's amounts (php | nzd). Only the symbol
+        // changes — amounts are entered by staff, never converted. Default
+        // php keeps existing documents identical.
+        $currency = $request->input('currency');
+        if (in_array($currency, ['php', 'nzd'], true)) {
+            $out['currency'] = $currency;
+        }
+
+        // Editable bank details (ANZ / RCBC preset or fully custom). Blank
+        // fields are left unset so the generator falls back to its RCBC
+        // defaults. Capped so a stray value can't bloat the PDF.
+        foreach (['bank_heading', 'bank_name', 'bank_account_name', 'bank_account_number', 'bank_reference'] as $key) {
+            $val = $request->input($key);
+            if (is_string($val) && trim($val) !== '') {
+                $clean = mb_substr(trim($val), 0, 120);
+                // The reference already renders with a leading '#' — drop a
+                // pasted one so it doesn't double up (##ref).
+                if ($key === 'bank_reference') {
+                    $clean = ltrim($clean, '#');
+                }
+                $out[$key] = $clean;
+            }
+        }
+
         return $out;
+    }
+
+    /** Symbol for a currency code — 'NZ$' for nzd, 'Php' otherwise. */
+    private function currencySymbolFor(?string $currency): string
+    {
+        return $currency === 'nzd' ? 'NZ$' : 'Php';
     }
 
     /**
@@ -1415,13 +1451,21 @@ class LeadDocumentController extends Controller
         $overrides = $this->feeOverridesFromRequest($request);
         $consultancyScenario = $this->consultancyScenarioForType($type);
 
-        if ($consultancyScenario !== null) {
+        if ($type === 'consultancy_onshore') {
+            $payload = $generator->buildOnshoreEngagementPayload($lead, $overrides);
+            $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
+            $view = 'agreements.onshore-engagement';
+        } elseif ($type === 'consultancy_offshore') {
+            $payload = $generator->buildOffshorePayload($lead, $overrides);
+            $payload['preview'] = true;
+            $view = 'agreements.consultancy-offshore';
+        } elseif ($consultancyScenario !== null) {
             [$payload] = $generator->buildConsultancyPayload($lead, $consultancyScenario, $overrides);
             $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
             $view = 'agreements.consultancy';
         } elseif ($type === 'english_engagement') {
             $view = 'agreements.engagement-english';
-            $payload = $this->englishEngagementPayload($lead);
+            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php');
         } else {
             return response('<html><body style="font-family:sans-serif;padding:2rem;color:#666">Unknown document type.</body></html>', 400)
                 ->header('Content-Type', 'text/html; charset=utf-8');
@@ -1431,7 +1475,7 @@ class LeadDocumentController extends Controller
             ->header('Content-Type', 'text/html; charset=utf-8');
     }
 
-    private function englishEngagementPayload(Lead $lead): array
+    private function englishEngagementPayload(Lead $lead, string $currency = 'php'): array
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
 
@@ -1448,6 +1492,8 @@ class LeadDocumentController extends Controller
             'signer_signature' => method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null,
             'generated_at' => now(),
             'generated_at_formatted' => now()->format('jS').' day of '.now()->format('F Y'),
+            'currency' => $currency === 'nzd' ? 'nzd' : 'php',
+            'currency_symbol' => $this->currencySymbolFor($currency),
         ];
     }
 
