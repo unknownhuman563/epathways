@@ -2020,7 +2020,7 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
         setSubmitting(true);
         router.post(
             `/admin/leads/${leadId}/documents/requests`,
-            { items },
+            { items, message: message.trim() || null },
             {
                 preserveScroll: true,
                 preserveState: true,

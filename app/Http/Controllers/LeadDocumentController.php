@@ -138,6 +138,8 @@ class LeadDocumentController extends Controller
             'items.*.label' => 'required|string|max:120',
             'items.*.description' => 'nullable|string|max:500',
             'items.*.required' => 'sometimes|boolean',
+            // The staff member's optional "message to client" for this batch.
+            'message' => 'nullable|string|max:2000',
         ]);
 
         try {
@@ -163,6 +165,9 @@ class LeadDocumentController extends Controller
             $ctx = [
                 'document_name' => count($labels) === 1 ? $labels[0] : count($labels).' documents',
                 'document_list' => implode(', ', $labels),
+                // The staff member's "message to client" — fills {{message}} in the
+                // template (blank string, never null, so the placeholder clears).
+                'message' => (string) ($data['message'] ?? ''),
             ];
 
             // The email-automation "Document requested" message is the single
@@ -220,8 +225,13 @@ class LeadDocumentController extends Controller
         $docRequest = LeadDocumentRequest::where('lead_id', $lead->id)->findOrFail($requestId);
 
         // A resend concerns one request, so {{document_name}} and {{document_list}}
-        // are both that single label (a template can use either).
-        $ctx = ['document_name' => $docRequest->label, 'document_list' => $docRequest->label];
+        // are both that single label (a template can use either). {{message}} is
+        // the instruction saved with the original request.
+        $ctx = [
+            'document_name' => $docRequest->label,
+            'document_list' => $docRequest->label,
+            'message' => (string) ($docRequest->description ?? ''),
+        ];
         $firedClient = app(\App\Services\EmailAutomationService::class)
             ->fire('immigration.document.requested', $lead, $ctx);
 
