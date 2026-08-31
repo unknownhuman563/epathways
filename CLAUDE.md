@@ -40,9 +40,22 @@ php artisan db:seed --class=AdminSeeder    # creates admin login from ADMIN_SEED
 php artisan migrate:fresh --seed
 ```
 
-Local DB is MySQL by default (`DB_CONNECTION=mysql`, db name `epathways`); copy `.env.example` to
+Local DB uses the `mysql` driver (`DB_CONNECTION=mysql`, db name `epathways`); copy `.env.example` to
 `.env` and `php artisan key:generate`. Tests force sqlite in-memory + `QUEUE_CONNECTION=sync` +
 `MAIL_MAILER=array` via `phpunit.xml`, so they don't touch your dev DB, queue or mailbox.
+
+**DB engine differs local vs prod, and it bites.** Dev machines commonly run **MariaDB** (lenient) while
+production is **MySQL** (strict about InnoDB's ~8126-byte in-row limit). The **`leads` table is a
+200+ column "god table" already at that limit**, so *adding a `VARCHAR` column to `leads` passes locally
+but fails in production with `SQLSTATE 1118 "Row size too large"`*. Before adding any column to `leads`:
+prefer `TEXT` (BLOB types are exempt from the 8126 limit) or `JSON`; if a real `VARCHAR` is needed, free
+space in the **same atomic `ALTER`** (`ROW_FORMAT=DYNAMIC` + convert some large non-indexed columns to
+`TEXT`) rather than a sequence of ALTERs (each intermediate step fails on an over-limit table). Migrations
+that touch `leads` are MySQL-guarded (sqlite tests skip the row-format work). See
+`docs/refactors/leads-table-split.md` for the long-term plan to split the table.
+
+`composer test` currently has ~55 pre-existing failures (tracker/checklist/agreement areas) unrelated to
+schema — do not assume a fully green baseline; compare against the branch point when judging your changes.
 
 Useful diagnostic/maintenance commands (`app/Console/Commands/`) — several are the fastest way to
 reproduce a scheduled behaviour by hand: `immigration:evaluate-findings`,
@@ -212,6 +225,21 @@ reshape `entry_requirements`/`employment_outcomes` into structured "sections" JS
 emails are config-driven — `config/stage_emails.php` maps a `Lead::STAGES` value to a template key and
 `SendStageTransitionEmail` re-checks the lead's current stage before sending after a small delay.
 
+**Email automation** (admin/super-admin, `/admin/email-automation`). `EmailEventRegistry` is the
+catalogue of fireable events per department (named events like `immigration.engagement.sent`,
+`immigration.invoice.paid`, plus one generated **per case stage**, keyed
+`immigration.stage.<Str::slug(stage,'_')>`); admins attach `EmailAutomationMessage` rows (recipient +
+template + channel, OFF by default) via `Admin\EmailAutomationController`. `EmailAutomationService::fire($key,$lead,$ctx)`
+is the single door — a safe no-op unless a message is enabled, it returns whether it sent to the **client**
+so callers can implement **single-source** sending (fire the automation; only fall back to the built-in
+email when no client message is configured — this avoids the double-send that bit engagement/document
+flows). Fire points are wired across `Lead::advanceImmigrationStage`, `ImmigrationController::updateCaseStage`
+(BOTH the process-chain path **and** the legacy path — a stage change that misses either path sends
+nothing), `LeadDocumentController` (document requested/approved/rejected, invoice paid), and the
+engagement/signing/outcome flows. Template variables resolve in `CommunicationService::buildContext`
+(the map that fills `{{first_name}}`, `{{visa_type}}`, `{{invoice_number}}`, …); `password`/`signed_at`/
+`status_detail` only fill when the calling action passes them in `$ctx`.
+
 **Bookings & calendar.** `BookingController` + `Booking` (+ `BookingReminder`, `StaffAvailability`,
 `AvailabilityRule`, `SlotGenerator`, `CalendarEvent`). Optional Stripe payment step for paid
 consultations (`PaymentController`, webhook at `/stripe/webhook`). `GoogleCalendarService` +
@@ -296,6 +324,7 @@ Workflow: feature branch → merge to `staging` (verify) → merge to `main` (pr
 - `docs/immigration/build-12-*.md` — case collaboration brief, open items, release notes, test plan.
 - `docs/ai-agent/` — the AI agent layer spec (see constraints below).
 - `docs/audits/` — point-in-time audit findings (lead portal, tickets, system bugs, case detail).
+- `docs/refactors/leads-table-split.md` — plan to split the 200+ column `leads` table (see the DB note above).
 
 ## AI Agent layer — standing constraints
 

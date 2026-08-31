@@ -61,7 +61,7 @@ class HandleInertiaRequests extends Middleware
                 // Assessment draft save — distinct from `success` so the page
                 // doesn't flip to the "submission complete" screen on a save.
                 'draft_saved' => $request->session()->get('draft_saved'),
-                'draft_id'    => $request->session()->get('draft_id'),
+                'draft_id' => $request->session()->get('draft_id'),
                 // Visa intake post-submit — used by the four visa intake
                 // pages to swap the form for a persistent thank-you modal
                 // once the controller saves the row. Carries the visa name
@@ -72,11 +72,11 @@ class HandleInertiaRequests extends Middleware
             // Public contact channels for the sticky CTA bar, floating contact
             // widget, and footer. Components hide channels with empty values.
             'contact' => [
-                'phone'     => config('services.contact.phone'),
-                'whatsapp'  => config('services.contact.whatsapp'),
+                'phone' => config('services.contact.phone'),
+                'whatsapp' => config('services.contact.whatsapp'),
                 'messenger' => config('services.contact.messenger'),
-                'facebook'  => config('services.contact.facebook'),
-                'email'     => config('services.contact.email'),
+                'facebook' => config('services.contact.facebook'),
+                'email' => config('services.contact.email'),
             ],
             // Portal-sidebar badge counts — surfaces "what needs my attention
             // today" on the nav itself. Lazy so the queries only run for the
@@ -133,7 +133,9 @@ class HandleInertiaRequests extends Middleware
     private function sidebarBadges(Request $request): array
     {
         $user = $request->user();
-        if (! $user) return [];
+        if (! $user) {
+            return [];
+        }
 
         $path = $request->path();
         $out = [];
@@ -144,20 +146,20 @@ class HandleInertiaRequests extends Middleware
                 ->when(! $user->isAdmin(), fn ($q) => $q->where('current_owner_id', $user->id));
             $myIds = (clone $caseScope)->pluck('id');
             $out['immigration-adviser'] = [
-                'my_cases'             => $myIds->count(),
-                'pending_signoff'      => $myIds->filter(fn ($id) => \App\Models\CaseAttestation::currentVerdict($id) === null || ! \App\Models\CaseAttestation::hasLodgementSignoff($id))->count(),
+                'my_cases' => $myIds->count(),
+                'pending_signoff' => $myIds->filter(fn ($id) => \App\Models\CaseAttestation::currentVerdict($id) === null || ! \App\Models\CaseAttestation::hasLodgementSignoff($id))->count(),
                 'pending_verification' => \App\Models\LeadDocument::where('status', \App\Models\LeadDocument::STATUS_CHECKED)
                     ->whereHas('lead', fn ($q) => $q->immigrationCase())->count(),
                 'notifications_unread' => $user->unreadNotifications()->count(),
             ];
         } elseif (str_starts_with($path, 'portal/immigration')) {
             $todayStart = now()->startOfDay();
-            $weekStart  = now()->startOfWeek();
+            $weekStart = now()->startOfWeek();
             $out['immigration'] = [
-                'new_assessments'      => \App\Models\ResidentIntake::where('created_at', '>=', $weekStart)->count(),
-                'new_leads_today'      => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
-                'active_cases'         => \App\Models\Lead::where('status', 'Visa Process')->count(),
-                'docs_pending_review'  => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                'new_assessments' => \App\Models\ResidentIntake::where('created_at', '>=', $weekStart)->count(),
+                'new_leads_today' => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
+                'active_cases' => \App\Models\Lead::where('status', 'Visa Process')->count(),
+                'docs_pending_review' => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
                 'notifications_unread' => $user->unreadNotifications()->count(),
             ];
         }
@@ -165,9 +167,31 @@ class HandleInertiaRequests extends Middleware
         if (str_starts_with($path, 'portal/education')) {
             $todayStart = now()->startOfDay();
             $out['education'] = [
-                'new_leads_today'      => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
-                'docs_pending_review'  => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                'new_leads_today' => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
+                'docs_pending_review' => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
                 'notifications_unread' => $user->unreadNotifications()->count(),
+            ];
+        }
+
+        if (str_starts_with($path, 'portal/sub-agent')) {
+            // Scoped to the parent agent's referrals — the same row filter
+            // SubAgentController applies, so the badge can never count a lead
+            // the sub-agent is not allowed to open.
+            $parentId = $user->parent_agent_id;
+            $leadIds = $parentId ? \App\Models\Lead::where('agent_id', $parentId)->pluck('id') : collect();
+
+            $out['sub-agent'] = [
+                // Leads sitting in the "needs follow-up" end of the pipeline.
+                'needs_follow_up' => $leadIds->isEmpty() ? 0 : \App\Models\Lead::whereIn('id', $leadIds)
+                    ->whereIn('status', ['New Leads', 'Contact Attempted', 'Contacted for Booking', 'Missed the Meeting'])
+                    ->count(),
+                // Follow-up tasks that are due or past due and not snoozed.
+                'follow_ups_due' => \App\Models\LeadTask::where('completed', false)
+                    ->where(fn ($q) => $q->whereIn('lead_id', $leadIds)
+                        ->orWhere(fn ($q2) => $q2->whereNull('lead_id')->where('created_by', $user->id)))
+                    ->where(fn ($q) => $q->whereNull('snoozed_until')->orWhere('snoozed_until', '<=', now()))
+                    ->whereNotNull('due_at')->where('due_at', '<=', now()->endOfDay())
+                    ->count(),
             ];
         }
 
@@ -182,12 +206,12 @@ class HandleInertiaRequests extends Middleware
 
         if (str_starts_with($path, 'portal/sales') || str_starts_with($path, 'admin')) {
             $todayStart = now()->startOfDay();
-            $weekEnd    = now()->endOfWeek();
+            $weekEnd = now()->endOfWeek();
 
             $out['sales'] = [
-                'new_leads_today'    => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
-                'tasks_open'         => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->count(),
-                'tasks_overdue'      => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', now())->count(),
+                'new_leads_today' => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
+                'tasks_open' => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->count(),
+                'tasks_overdue' => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', now())->count(),
                 'bookings_this_week' => \App\Models\Booking::whereBetween('appointment_date', [now()->startOfWeek(), $weekEnd])->count(),
                 'notifications_unread' => $user->unreadNotifications()->count(),
             ];

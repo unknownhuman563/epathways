@@ -21,7 +21,7 @@ class SalesController extends Controller
     // Unified lead-pipeline stages (merged from the old `status` + `stage`
     // concepts into one). Order matters — this is the canonical pipeline
     // order surfaced in the dropdown.
-    private const LEAD_STATUSES = [
+    public const LEAD_STATUSES = [
         'New Leads',
         'Contact Attempted',
         'Contacted for Booking',

@@ -269,6 +269,9 @@ class Lead extends Model
         // Per-lead ad-hoc document rows [{key, name}] added on the Documents
         // tab — scoped to this one lead, uploaded against by a custom.* key.
         'custom_documents',
+        // Sub-agent contact facts (best time to call, channel, languages,
+        // emergency contact, stated goal) — one json column, see migration.
+        'contact_profile',
         // Up to 3 program IDs staff have proposed for this lead — drives
         // the "Proposal" tab on the Proposal & Agreements page and the
         // program shortlist rendered on the tracker.
@@ -398,6 +401,7 @@ class Lead extends Model
         'document_checklist' => 'array',
         'hidden_track_documents' => 'array',
         'custom_documents' => 'array',
+        'contact_profile' => 'array',
         'proposed_program_ids' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
