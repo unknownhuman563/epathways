@@ -49,7 +49,6 @@ export default function LeadDashboard({
     family = [],
     nextAppointment = null,
     analytics = {},
-    requestedDocuments = { total: 0, outstanding: 0, items: [] },
 }) {
     return (
         <div className="space-y-8 max-w-6xl mx-auto pb-16">
@@ -94,11 +93,6 @@ export default function LeadDashboard({
                     </div>
                 </div>
             </section>
-
-            {/* ── Documents your adviser requested (action needed) ───────── */}
-            {requestedDocuments.outstanding > 0 && (
-                <RequestedDocumentsCard data={requestedDocuments} />
-            )}
 
             {/* ── Analytics band ─────────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -258,51 +252,6 @@ export default function LeadDashboard({
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-// Prominent "your adviser needs documents" call-to-action on the dashboard.
-// Lists what's outstanding and sends the client to the Documents page to upload.
-function RequestedDocumentsCard({ data }) {
-    const { outstanding, items = [] } = data;
-    return (
-        <section className="rounded-[20px] border-2 border-amber-300 bg-amber-50/60 p-6 sm:p-7">
-            <div className="flex items-start gap-4 flex-wrap">
-                <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
-                    <AlertCircle size={20} strokeWidth={2.5} />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-700 mb-1">Action needed</p>
-                    <h2 className="text-lg font-semibold text-[#0f172a]">
-                        Your adviser requested {outstanding} document{outstanding === 1 ? "" : "s"}
-                    </h2>
-                    <p className="text-sm text-gray-600 font-light mt-1">
-                        Upload {outstanding === 1 ? "it" : "them"} to keep your application moving.
-                    </p>
-
-                    <ul className="mt-4 flex flex-wrap gap-2">
-                        {items.map((it) => (
-                            <li key={it.id}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold border ${
-                                    it.status === "Rejected"
-                                        ? "bg-red-50 text-red-700 border-red-200"
-                                        : "bg-white text-gray-700 border-amber-200"
-                                }`}>
-                                <FileText size={12} />
-                                {it.label}
-                                {it.status === "Rejected" && <span className="text-[10px] font-bold uppercase">· needs new file</span>}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-                <Link
-                    href="/portal/lead/documents"
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#009688] text-white text-sm font-bold hover:bg-[#00796b] transition-colors flex-shrink-0"
-                >
-                    Upload documents <ArrowRight size={16} />
-                </Link>
-            </div>
-        </section>
-    );
-}
 
 function StatCard({ icon, label, value, sub, pct = null, tone = "teal", href = null }) {
     const TONES = {
