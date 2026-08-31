@@ -144,6 +144,13 @@ class LeadTrackingController extends Controller
             return null;
         }
 
+        // A study proposal only reaches the client once it's been approved in
+        // the Program Verification module. Pending/verified proposals stay
+        // hidden; legacy proposals (no review record) remain live.
+        if (! $lead->proposalIsLive()) {
+            return null;
+        }
+
         // Previous proposal versions (all but the newest, which is the active
         // one shown above). Shown read-only on the tracker as earlier options.
         $previousVersions = $lead->proposals->slice(1)->values();
