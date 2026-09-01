@@ -1520,6 +1520,9 @@ class LeadDocumentController extends Controller
         $validated = $request->validate([
             'program_ids' => 'nullable|array|max:5',
             'program_ids.*' => 'integer|exists:programs,id',
+            // Per-program "why this program" reasons, keyed by program id.
+            'reasons' => 'nullable|array',
+            'reasons.*' => 'nullable|string|max:1000',
         ]);
 
         try {
@@ -1527,6 +1530,17 @@ class LeadDocumentController extends Controller
             // Uniquify + reindex so the JSON stays clean regardless of
             // client-side ordering / duplicates.
             $ids = array_values(array_unique(array_map('intval', $validated['program_ids'] ?? [])));
+
+            // Keep only reasons for programs that are actually in the shortlist,
+            // keyed by (string) program id, trimmed, blanks dropped.
+            $reasons = [];
+            foreach (($validated['reasons'] ?? []) as $pid => $text) {
+                $pid = (int) $pid;
+                $text = trim((string) $text);
+                if ($text !== '' && in_array($pid, $ids, true)) {
+                    $reasons[(string) $pid] = $text;
+                }
+            }
 
             // Legacy safety: a lead whose active proposal predates versioning
             // has no history row yet. Snapshot that existing shortlist BEFORE
@@ -1560,6 +1574,21 @@ class LeadDocumentController extends Controller
             }
 
             $lead->proposed_program_ids = $ids ?: null;
+            $lead->proposed_program_reasons = $reasons ?: null;
+
+            // Study proposals now go through verification (Dinah's Program
+            // Verification module) before they reach the client. Saving a
+            // non-empty shortlist submits it as PENDING — it stays hidden on the
+            // tracker and no email fires until it's approved. Clearing resets it.
+            if (! empty($ids)) {
+                $lead->proposal_review = [
+                    'status' => 'pending',
+                    'submitted_at' => now()->toIso8601String(),
+                    'submitted_by' => optional($request->user())->id,
+                ];
+            } else {
+                $lead->proposal_review = null;
+            }
             $lead->save();
 
             // Snapshot the new version. Clearing (empty list) only resets the
@@ -1568,6 +1597,7 @@ class LeadDocumentController extends Controller
                 \App\Models\LeadProposal::create([
                     'lead_id' => $lead->id,
                     'program_ids' => $ids,
+                    'reasons' => $reasons ?: null,
                     'created_by' => optional($request->user())->id,
                 ]);
             }
@@ -1575,7 +1605,7 @@ class LeadDocumentController extends Controller
             $count = count($ids);
             $msg = $count === 0
                 ? "Proposal cleared for {$lead->first_name} {$lead->last_name}."
-                : "Proposed {$count} program".($count === 1 ? '' : 's')." for {$lead->first_name} {$lead->last_name}.";
+                : "Submitted {$count} program".($count === 1 ? '' : 's').' for verification — the client sees them once approved.';
 
             return back()->with('success', $msg);
         } catch (\Throwable $e) {
@@ -1675,6 +1705,35 @@ class LeadDocumentController extends Controller
      *  - {{program_1}}..{{program_5}} : the same values as individual plain-text
      *    lines, kept for older templates. Unselected slots are empty strings.
      */
+    /**
+     * Send the client the "Study Proposal ready" email and advance the pipeline
+     * to "Proposal Sent". Shared by the Notify button and the Program
+     * Verification approval step. Safe no-op when the lead has no email.
+     */
+    public function sendProposalReadyEmail(Lead $lead): bool
+    {
+        if (empty($lead->email)) {
+            return false;
+        }
+
+        $stages = \App\Models\Lead::STAGES;
+        $curIdx = array_search($lead->status, $stages, true);
+        $tgtIdx = array_search('Proposal Sent', $stages, true);
+        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+            $lead->status = 'Proposal Sent';
+            $lead->save();
+        }
+
+        $res = app(\App\Services\CommunicationService::class)
+            ->sendTemplated('program_proposal', $lead, $this->proposalProgramVars($lead));
+
+        if (! ($res['email'] ?? null)) {
+            Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'proposal'));
+        }
+
+        return true;
+    }
+
     private function proposalProgramVars(Lead $lead): array
     {
         $ids = is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : [];

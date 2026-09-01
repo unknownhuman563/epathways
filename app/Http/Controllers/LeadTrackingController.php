@@ -144,6 +144,13 @@ class LeadTrackingController extends Controller
             return null;
         }
 
+        // A study proposal only reaches the client once it's been approved in
+        // the Program Verification module. Pending/verified proposals stay
+        // hidden; legacy proposals (no review record) remain live.
+        if (! $lead->proposalIsLive()) {
+            return null;
+        }
+
         // Previous proposal versions (all but the newest, which is the active
         // one shown above). Shown read-only on the tracker as earlier options.
         $previousVersions = $lead->proposals->slice(1)->values();
@@ -174,21 +181,27 @@ class LeadTrackingController extends Controller
             'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
             'public_url' => '/program-details/'.($p->slug ?: $p->id),
         ];
-        // Preserve staff-picked ordering exactly. Drop ids whose Program vanished.
-        $mapIds = fn ($idList) => collect($idList)
+        // Preserve staff-picked ordering exactly. Drop ids whose Program
+        // vanished. Merge in the per-program "why this program" reason from the
+        // supplied reasons map (keyed by program id).
+        $mapIds = fn ($idList, $reasons = []) => collect($idList)
             ->map(fn ($id) => $programs->get((int) $id))
             ->filter()
-            ->map($mapOne)
+            ->map(fn ($p) => array_merge($mapOne($p), [
+                'reason' => trim((string) ($reasons[(string) $p->id] ?? ($reasons[$p->id] ?? ''))) ?: null,
+            ]))
             ->values();
 
+        $activeReasons = is_array($lead->proposed_program_reasons) ? $lead->proposed_program_reasons : [];
+
         return [
-            'programs' => $mapIds($ids),
+            'programs' => $mapIds($ids, $activeReasons),
             'preferred_program_id' => $lead->preferred_program_id,
             'chosen_at' => optional($lead->preferred_program_chosen_at)->toIso8601String(),
             // Earlier proposals, newest first — read-only history for the client.
             'previous' => $previousVersions->map(fn ($v) => [
                 'id' => $v->id,
-                'programs' => $mapIds($v->program_ids ?? []),
+                'programs' => $mapIds($v->program_ids ?? [], is_array($v->reasons) ? $v->reasons : []),
                 'selected_program_id' => $v->selected_program_id,
                 'created_at' => optional($v->created_at)->toIso8601String(),
             ])->values(),

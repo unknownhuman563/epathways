@@ -521,6 +521,20 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.agents.agreement.download');
     });
 
+    // Program Verification module — restricted (default super-admin-only,
+    // grantable per user via Module Management, e.g. to Dinah). Gated only by
+    // the module so it's reachable from any portal the grantee is in.
+    Route::middleware('module:program_verification')->group(function () {
+        Route::get('/program-verification', [\App\Http\Controllers\ProgramVerificationController::class, 'index'])
+            ->name('program-verification.index');
+        Route::post('/program-verification/{lead}/programs', [\App\Http\Controllers\ProgramVerificationController::class, 'updatePrograms'])
+            ->name('program-verification.programs');
+        Route::post('/program-verification/{lead}/verify', [\App\Http\Controllers\ProgramVerificationController::class, 'verify'])
+            ->name('program-verification.verify');
+        Route::post('/program-verification/{lead}/approve', [\App\Http\Controllers\ProgramVerificationController::class, 'approve'])
+            ->name('program-verification.approve');
+    });
+
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
     Route::middleware('portal:admin')->group(function () {
         Route::redirect('/admin', '/admin/dashboard');

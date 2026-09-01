@@ -5,12 +5,13 @@ import {
     ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
     Building2, Ticket, Mail,
     PenLine, Megaphone, Smartphone, MessageSquare, FileText, Award,
-    Clock, BookOpen,
+    Clock, BookOpen, BadgeCheck,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
     const { props } = usePage();
     const badges = props?.sidebarBadges?.education || {};
+    const modules = props?.auth?.modules || [];
 
     const EDUCATION_NAV = [
         { name: "Dashboard", href: "/portal/education/dashboard", icon: <LayoutDashboard size={20} /> },
@@ -31,6 +32,10 @@ export default function EducationLayout({ children }) {
         { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },
         { name: "Documents", href: "/portal/education/documents", icon: <FolderOpen size={20} />, badge: badges.docs_pending_review, badgeTone: "warning" },
+        // Restricted module — only shows when granted (e.g. to Dinah).
+        ...(modules.includes("program_verification")
+            ? [{ name: "Program Verification", href: "/program-verification", icon: <BadgeCheck size={20} /> }]
+            : []),
         { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
 
         { name: "Setup", section: true },

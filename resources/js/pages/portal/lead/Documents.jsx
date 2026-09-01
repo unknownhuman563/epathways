@@ -38,47 +38,24 @@ export default function LeadDocumentsPage({
             {/* Header */}
             <div>
                 <p className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.32em] mb-1.5">
-                    Document submission journey
+                    Documents
                 </p>
                 <h1 className="text-2xl sm:text-3xl font-medium text-[#282728] tracking-tight">My documents</h1>
                 <p className="text-sm text-gray-500 font-light mt-1.5 max-w-2xl">
-                    Submit each section in order. Once your adviser verifies a section, the next one unlocks.
+                    Upload the documents your adviser has requested below.
                 </p>
             </div>
 
-            {/* Progress strip */}
-            <SectionProgressStrip sections={CHECKLIST} verifications={sectionVerifications} currentIdx={currentIdx} />
-
-            {/* Sections */}
-            <div className="space-y-4">
-                {CHECKLIST.map((section, idx) => {
-                    const ver = sectionVerifications[section.key];
-                    const verStatus = ver?.status;
-                    const state = idx < currentIdx
-                        ? 'done'
-                        : idx === currentIdx
-                            ? (currentIdx >= CHECKLIST.length ? 'done' : 'current')
-                            : 'locked';
-
-                    return (
-                        <SectionPanel
-                            key={section.key}
-                            section={section}
-                            sectionIndex={idx}
-                            state={state}
-                            verification={ver}
-                            verStatus={verStatus}
-                            files={Object.fromEntries(section.items.map(it => [it.id, checklistFiles[it.id] || []]))}
-                            lead={lead}
-                        />
-                    );
-                })}
-            </div>
-
-            {/* Documents your adviser specifically requested (checklist items
-                they picked, or ad-hoc "other" documents) — each is uploadable. */}
-            {requests.length > 0 && (
+            {/* Documents your adviser requested — shown FIRST. Checklist items
+                they picked, or ad-hoc "other" documents — each is uploadable. */}
+            {requests.length > 0 ? (
                 <AdviserRequestsPanel requests={requests} />
+            ) : (
+                <section className="bg-white rounded-2xl border border-[#282728]/15 p-8 text-center">
+                    <Inbox size={28} className="mx-auto text-gray-300" />
+                    <p className="mt-2 text-sm font-semibold text-[#282728]">No documents requested yet</p>
+                    <p className="text-xs text-gray-500 mt-1">When your adviser asks for a document, it&apos;ll appear here to upload.</p>
+                </section>
             )}
 
             {/* Shared by staff */}

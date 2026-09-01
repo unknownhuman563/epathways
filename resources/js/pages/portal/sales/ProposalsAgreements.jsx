@@ -304,6 +304,7 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                         <th className="px-3 py-3">Name</th>
                         <th className="px-3 py-3">Contacts</th>
                         <th className="px-3 py-3">Programs</th>
+                        <th className="px-3 py-3">Status</th>
                         <th className="px-3 py-3">Created</th>
                         <th className="px-3 py-3 text-right pr-4">Actions</th>
                     </tr>
@@ -422,6 +423,10 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                                     </details>
                                 )}
                             </td>
+                            {/* ── STATUS (verification) ────────────────── */}
+                            <td className="px-3 py-3">
+                                <ProposalStatusBadge status={r.proposal_status} />
+                            </td>
                             {/* ── CREATED ─────────────────────────────── */}
                             <td className="px-3 py-3 whitespace-nowrap text-gray-600">
                                 {fmtDate(r.updated_at)}
@@ -464,6 +469,23 @@ function variantToTypeKey(doc) {
         return match?.value || 'consultancy_std_single_100';
     }
     return 'consultancy_std_single_100';
+}
+
+// Verification status of a study proposal. pending/verified = still in Program
+// Verification ("Verifying"); approved = live on the client's tracker. Null =
+// legacy proposal (predates the workflow) — treated as live.
+function ProposalStatusBadge({ status }) {
+    const map = {
+        pending:  { label: 'Verifying', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+        verified: { label: 'Verifying', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+        approved: { label: 'Approved',  cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    };
+    const m = map[status] || { label: 'Live', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
+    return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${m.cls}`}>
+            {m.label}
+        </span>
+    );
 }
 
 // Initials fallback for the profile avatar when there's no face image.
@@ -735,7 +757,7 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
 // ── Program picker — replaces the PDF preview on the left of the New
 //    modal when Proposal type is selected. Cap is enforced in the parent
 //    (togglePicked drops the oldest pick to make room for a fourth). ───
-function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedIds, togglePicked, max }) {
+function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedIds, togglePicked, max, reasons = {}, setReason }) {
     const pickedSet = new Set(pickedIds);
     // Look up picked-program details from the FULL catalogue so the
     // "Selected" chips keep their titles even when an active search
@@ -757,41 +779,47 @@ function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedId
                     </span>
                 </div>
 
-                {/* Selected programs — shown as chips so staff can see at
-                    a glance what they've picked, and can un-pick without
-                    scrolling back through the list. */}
+                {/* Selected programs — each with a "why this program" reason the
+                    client sees on their tracker. Removable per row. */}
                 {pickedIds.length > 0 && (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-2">
                             Selected · {pickedIds.length}
                         </p>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="space-y-2">
                             {pickedIds.map((id) => {
                                 const p = pickedById.get(id);
                                 return (
-                                    <span
-                                        key={id}
-                                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white border border-emerald-200 text-[11px] font-semibold text-gray-800 shadow-sm max-w-full"
-                                    >
-                                        {p ? (
-                                            <>
-                                                <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
-                                                    L{p.level}
-                                                </span>
-                                                <span className="truncate max-w-[220px]" title={p.title}>{p.title}</span>
-                                            </>
-                                        ) : (
-                                            <span className="text-gray-500">Program #{id}</span>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => togglePicked(id)}
-                                            className="ml-0.5 -mr-0.5 w-4 h-4 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
-                                            title="Remove from proposal"
-                                        >
-                                            <X size={11} />
-                                        </button>
-                                    </span>
+                                    <div key={id} className="rounded-md bg-white border border-emerald-200 shadow-sm p-2">
+                                        <div className="flex items-center gap-1.5">
+                                            {p ? (
+                                                <>
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
+                                                        L{p.level}
+                                                    </span>
+                                                    <span className="text-[12px] font-semibold text-gray-800 truncate" title={p.title}>{p.title}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-[12px] text-gray-500">Program #{id}</span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => togglePicked(id)}
+                                                className="ml-auto w-5 h-5 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors shrink-0"
+                                                title="Remove from proposal"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                        <textarea
+                                            rows={2}
+                                            value={reasons[id] ?? ''}
+                                            onChange={(e) => setReason?.(id, e.target.value)}
+                                            placeholder="Why this program? (the client sees this on their tracker)"
+                                            maxLength={1000}
+                                            className="w-full mt-1.5 px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-gray-400 resize-y"
+                                        />
+                                    </div>
                                 );
                             })}
                         </div>
@@ -1219,6 +1247,9 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     const [leadSearch, setLeadSearch] = useState('');
     const [programSearch, setProgramSearch] = useState('');
     const [pickedProgramIds, setPickedProgramIds] = useState([]);
+    // Per-program "why this program" reasons, keyed by program id.
+    const [pickedReasons, setPickedReasons] = useState({});
+    const setReason = (id, text) => setPickedReasons((r) => ({ ...r, [id]: text }));
     const [submitting, setSubmitting] = useState(false);
     // Editable amounts on the Settings panel — only surfaced for the 4
     // consultancy scenarios. Defaults come from the selected DOC_TYPE.
@@ -1250,6 +1281,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             setCategory('philippines');
         }
         setPickedProgramIds([]);
+        setPickedReasons({});
         setProgramSearch('');
         setNotify(true);
         setBank({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' });
@@ -1317,7 +1349,15 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         // rides along in the payload instead of a second POST.
         const wantNotify = notify && canNotify;
         const payload = isProposal
-            ? { program_ids: pickedProgramIds }
+            ? {
+                program_ids: pickedProgramIds,
+                // Only reasons for currently-picked programs, blanks dropped.
+                reasons: Object.fromEntries(
+                    pickedProgramIds
+                        .filter((id) => (pickedReasons[id] || '').trim())
+                        .map((id) => [id, pickedReasons[id].trim()]),
+                ),
+            }
             : (isConsultancyType
                 ? {
                     school_enrolment_fee: schoolFee,
@@ -1340,6 +1380,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             setType('');
             setLeadSearch('');
             setPickedProgramIds([]);
+            setPickedReasons({});
             setNotify(true);
         };
 
@@ -1347,10 +1388,10 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             preserveScroll: true,
             onSuccess: () => {
                 // Consultancy/onshore/offshore agreements already emailed the
-                // client inside the generate endpoint above, so they skip the
-                // second POST (no double-send). Everything else (proposals save a
-                // shortlist; English Engagement has no self-send) still notifies.
-                if (wantNotify && ! isAgreementType) {
+                // client inside the generate endpoint. Study proposals now defer
+                // their email to the Program Verification approval step, so they
+                // skip it here too. English Engagement still notifies immediately.
+                if (wantNotify && ! isAgreementType && ! isProposal) {
                     router.post(`/admin/leads/${leadId}/notify-document-ready`, {
                         kind: isProposal ? 'proposal' : 'agreement',
                     }, {
@@ -1378,9 +1419,15 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
 
     const togglePickedProgram = (id) => {
         setPickedProgramIds((prev) => {
-            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            if (prev.includes(id)) {
+                // Unpicking — drop its reason too.
+                setPickedReasons((r) => { const n = { ...r }; delete n[id]; return n; });
+                return prev.filter((x) => x !== id);
+            }
             if (prev.length >= MAX_PROPOSED_PROGRAMS) {
-                // Hard cap — drop the oldest pick to make room for the new one.
+                // Hard cap — drop the oldest pick (and its reason) to make room.
+                const dropped = prev[0];
+                setPickedReasons((r) => { const n = { ...r }; delete n[dropped]; return n; });
                 return [...prev.slice(1), id];
             }
             return [...prev, id];
@@ -1451,7 +1498,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             <h3 className="text-[15px] font-bold text-gray-900 leading-tight">New proposal or agreement</h3>
                             <p className="text-[11px] text-gray-500 mt-0.5">
                                 {isProposalType
-                                    ? 'Pick up to 5 programs; the lead chooses one on their tracker.'
+                                    ? 'Pick up to 5 programs; submit for verification — the client sees them once approved.'
                                     : 'Preview updates as you change lead or type. Generate attaches a PDF to the lead\'s documents.'}
                             </p>
                         </div>
@@ -1704,6 +1751,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                         pickedIds={pickedProgramIds}
                                         togglePicked={togglePickedProgram}
                                         max={MAX_PROPOSED_PROGRAMS}
+                                        reasons={pickedReasons}
+                                        setReason={setReason}
                                     />
                                 </div>
                             ) : previewUrl ? (
@@ -1791,7 +1840,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                         >
                             {submitting ? <Loader size={14} className="animate-spin" /> : <Plus size={14} />}
-                            {isProposalType ? 'Save proposal' : 'Generate'}
+                            {isProposalType ? 'Submit for verification' : 'Generate'}
                         </button>
                     </div>
                 </div>

@@ -23,6 +23,10 @@ return [
             'label' => 'Agents',
             'description' => 'Manage referral agents — their leads, profiles, and agreements.',
         ],
+        'program_verification' => [
+            'label' => 'Program Verification',
+            'description' => 'Verify and approve study proposals before they reach the client.',
+        ],
     ],
 
 ];

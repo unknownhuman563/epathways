@@ -726,6 +726,9 @@ class SalesController extends Controller
                         // proposal was just created — nothing selected yet).
                         'preferred_program_id' => $l->preferred_program_id,
                         'preferred_program_chosen_at' => optional($l->preferred_program_chosen_at)->toIso8601String(),
+                        // Verification status: pending | verified | approved.
+                        // Null = legacy proposal (predates the workflow).
+                        'proposal_status' => $l->proposalStatus(),
                         'updated_at' => optional($l->updated_at)->toIso8601String(),
                     ];
                 })
