@@ -2051,6 +2051,18 @@ class LeadDocumentController extends Controller
         } catch (\Throwable $e) {
             Log::error('Lead-portal document notify failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
         }
+
+        // Email automation — fires the configured "document uploaded" staff
+        // notice (a no-op unless a message is enabled for the key). Kept in its
+        // own try so a template/send problem never blocks the in-app alert above.
+        try {
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.document.uploaded', $lead, [
+                'document_name' => $document->original_name,
+                'adviser_name' => optional($lead->assignee)->name ?? '',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Document-uploaded automation failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
     }
 
     public function leadUpload(Request $request)
