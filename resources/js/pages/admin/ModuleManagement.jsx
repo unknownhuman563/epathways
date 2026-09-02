@@ -28,30 +28,44 @@ export default function ModuleManagement({ modules = [], users = [] }) {
         setGranted(new Set(u.modules || []));
     };
 
-    // Whole-module toggle. Granting the whole module clears its (now-redundant)
-    // feature keys; ungranting clears everything for the module.
+    const featureKeys = (m) => (m.features || []).map((f) => f.key);
+
+    // "Full access" is a convenience that mirrors "every part on" — but the
+    // individual parts stay independently toggleable. We store the individual
+    // feature keys (not the bare parent) so you can enable/disable any single
+    // part freely; a legacy bare-parent grant is expanded to parts on first edit.
+    const wholeOn = (m) => {
+        const fks = featureKeys(m);
+        if (fks.length === 0) return granted.has(m.key);        // module with no parts
+        return granted.has(m.key) || fks.every((k) => granted.has(k));
+    };
+    const featureOn = (m, key) => granted.has(m.key) || granted.has(key);
+
     const toggleWhole = (m) => setGranted((prev) => {
         const next = new Set(prev);
-        const featureKeys = (m.features || []).map((f) => f.key);
-        if (next.has(m.key)) {
-            next.delete(m.key);
-        } else {
-            next.add(m.key);
-            featureKeys.forEach((k) => next.delete(k));
+        const fks = featureKeys(m);
+        if (fks.length === 0) {                                 // no parts → simple toggle
+            next.has(m.key) ? next.delete(m.key) : next.add(m.key);
+            return next;
         }
+        const on = next.has(m.key) || fks.every((k) => next.has(k));
+        next.delete(m.key);                                    // drop legacy bare-parent form
+        fks.forEach((k) => next.delete(k));
+        if (! on) fks.forEach((k) => next.add(k));             // turning ON = every part
         return next;
     });
 
-    // Individual feature toggle (only relevant when the whole module is off).
     const toggleFeature = (m, key) => setGranted((prev) => {
         const next = new Set(prev);
-        next.delete(m.key); // switching to per-feature drops any whole-module grant
+        // Expand a legacy whole-module grant into explicit parts so a single
+        // part can be flipped without losing the others.
+        if (next.has(m.key)) {
+            next.delete(m.key);
+            featureKeys(m).forEach((k) => next.add(k));
+        }
         next.has(key) ? next.delete(key) : next.add(key);
         return next;
     });
-
-    const wholeOn = (m) => granted.has(m.key);
-    const featureOn = (m, key) => granted.has(m.key) || granted.has(key);
 
     // Dirty check vs the user's saved grant set.
     const dirty = useMemo(() => {
@@ -202,7 +216,7 @@ export default function ModuleManagement({ modules = [], users = [] }) {
                                                         {hasFeatures && (
                                                             <div className="border-t border-gray-100 px-3 py-2 space-y-1">
                                                                 <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 pb-0.5">
-                                                                    {on ? "All parts (full access)" : "Or grant specific parts"}
+                                                                    Grant specific parts
                                                                 </p>
                                                                 {m.features.map((f) => {
                                                                     const fon = featureOn(m, f.key);
@@ -210,9 +224,8 @@ export default function ModuleManagement({ modules = [], users = [] }) {
                                                                         <button
                                                                             key={f.key}
                                                                             type="button"
-                                                                            disabled={on}
                                                                             onClick={() => toggleFeature(m, f.key)}
-                                                                            className={`w-full text-left flex items-center gap-3 pl-4 pr-2 py-2 rounded-lg transition-colors ${on ? "opacity-60 cursor-default" : "hover:bg-gray-50"}`}
+                                                                            className="w-full text-left flex items-center gap-3 pl-4 pr-2 py-2 rounded-lg transition-colors hover:bg-gray-50"
                                                                         >
                                                                             <div className="min-w-0 flex-1">
                                                                                 <div className="text-[13px] font-medium text-gray-800">{f.label}</div>
