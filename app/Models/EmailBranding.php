@@ -54,6 +54,17 @@ class EmailBranding extends Model
      *
      * @return array{bannerUrl: string, footerUrl: string, footerPath: string}
      */
+    /**
+     * Per-department accent colour for the baked CTA buttons (BOOK NOW / CALL).
+     * Null = the default brand green. Immigration uses cyan.
+     */
+    public static function accentFor(?string $key): ?string
+    {
+        return [
+            'immigration' => '#0692af',
+        ][$key ?: 'default'] ?? null;
+    }
+
     public static function resolveAssets(?string $key): array
     {
         $key = $key ?: 'default';
