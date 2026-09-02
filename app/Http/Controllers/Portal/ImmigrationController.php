@@ -1860,6 +1860,12 @@ class ImmigrationController extends Controller
                 // the case's Documents tab.
                 if ($intake instanceof ResidentIntake) {
                     \App\Services\Immigration\IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
+                } elseif ($intake instanceof \App\Models\WorkIntake) {
+                    \App\Services\Immigration\IntakeDocumentMigrator::fromWorkIntake($intake, $lead);
+                } elseif ($intake instanceof \App\Models\StudentIntake
+                    || $intake instanceof \App\Models\VisitorIntake
+                    || $intake instanceof \App\Models\FamilyIntake) {
+                    \App\Services\Immigration\IntakeDocumentMigrator::fromIntake($intake, $lead);
                 }
                 \App\Services\Immigration\IntakeDocumentMigrator::fromLeadUploads($lead);
 
@@ -3068,7 +3074,84 @@ class ImmigrationController extends Controller
                 'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
                 'status' => $lead->status,
             ] : null,
+            // Uploaded documents (shared tab) — shown in the assessment-module
+            // Documents card and streamed from the private disk.
+            'documents' => $this->intakeDocumentsPayload($type, $intake),
         ]);
+    }
+
+    /**
+     * Documents-card payload for the assessment-module intake view — the
+     * uploaded files (keyed) + human labels + a type-aware download base. Null
+     * (so the card hides) when the intake carries no uploads.
+     */
+    private function intakeDocumentsPayload(?string $type, $intake): ?array
+    {
+        $files = $intake->document_files ?? null;
+        if (empty($files) || ! is_array($files)) {
+            return null;
+        }
+
+        // Merged label map across the shared checklist and the work tab; any
+        // unknown key is humanised.
+        $labels = [
+            'passport' => 'Passport (all pages)', 'visa_copies' => 'All NZ visa copies',
+            'contracts' => 'NZ employment contracts + JD', 'payslips' => 'Payslips — first 2 mo + latest 1 mo',
+            'ird_summary' => 'IRD summary of earnings (monthly)', 'education_certs' => 'Education certificates / transcripts',
+            'cv' => 'CV (NZ + overseas history)', 'other' => 'Other supporting documents',
+            'job_offer' => 'Job Offer', 'job_token' => 'Job Token / Job Check',
+            'employment_contract' => 'Employment Contract', 'valid_pcc' => 'Valid PCC',
+            'current_nz_visa' => 'Current NZ Visa Copy', 'anzsco_skills' => 'ANZSCO Skills 3/4/5 evidence',
+            'english_test' => 'English Proficiency Test Result', 'ird_earnings' => 'IRD Earnings Summary',
+        ];
+        $present = [];
+        foreach (array_keys($files) as $k) {
+            if ($k === 'other') {
+                continue;
+            }
+            $present[$k] = $labels[$k] ?? ucwords(str_replace('_', ' ', (string) $k));
+        }
+
+        return [
+            'labels'      => $present,
+            'ticked'      => $intake->documents ?? (object) [],
+            'files'       => $files,
+            'other_label' => 'Other supporting documents',
+            'base'        => "/admin/immigration/intakes/{$type}/{$intake->id}/documents",
+        ];
+    }
+
+    /**
+     * Stream one uploaded intake document (Work / Student / Visitor / Family)
+     * from the PRIVATE disk. Role-gated by the route group.
+     */
+    public function downloadIntakeDocument(\Illuminate\Http\Request $request, string $type, $id, string $key, $index = 0)
+    {
+        $map = [
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
+        ];
+        abort_unless(isset($map[$type]), 404);
+
+        $intake = $map[$type]::findOrFail($id);
+        $files = $intake->document_files ?? [];
+        abort_unless(isset($files[$key]), 404);
+
+        $entry = $files[$key];
+        $paths = is_array($entry) ? array_values($entry) : [$entry];
+        $i = (int) $index;
+        abort_unless(isset($paths[$i]), 404);
+        $path = $paths[$i];
+        abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+
+        $ext = pathinfo($path, PATHINFO_EXTENSION) ?: 'pdf';
+        $filename = $intake->intake_id.' - '.$key.'.'.$ext;
+
+        return $request->boolean('download')
+            ? \Illuminate\Support\Facades\Storage::disk('local')->download($path, $filename)
+            : \Illuminate\Support\Facades\Storage::disk('local')->response($path, $filename);
     }
 
     /**

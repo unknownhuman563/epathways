@@ -1571,19 +1571,7 @@ class CaseProfileController extends Controller
             }
         }
 
-        // Newest wins — a freshly taken assessment supersedes the stamped one.
-        $assessment = $candidates->unique('id')->sortByDesc('id')->first();
-
-        if (! $assessment) {
-            return [null, null];
-        }
-
-        $intake = $assessment->intakeable;
-        if (! $intake) {
-            return [null, null];
-        }
-
-        $type = match ($intake::class) {
+        $typeFor = fn ($intake) => match ($intake ? $intake::class : null) {
             ResidentIntake::class => 'resident',
             WorkIntake::class => 'work',
             StudentIntake::class => 'student',
@@ -1592,16 +1580,26 @@ class CaseProfileController extends Controller
             default => null,
         };
 
-        if ($type === null) {
-            return [null, null];
+        // Prefer the newest assessment, but walk the list newest-first and return
+        // the first one that actually resolves to a usable intake. A newer but
+        // half-finished / unsupported submission must NOT hide a good earlier
+        // assessment — otherwise switching the case's visa type made the original
+        // (e.g. partner) assessment disappear even though it's still on file.
+        $sorted = $candidates->unique('id')->sortByDesc('id')->values();
+        foreach ($sorted as $candidate) {
+            $intake = $candidate->intakeable;
+            $type = $typeFor($intake);
+            if ($intake && $type !== null) {
+                return [$type, array_merge($intake->toArray(), [
+                    'assessment_id' => $candidate->id,
+                    'assessment_status' => $candidate->status,
+                    'assessment_payment_status' => $candidate->payment_status,
+                    'assessment_booking_id' => $candidate->booking_id,
+                ])];
+            }
         }
 
-        return [$type, array_merge($intake->toArray(), [
-            'assessment_id' => $assessment->id,
-            'assessment_status' => $assessment->status,
-            'assessment_payment_status' => $assessment->payment_status,
-            'assessment_booking_id' => $assessment->booking_id,
-        ])];
+        return [null, null];
     }
 
     private function serializeLead(Lead $lead): array

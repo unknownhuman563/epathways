@@ -29,9 +29,12 @@ class StudentIntake extends Model
         'has_sponsor', 'sponsor_relationship', 'sponsor_income_source',
         'can_provide_statements', 'has_other_assets', 'other_assets_details',
         'declaration_accepted', 'signature_name', 'signature_date',
+        'documents', 'document_files',
     ];
 
     protected $casts = [
+        'documents'            => 'array',
+        'document_files'       => 'array',
         'dob'                  => 'date',
         'passport_expiry'      => 'date',
         'last_nz_departure'    => 'date',
