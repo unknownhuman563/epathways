@@ -28,11 +28,30 @@ export default function ModuleManagement({ modules = [], users = [] }) {
         setGranted(new Set(u.modules || []));
     };
 
-    const toggle = (key) => setGranted((prev) => {
+    // Whole-module toggle. Granting the whole module clears its (now-redundant)
+    // feature keys; ungranting clears everything for the module.
+    const toggleWhole = (m) => setGranted((prev) => {
         const next = new Set(prev);
+        const featureKeys = (m.features || []).map((f) => f.key);
+        if (next.has(m.key)) {
+            next.delete(m.key);
+        } else {
+            next.add(m.key);
+            featureKeys.forEach((k) => next.delete(k));
+        }
+        return next;
+    });
+
+    // Individual feature toggle (only relevant when the whole module is off).
+    const toggleFeature = (m, key) => setGranted((prev) => {
+        const next = new Set(prev);
+        next.delete(m.key); // switching to per-feature drops any whole-module grant
         next.has(key) ? next.delete(key) : next.add(key);
         return next;
     });
+
+    const wholeOn = (m) => granted.has(m.key);
+    const featureOn = (m, key) => granted.has(m.key) || granted.has(key);
 
     // Dirty check vs the user's saved grant set.
     const dirty = useMemo(() => {
@@ -160,24 +179,54 @@ export default function ModuleManagement({ modules = [], users = [] }) {
                                     <>
                                         <div className="space-y-2.5">
                                             {modules.map((m) => {
-                                                const on = granted.has(m.key);
+                                                const on = wholeOn(m);
+                                                const hasFeatures = (m.features || []).length > 0;
                                                 return (
-                                                    <button
-                                                        key={m.key}
-                                                        type="button"
-                                                        onClick={() => toggle(m.key)}
-                                                        className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
-                                                            on ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200 hover:border-gray-300"
-                                                        }`}
-                                                    >
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="text-sm font-semibold text-gray-900">{m.label}</div>
-                                                            {m.description && <div className="text-[11px] text-gray-500 mt-0.5">{m.description}</div>}
-                                                        </div>
-                                                        <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-gray-300"}`}>
-                                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
-                                                        </span>
-                                                    </button>
+                                                    <div key={m.key} className={`rounded-xl border transition-colors ${on ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200"}`}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleWhole(m)}
+                                                            className="w-full text-left flex items-center gap-3 px-4 py-3"
+                                                        >
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="text-sm font-semibold text-gray-900">
+                                                                    {m.label}{hasFeatures && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">Full access</span>}
+                                                                </div>
+                                                                {m.description && <div className="text-[11px] text-gray-500 mt-0.5">{m.description}</div>}
+                                                            </div>
+                                                            <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-gray-300"}`}>
+                                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
+                                                            </span>
+                                                        </button>
+
+                                                        {hasFeatures && (
+                                                            <div className="border-t border-gray-100 px-3 py-2 space-y-1">
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 pb-0.5">
+                                                                    {on ? "All parts (full access)" : "Or grant specific parts"}
+                                                                </p>
+                                                                {m.features.map((f) => {
+                                                                    const fon = featureOn(m, f.key);
+                                                                    return (
+                                                                        <button
+                                                                            key={f.key}
+                                                                            type="button"
+                                                                            disabled={on}
+                                                                            onClick={() => toggleFeature(m, f.key)}
+                                                                            className={`w-full text-left flex items-center gap-3 pl-4 pr-2 py-2 rounded-lg transition-colors ${on ? "opacity-60 cursor-default" : "hover:bg-gray-50"}`}
+                                                                        >
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="text-[13px] font-medium text-gray-800">{f.label}</div>
+                                                                                {f.description && <div className="text-[11px] text-gray-500 mt-0.5">{f.description}</div>}
+                                                                            </div>
+                                                                            <span className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${fon ? "bg-emerald-500" : "bg-gray-300"}`}>
+                                                                                <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${fon ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                                                                            </span>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>

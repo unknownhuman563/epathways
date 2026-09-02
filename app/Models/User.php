@@ -128,23 +128,76 @@ class User extends Authenticatable
      */
     public function grantedModules(): array
     {
-        $restricted = array_keys(config('modules.restricted', []));
+        $restricted = config('modules.restricted', []);
 
-        if ($this->isSuperAdmin()) {
-            return array_values($restricted);
+        // Every valid key: each module + its dotted feature keys.
+        $valid = [];
+        foreach ($restricted as $key => $def) {
+            $valid[] = $key;
+            foreach (array_keys($def['features'] ?? []) as $f) {
+                $valid[] = "{$key}.{$f}";
+            }
         }
 
-        return array_values(array_intersect((array) ($this->module_permissions ?? []), $restricted));
+        if ($this->isSuperAdmin()) {
+            return array_values($valid);
+        }
+
+        $perms = array_values(array_intersect((array) ($this->module_permissions ?? []), $valid));
+        $out = $perms;
+
+        foreach ($restricted as $key => $def) {
+            $children = array_keys($def['features'] ?? []);
+            $adminDefault = ($def['admin_default'] ?? false) && $this->role === self::ROLE_ADMIN;
+
+            // Admin-tier module, or a whole-module grant → expose parent + every feature.
+            if ($adminDefault || in_array($key, $perms, true)) {
+                $out[] = $key;
+                foreach ($children as $f) {
+                    $out[] = "{$key}.{$f}";
+                }
+            }
+            // Any feature grant → also expose the parent (for parent-level checks).
+            if (collect($perms)->contains(fn ($p) => str_starts_with((string) $p, "{$key}."))) {
+                $out[] = $key;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
-    /** May this user see a specific restricted module key? */
+    /**
+     * May this user see a restricted module or feature key (e.g. "dtr" or
+     * "dtr.reports")? Super admins see everything; admins see admin_default
+     * modules; a whole-module grant implies its features; any feature grant
+     * makes the parent visible.
+     */
     public function canSeeModule(string $key): bool
     {
         if ($this->isSuperAdmin()) {
             return true;
         }
 
-        return in_array($key, (array) ($this->module_permissions ?? []), true);
+        $parent = str_contains($key, '.') ? explode('.', $key, 2)[0] : $key;
+        $def = config("modules.restricted.{$parent}");
+
+        // Admin-tier modules (historically admin surfaces) — admins always see them.
+        if (($def['admin_default'] ?? false) && $this->role === self::ROLE_ADMIN) {
+            return true;
+        }
+
+        $perms = (array) ($this->module_permissions ?? []);
+        if (in_array($key, $perms, true)) {
+            return true;
+        }
+
+        // A dotted feature is covered by a whole-module grant on its parent.
+        if (str_contains($key, '.')) {
+            return in_array($parent, $perms, true);
+        }
+
+        // A parent key is visible when any of its features is granted.
+        return collect($perms)->contains(fn ($p) => str_starts_with((string) $p, "{$key}."));
     }
 
     /**
