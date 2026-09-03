@@ -18,20 +18,42 @@ class PropertyController extends Controller
 
     private function rules(?Property $property = null): array
     {
+        // Rental mode decides which listing fields are required. Per-room mode
+        // needs room/bed/bath + rent_single; whole-property mode needs the
+        // whole_property_rent_weekly + bedrooms + bathrooms. The other set is
+        // still accepted (kept for later mode switch) but only validated when
+        // relevant to avoid blocking the user with irrelevant errors.
+        $mode = request('rental_mode', Property::RENTAL_MODE_PER_ROOM);
+        $isPerRoom = $mode === Property::RENTAL_MODE_PER_ROOM;
+        $isWhole = $mode === Property::RENTAL_MODE_WHOLE;
+
         return [
-            // Public listing fields (unchanged)
+            // Public listing fields
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
             'suburb' => ['nullable', Rule::in(['Hobsonville', 'Glenfield', 'Kelston', 'Hillsborough', 'Sunnynook'])],
-            'room_type' => ['required', Rule::in(['single', 'ensuite'])],
+            'rental_mode' => ['required', Rule::in(Property::RENTAL_MODES)],
+            // Per-room fields
+            'room_type' => [$isPerRoom ? 'required' : 'nullable', Rule::in(['single', 'ensuite'])],
             'has_wardrobe' => 'boolean',
-            'bed_type' => ['required', Rule::in(['single', 'double'])],
-            'bathroom_type' => ['required', Rule::in(['shared', 'private'])],
+            'bed_type' => [$isPerRoom ? 'required' : 'nullable', Rule::in(['single', 'double'])],
+            'bathroom_type' => [$isPerRoom ? 'required' : 'nullable', Rule::in(['shared', 'private'])],
             'includes' => 'nullable|string',
-            'map_url' => 'nullable|string|max:2000',
-            'rent_single' => 'required|numeric|min:0',
+            'rent_single' => [$isPerRoom ? 'required' : 'nullable', 'numeric', 'min:0'],
             'rent_couple' => 'nullable|numeric|min:0',
             'bills_excluded' => 'boolean',
+            // Whole-property fields
+            'whole_property_rent_weekly' => [$isWhole ? 'required' : 'nullable', 'numeric', 'min:0'],
+            'bedrooms' => [$isWhole ? 'required' : 'nullable', 'integer', 'min:0', 'max:50'],
+            'bathrooms' => [$isWhole ? 'required' : 'nullable', 'integer', 'min:0', 'max:50'],
+            'rooms_layout' => 'nullable|array|max:30',
+            'rooms_layout.*.name' => 'nullable|string|max:80',
+            'rooms_layout.*.type' => 'nullable|string|max:40',
+            'rooms_layout.*.bed' => 'nullable|string|max:40',
+            'rooms_layout.*.ensuite' => 'nullable|string|max:20',
+            'rooms_layout.*.notes' => 'nullable|string|max:255',
+            // Shared
+            'map_url' => 'nullable|string|max:2000',
             'description' => 'nullable|string',
             'status' => ['required', Rule::in(['available', 'unavailable'])],
             'images' => 'nullable|array',
@@ -246,6 +268,18 @@ class PropertyController extends Controller
         $data['has_wardrobe'] = $request->boolean('has_wardrobe');
         $data['bills_excluded'] = $request->boolean('bills_excluded');
         $data['uses_bottled_gas'] = $request->boolean('uses_bottled_gas');
+
+        // Drop rows the user left completely blank; store as null when the
+        // whole array is empty (or when mode is per_room) so the JSON column
+        // stays clean.
+        if (isset($data['rooms_layout']) && is_array($data['rooms_layout'])) {
+            $rows = collect($data['rooms_layout'])
+                ->map(fn ($row) => array_map('trim', array_map(fn ($v) => (string) ($v ?? ''), $row)))
+                ->filter(fn ($row) => collect($row)->filter(fn ($v) => $v !== '')->isNotEmpty())
+                ->values()
+                ->all();
+            $data['rooms_layout'] = ($rows === [] || ($data['rental_mode'] ?? null) !== Property::RENTAL_MODE_WHOLE) ? null : $rows;
+        }
         // Default new records to active; respect the toggle when present.
         $data['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : true;
 

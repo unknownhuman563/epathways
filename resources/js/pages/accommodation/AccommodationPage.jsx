@@ -332,7 +332,7 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
                     <div className="w-full h-full rounded-[1.5rem] bg-gray-100 flex items-center justify-center text-gray-300 text-sm">No image</div>
                   )}
                   <div className="absolute top-4 right-4 bg-white px-3 py-1.5 rounded-full text-xs font-bold shadow-sm capitalize">
-                    {acc.room_type}
+                    {acc.rental_mode === 'whole_property' ? 'Whole property' : acc.room_type}
                   </div>
                 </div>
 
@@ -350,29 +350,55 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
                 {/* Column 3: Rent & Info */}
                 <div className="h-full py-4 lg:px-6 lg:border-r border-gray-100">
                   <div className="mb-6 rounded-2xl border border-[#1F5A8B]/15 bg-[#1F5A8B]/5 p-4">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Single</span>
-                      <span className="text-3xl font-extrabold text-[#282728] leading-none">
-                        {money(acc.rent_single)}<span className="text-xs text-gray-400 font-medium">/wk</span>
-                      </span>
-                    </div>
-                    {acc.rent_couple != null && (
-                      <div className="flex items-baseline justify-between gap-2 mt-3 pt-3 border-t border-[#1F5A8B]/15">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Couple</span>
-                        <span className="text-2xl font-extrabold text-[#282728] leading-none">
-                          {money(acc.rent_couple)}<span className="text-xs text-gray-400 font-medium">/wk</span>
-                        </span>
-                      </div>
+                    {acc.rental_mode === 'whole_property' ? (
+                      <>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Whole property</span>
+                          <span className="text-3xl font-extrabold text-[#282728] leading-none">
+                            {money(acc.whole_property_rent_weekly)}<span className="text-xs text-gray-400 font-medium">/wk</span>
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-3">
+                          {[acc.bedrooms ? `${acc.bedrooms} bed` : null, acc.bathrooms ? `${acc.bathrooms} bath` : null].filter(Boolean).join(' · ') || 'entire home'}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Single</span>
+                          <span className="text-3xl font-extrabold text-[#282728] leading-none">
+                            {money(acc.rent_single)}<span className="text-xs text-gray-400 font-medium">/wk</span>
+                          </span>
+                        </div>
+                        {acc.rent_couple != null && (
+                          <div className="flex items-baseline justify-between gap-2 mt-3 pt-3 border-t border-[#1F5A8B]/15">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Couple</span>
+                            <span className="text-2xl font-extrabold text-[#282728] leading-none">
+                              {money(acc.rent_couple)}<span className="text-xs text-gray-400 font-medium">/wk</span>
+                            </span>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-3">{acc.bills_excluded ? 'Excludes bills' : 'Bills included'}</p>
+                      </>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-3">{acc.bills_excluded ? 'Excludes bills' : 'Bills included'}</p>
                   </div>
 
-                  <p className="text-[11px] font-bold mb-3">Room details</p>
+                  <p className="text-[11px] font-bold mb-3">{acc.rental_mode === 'whole_property' ? 'Property details' : 'Room details'}</p>
                   <div className="space-y-2.5 text-[11px]">
-                    <div className="flex justify-between"><span className="text-gray-500">Room type</span><span className="font-semibold text-gray-400 capitalize">{acc.room_type}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Bed</span><span className="font-semibold text-gray-400 capitalize">{acc.bed_type} mattress</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Wardrobe</span><span className="font-semibold text-gray-400">{acc.has_wardrobe ? 'Yes' : 'No'}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Bathroom</span><span className="font-semibold text-gray-400 capitalize">{acc.bathroom_type}</span></div>
+                    {acc.rental_mode === 'whole_property' ? (
+                      <>
+                        <div className="flex justify-between"><span className="text-gray-500">Bedrooms</span><span className="font-semibold text-gray-400">{acc.bedrooms ?? '—'}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Bathrooms</span><span className="font-semibold text-gray-400">{acc.bathrooms ?? '—'}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Rental type</span><span className="font-semibold text-gray-400">Whole property</span></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between"><span className="text-gray-500">Room type</span><span className="font-semibold text-gray-400 capitalize">{acc.room_type}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Bed</span><span className="font-semibold text-gray-400 capitalize">{acc.bed_type} mattress</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Wardrobe</span><span className="font-semibold text-gray-400">{acc.has_wardrobe ? 'Yes' : 'No'}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Bathroom</span><span className="font-semibold text-gray-400 capitalize">{acc.bathroom_type}</span></div>
+                      </>
+                    )}
                   </div>
                 </div>
 
