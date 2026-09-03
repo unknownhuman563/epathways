@@ -20,6 +20,28 @@ const DEFAULT_FEE_REGIONS = [
     'LATAM/Europe/Africa/Middle East',
 ];
 
+// The list "Price" column shows the free-text price_text if set, otherwise
+// falls back to the structured tuition fees (same source the public Fee Guide
+// and Program Details pages read) so a program with saved fees never shows "—".
+function priceLabel(program) {
+    if (program.price_text) return program.price_text;
+
+    const rows = Array.isArray(program.tuition_fees) && program.tuition_fees.length > 0
+        ? program.tuition_fees
+        : (program.tuition_fee ? [{ amount: program.tuition_fee }] : []);
+
+    const amounts = rows
+        .map(r => Number(r?.amount))
+        .filter(n => Number.isFinite(n) && n > 0);
+    if (amounts.length === 0) return '';
+
+    const min = Math.min(...amounts);
+    const fmt = n => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    return amounts.length > 1 && Math.max(...amounts) !== min
+        ? `From ${fmt(min)}`
+        : fmt(min);
+}
+
 function Label({ children, required }) {
     return (
         <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -758,7 +780,7 @@ export function ProgramModal({ open, onClose, editing, schools = [], portalBase 
     );
 }
 
-export default function Programs({ programs = [], schools = [] }) {
+export default function Programs({ programs = [], schools = [], portalBase = '/admin' }) {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -831,7 +853,7 @@ export default function Programs({ programs = [], schools = [] }) {
     const confirmDelete = () => {
         if (!deleteTarget) return;
         setIsDeleting(true);
-        router.delete('/admin/programs/' + deleteTarget.id, {
+        router.delete(portalBase + '/programs/' + deleteTarget.id, {
             preserveScroll: true,
             onFinish: () => {
                 setIsDeleting(false);
@@ -975,7 +997,7 @@ export default function Programs({ programs = [], schools = [] }) {
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-700 capitalize">{CATEGORY_LABELS[program.category] || program.category}</td>
                                     <td className="px-6 py-4 text-sm text-gray-700">{program.location || '—'}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-700">{program.price_text || '—'}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{priceLabel(program) || '—'}</td>
                                     <td className="px-6 py-4">
                                         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border capitalize ${getStatusStyle(program.status)}`}>{program.status}</span>
                                     </td>
@@ -1080,7 +1102,7 @@ export default function Programs({ programs = [], schools = [] }) {
                 )}
             </div>
 
-            <ProgramModal open={showModal} onClose={closeModal} editing={editing} schools={schools} />
+            <ProgramModal open={showModal} onClose={closeModal} editing={editing} schools={schools} portalBase={portalBase} />
 
             {deleteTarget && (
                 <>
