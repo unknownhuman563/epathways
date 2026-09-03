@@ -1312,12 +1312,12 @@ class ImmigrationController extends Controller
             }
             $user = auth()->user();
             \App\Models\LeadNote::create([
-                'lead_id'     => $lead->id,
-                'user_id'     => $user?->id,
+                'lead_id' => $lead->id,
+                'user_id' => $user?->id,
                 'author_name' => $user?->name,
                 'author_role' => $user?->role,
-                'kind'        => 'note',
-                'body'        => "Stage → {$newStage}: {$stageNote}",
+                'kind' => 'note',
+                'body' => "Stage → {$newStage}: {$stageNote}",
             ]);
         };
 
@@ -1844,12 +1844,14 @@ class ImmigrationController extends Controller
                 // is always (re)linked so the case profile resolves THIS
                 // exact assessment, not a same-email one.
                 $patch = ['inz_visa_type' => $visaName, 'assessment_id' => $assessment->id];
+                $becameCase = false;
                 if (! $lead->is_immigration_case) {
                     $patch['is_immigration_case'] = true;
                     $patch['immigration_converted_at'] = now();
                     $patch['immigration_converted_by'] = auth()->id();
                     $patch['stage_updated_at'] = now();
                     $patch['stage_updated_by'] = auth()->id();
+                    $becameCase = true;
                 }
                 $lead->fill($patch)->save();
 
@@ -1874,6 +1876,12 @@ class ImmigrationController extends Controller
                 // assessment lifecycle reflects the handoff.
                 $intake->update(['status' => 'Engaged']);
                 $assessment->update(['status' => 'completed']);
+
+                // Only fire on a genuinely NEW conversion — a re-run (already a
+                // case) must not re-notify.
+                if ($becameCase) {
+                    $this->fireCaseConverted($lead);
+                }
 
                 return redirect("/portal/immigration/cases/{$lead->id}/profile?tab=documents")
                     ->with('success', "Converted {$lead->first_name} to an immigration case.");
@@ -1918,6 +1926,7 @@ class ImmigrationController extends Controller
                 ]);
             }
 
+            $becameCase = false;
             if (! $lead->is_immigration_case) {
                 $lead->fill([
                     'is_immigration_case' => true,
@@ -1926,6 +1935,7 @@ class ImmigrationController extends Controller
                     'stage_updated_at' => now(),
                     'stage_updated_by' => auth()->id(),
                 ])->save();
+                $becameCase = true;
             }
 
             // Carry the applicant's assessment uploads into the case documents.
@@ -1933,9 +1943,26 @@ class ImmigrationController extends Controller
 
             $intake->update(['status' => 'Engaged']);
 
+            if ($becameCase) {
+                $this->fireCaseConverted($lead);
+            }
+
             return redirect("/portal/immigration/cases/{$lead->id}/profile?tab=documents")
                 ->with('success', "Converted {$intake->first_name} to an immigration case.");
         });
+    }
+
+    /**
+     * Fire the configurable "Converted to case" email automation. A no-op
+     * unless an admin enabled a message for `immigration.case.converted`
+     * (client welcome and/or a notice to the case's adviser/manager/team), and
+     * it never throws — so it can't break a conversion.
+     */
+    private function fireCaseConverted(Lead $lead): void
+    {
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.case.converted', $lead, [
+            'visa_type' => $lead->inz_visa_type ?? '',
+        ]);
     }
 
     /** "resident-intake" / "work-intake" / "student-intake" / "visitor-intake". */
@@ -3113,11 +3140,11 @@ class ImmigrationController extends Controller
         }
 
         return [
-            'labels'      => $present,
-            'ticked'      => $intake->documents ?? (object) [],
-            'files'       => $files,
+            'labels' => $present,
+            'ticked' => $intake->documents ?? (object) [],
+            'files' => $files,
             'other_label' => 'Other supporting documents',
-            'base'        => "/admin/immigration/intakes/{$type}/{$intake->id}/documents",
+            'base' => "/admin/immigration/intakes/{$type}/{$intake->id}/documents",
         ];
     }
 
