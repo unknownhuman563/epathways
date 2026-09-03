@@ -921,13 +921,16 @@ class EducationController extends Controller
     public function programs()
     {
         try {
-            // Return the FULL program attributes — the shared ProgramModal
-            // seeds its edit form from this row, so any omitted field would
-            // render blank and be wiped on save. Only `enrolled` is extra.
-            $programs = Program::orderBy('title')->get()->map(fn ($p) => array_merge(
-                $p->attributesToArray(),
-                ['enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count()]
-            ));
+            // Same data shape the admin Programs page ships (full models +
+            // school relation + appended image_url), so the education portal
+            // renders the identical Programs module. The full attributes also
+            // seed the edit modal so a save can't blank untouched columns.
+            $programs = Program::with('school:id,name')->latest()->get();
+            $programs->each(function (Program $p) {
+                $p->image_url = $p->image
+                    ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image)
+                    : null;
+            });
 
             $schools = \App\Models\School::orderBy('name')->get(['id', 'name']);
 

@@ -758,7 +758,7 @@ export function ProgramModal({ open, onClose, editing, schools = [], portalBase 
     );
 }
 
-export default function Programs({ programs = [], schools = [] }) {
+export default function Programs({ programs = [], schools = [], portalBase = '/admin' }) {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -831,7 +831,7 @@ export default function Programs({ programs = [], schools = [] }) {
     const confirmDelete = () => {
         if (!deleteTarget) return;
         setIsDeleting(true);
-        router.delete('/admin/programs/' + deleteTarget.id, {
+        router.delete(portalBase + '/programs/' + deleteTarget.id, {
             preserveScroll: true,
             onFinish: () => {
                 setIsDeleting(false);
@@ -1080,7 +1080,7 @@ export default function Programs({ programs = [], schools = [] }) {
                 )}
             </div>
 
-            <ProgramModal open={showModal} onClose={closeModal} editing={editing} schools={schools} />
+            <ProgramModal open={showModal} onClose={closeModal} editing={editing} schools={schools} portalBase={portalBase} />
 
             {deleteTarget && (
                 <>

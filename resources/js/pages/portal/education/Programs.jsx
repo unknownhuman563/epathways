@@ -1,16 +1,15 @@
-import { Head } from "@inertiajs/react";
-import ProgramsManager from "@/components/programs/ProgramsManager";
+// Education portal Programs — same module + UI as the admin Programs page.
+// Rendered under portal/education/* so app.jsx wraps it in EducationLayout;
+// portalBase points the create / edit / delete actions at the education
+// routes (which map to the shared ProgramController CRUD).
+import AdminPrograms from "@/pages/admin/Programs";
 
 export default function EducationPrograms({ programs = [], schools = [] }) {
     return (
-        <>
-            <Head title="Programs — Education" />
-            <ProgramsManager
-                programs={programs}
-                schools={schools}
-                portalBase="/portal/education"
-                description="The NZ programs you advise on — the same catalogue admin maintains."
-            />
-        </>
+        <AdminPrograms
+            programs={programs}
+            schools={schools}
+            portalBase="/portal/education"
+        />
     );
 }
