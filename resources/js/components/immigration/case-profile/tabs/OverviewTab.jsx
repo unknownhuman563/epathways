@@ -62,6 +62,23 @@ export default function OverviewTab(props) {
     const withdrawn = stage === "Withdrawn" || /withdraw/i.test(lead.inz_status || "");
     const outcomeTone = declined ? "danger" : withdrawn ? "warn" : null;
 
+    // INZ processing tracker — days since the real lodgement date vs the visa
+    // type's expected window (staff-set from the INZ website; see VisaType.
+    // expected_processing_days). Same green/amber/red bands as the dashboard.
+    const lodgedAt = lead.inz_lodged_at || null;
+    const decisionAt = lead.inz_decision_at || null;
+    const expectedDays = lead.expected_processing_days ?? null;
+    const dayDiff = (a, b) => Math.max(0, Math.floor((new Date(b).getTime() - new Date(a).getTime()) / 86400000));
+    const daysSinceLodged = lodgedAt ? dayDiff(lodgedAt, decisionAt || Date.now()) : null;
+    const inzBand = (daysSinceLodged != null && expectedDays)
+        ? (daysSinceLodged > expectedDays ? "red" : daysSinceLodged >= expectedDays - 5 ? "amber" : "green")
+        : null;
+    const INZ_BAND = {
+        green: { bar: "bg-teal-600", text: "text-teal-600", label: decisionAt ? "On time" : "On track" },
+        amber: { bar: "bg-amber-500", text: "text-amber-600", label: decisionAt ? "On time" : "Due soon" },
+        red: { bar: "bg-red-600", text: "text-red-600", label: decisionAt ? "Over expected" : "Overdue" },
+    };
+
     // Pipeline stepper — each stage's state derived from case milestones.
     const steps = [
         { key: "assessment", label: "Assessment", done: !!lead.immigration_converted_at, sub: lead.immigration_converted_at ? `converted ${fmtShort(lead.immigration_converted_at)}` : "not converted" },
@@ -225,8 +242,44 @@ export default function OverviewTab(props) {
                         <Fact k="Case manager" v={lead.case_manager_name || lead.immigration_manager_name || "—"} />
                         <Fact k="Opened" v={fmtDate(openedIso)} />
                         <Fact k="Target lodgement" v={lead.target_lodgement_at ? fmtDate(lead.target_lodgement_at) : "—"} />
+                        <Fact k="Lodged with INZ" v={lodgedAt ? fmtDate(lodgedAt) : "Not yet lodged"} />
+                        {decisionAt && <Fact k="INZ decision" v={fmtDate(decisionAt)} />}
                         <Fact k="Source" v={lead.is_assessment_converted ? "Assessment conversion" : "Sales-converted"} />
                     </dl>
+
+                    {/* INZ processing tracker — days since lodgement vs the visa's
+                        expected window. Only shown once a lodgement date is set. */}
+                    {lodgedAt && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                    {decisionAt ? "INZ outcome time" : "INZ processing"}
+                                </span>
+                                {inzBand && <span className={`text-[11px] font-bold ${INZ_BAND[inzBand].text}`}>{INZ_BAND[inzBand].label}</span>}
+                            </div>
+                            {expectedDays ? (
+                                <>
+                                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                                        <div className={`h-full rounded-full ${INZ_BAND[inzBand]?.bar || "bg-gray-300"}`}
+                                            style={{ width: `${Math.min(100, Math.round((daysSinceLodged / expectedDays) * 100))}%` }} />
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 mt-1.5">
+                                        {decisionAt
+                                            ? `Decided in ${daysSinceLodged} days · expected ~${expectedDays}`
+                                            : `Day ${daysSinceLodged} of ~${expectedDays} expected · ${
+                                                daysSinceLodged > expectedDays
+                                                    ? `${daysSinceLodged - expectedDays} over`
+                                                    : `${expectedDays - daysSinceLodged} remaining`}`}
+                                    </p>
+                                </>
+                            ) : (
+                                <p className="text-[11px] text-gray-500">
+                                    {decisionAt ? `Decided in ${daysSinceLodged} days.` : `Day ${daysSinceLodged} since lodgement.`}
+                                    <span className="text-gray-400"> Set an expected window on the visa type to track against INZ.</span>
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </section>
 
                 {/* Stat tiles */}

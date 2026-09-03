@@ -1079,6 +1079,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/immigration/resident-intakes', [ResidentIntakeController::class, 'adminIndex'])->name('admin.immigration.resident-intakes');
         Route::get('/admin/immigration/resident-intakes/{id}', [ResidentIntakeController::class, 'adminShow'])->name('admin.immigration.resident-intakes.show');
         Route::get('/admin/immigration/resident-intakes/{id}/documents/{key}/{index?}', [ResidentIntakeController::class, 'downloadDocument'])->name('admin.immigration.resident-intakes.document');
+        // Generic intake-document stream for the Work / Student / Visitor / Family
+        // document tab — same private-disk streaming as resident, keyed by type.
+        Route::get('/admin/immigration/intakes/{type}/{id}/documents/{key}/{index?}', [ImmigrationController::class, 'downloadIntakeDocument'])->name('admin.immigration.intakes.document');
         Route::post('/admin/immigration/resident-intakes/{id}/edit-link', [ResidentIntakeController::class, 'generateEditLink'])->name('admin.immigration.resident-intakes.edit-link');
 
         Route::get('/admin/immigration/user-reviews', fn () => app(UserReviewController::class)->adminIndex('immigration'))->name('admin.immigration.user-reviews');

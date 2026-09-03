@@ -2743,6 +2743,12 @@ class LeadController extends Controller
             ])->save();
             $this->notifyDepartmentOfConversion($lead, ['immigration', 'immigration_manager', 'immigration_adviser'], 'Immigration');
 
+            // Configurable email automation — a no-op unless an admin enabled a
+            // message for this event (client welcome and/or staff notice).
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.case.converted', $lead, [
+                'visa_type' => $lead->inz_visa_type ?? '',
+            ]);
+
             return back()->with('success', "Lead {$lead->lead_id} is now an immigration case.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to case failed', ['id' => $id, 'error' => $e->getMessage()]);

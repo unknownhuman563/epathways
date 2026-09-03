@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
+use App\Http\Controllers\Concerns\HandlesIntakeDocuments;
 use App\Models\Assessment;
 use App\Models\FamilyIntake;
 use App\Support\IntakeVisaTypeMap;
@@ -15,6 +17,9 @@ use Illuminate\Support\Facades\Log;
  */
 class FamilyIntakeController extends Controller
 {
+    use FiresEnquiryAutomation;
+    use HandlesIntakeDocuments;
+
     public function showForm()
     {
         return inertia('visa/FamilyInterestPage');
@@ -32,9 +37,17 @@ class FamilyIntakeController extends Controller
         try {
             DB::beginTransaction();
 
+            $intakeId = 'FV-'.strtoupper(uniqid());
+
+            // Document tab — files to the private disk, kept out of mass-assignment.
+            unset($validated['document_files']);
+            $storedFiles = $this->persistIntakeFiles($request, 'family-intakes', $intakeId);
+
             $intake = FamilyIntake::create(array_merge($validated, [
-                'intake_id' => 'FV-'.strtoupper(uniqid()),
+                'intake_id' => $intakeId,
                 'status' => 'Submitted',
+                'documents' => ! empty($validated['documents']) ? $validated['documents'] : null,
+                'document_files' => $storedFiles ?: null,
             ]));
 
             // Ensure the Family Visa type exists so the Assessment can attach.
@@ -53,6 +66,8 @@ class FamilyIntakeController extends Controller
 
             DB::commit();
 
+            $this->fireEnquiryCaptured($intake, 'Family Visa (Partner / Child)');
+
             return back()->with('intake_submitted', 'Family Visa (Partner / Child)');
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -67,6 +82,8 @@ class FamilyIntakeController extends Controller
         $yn = 'nullable|string|max:10';
 
         return [
+            // Shared document-tab rules (passport, visa copies, files, …).
+            ...$this->intakeDocumentRules(),
             // A — Identity
             'family_name' => 'required|string|max:255',
             'first_name' => 'required|string|max:255',

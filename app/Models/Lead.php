@@ -317,6 +317,8 @@ class Lead extends Model
         // INZ lodgement tracking
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
         'inz_client_number', 'inz_application_number', 'inz_medical_ref', 'nzer_number',
+        // Planned INZ filing date + applicant IRD number.
+        'target_lodgement_at', 'ird_number',
         // IAA / Privacy Act gating
         'services_agreement_signed_at',
         // Lead-portal acknowledgment of Consultancy + English Engagement
@@ -440,6 +442,7 @@ class Lead extends Model
         'is_accommodation_client' => 'boolean',
         'accommodation_converted_at' => 'datetime',
         'inz_lodged_at' => 'datetime',
+        'target_lodgement_at' => 'date',
         'inz_decision_at' => 'datetime',
         'services_agreement_signed_at' => 'datetime',
 

@@ -26,6 +26,8 @@ class WorkIntake extends Model
         'military_compulsory', 'military_undertaken', 'military_details',
         'travelled_internationally', 'travel_trips', 'declaration_accepted',
         'signature_name', 'signature_date',
+        // Work Interest & Qualifications document tab (see the intake controller).
+        'documents', 'document_files',
     ];
 
     protected $casts = [
@@ -39,6 +41,8 @@ class WorkIntake extends Model
         'family_members'     => 'array',
         'nz_contacts'        => 'array',
         'travel_trips'       => 'array',
+        'documents'          => 'array',
+        'document_files'     => 'array',
         'declaration_accepted' => 'bool',
     ];
 
