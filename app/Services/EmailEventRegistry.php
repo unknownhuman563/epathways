@@ -90,6 +90,7 @@ class EmailEventRegistry
         return [
             ['group' => 'Leads & assessment', 'events' => [
                 ['key' => 'immigration.lead.captured', 'label' => 'New enquiry captured', 'when' => 'When a client submits a visa assessment on the website', 'vars' => ['first_name', 'visa_type']],
+                ['key' => 'immigration.case.converted', 'label' => 'Converted to case', 'when' => 'When a lead or assessment becomes an immigration case', 'vars' => ['first_name', 'visa_type']],
                 ['key' => 'immigration.assessment.ready', 'label' => 'Assessment result ready', 'when' => 'When eligibility scoring finishes', 'vars' => ['first_name', 'eligibility_score']],
                 ['key' => 'immigration.lead.cold', 'label' => 'Lead went cold', 'when' => 'No client reply for 7 days', 'vars' => ['first_name'], 'scheduled' => true],
             ]],
