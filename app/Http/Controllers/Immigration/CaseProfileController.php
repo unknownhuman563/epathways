@@ -1406,6 +1406,9 @@ class CaseProfileController extends Controller
             'inz_application_number' => 'nullable|string|max:60',
             'inz_medical_ref' => 'nullable|string|max:60',
             'nzer_number' => 'nullable|string|max:60',
+            // The actual INZ lodgement date — drives the days-in-processing
+            // tracker against the visa type's expected window.
+            'inz_lodged_at' => 'nullable|date',
         ]);
 
         $lead->update($validated);
@@ -1636,8 +1639,13 @@ class CaseProfileController extends Controller
             'inz_medical_ref' => $lead->inz_medical_ref,
             'nzer_number' => $lead->nzer_number,
             'inz_status' => $lead->inz_status,
-            'inz_lodged_at' => $lead->inz_lodged_at,
+            'inz_lodged_at' => optional($lead->inz_lodged_at)->format('Y-m-d'),
             'inz_decision_at' => $lead->inz_decision_at,
+            // INZ's expected processing window for this visa type (staff-set from
+            // the INZ website) — drives the lodgement→outcome day tracker.
+            'expected_processing_days' => optional(
+                \App\Models\VisaType::where('name', $lead->inz_visa_type)->first()
+            )->expected_processing_days,
             'is_immigration_case' => (bool) $lead->is_immigration_case,
             'immigration_converted_at' => $lead->immigration_converted_at,
             'immigration_converted_by' => $lead->immigration_converted_by,
