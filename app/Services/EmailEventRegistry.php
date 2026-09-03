@@ -19,7 +19,7 @@ class EmailEventRegistry
     /** Recipient roles a message can target, per department. */
     public const RECIPIENTS = [
         'immigration' => ['client', 'adviser', 'manager', 'team'],
-        'default'     => ['client', 'team'],
+        'default' => ['client', 'team'],
     ];
 
     public static function recipientsFor(string $department): array
@@ -38,12 +38,12 @@ class EmailEventRegistry
     public function catalogue(): array
     {
         return [
-            'immigration'   => $this->immigration(),
-            'sales'         => $this->sales(),
-            'education'     => $this->education(),
-            'english'       => $this->english(),
+            'immigration' => $this->immigration(),
+            'sales' => $this->sales(),
+            'education' => $this->education(),
+            'english' => $this->english(),
             'accommodation' => $this->accommodation(),
-            'finance'       => $this->finance(),
+            'finance' => $this->finance(),
         ];
     }
 
@@ -80,16 +80,16 @@ class EmailEventRegistry
         $stageEvents = [];
         foreach (Lead::IMMIGRATION_STAGES as $stage) {
             $stageEvents[] = [
-                'key'   => 'immigration.stage.'.Str::slug($stage, '_'),
+                'key' => 'immigration.stage.'.Str::slug($stage, '_'),
                 'label' => 'Moved to '.$stage,
-                'when'  => 'When the case stage changes to “'.$stage.'”',
-                'vars'  => ['first_name', 'stage', 'adviser_name', 'tracker_url'],
+                'when' => 'When the case stage changes to “'.$stage.'”',
+                'vars' => ['first_name', 'stage', 'adviser_name', 'tracker_url'],
             ];
         }
 
         return [
             ['group' => 'Leads & assessment', 'events' => [
-                ['key' => 'immigration.lead.captured', 'label' => 'New enquiry captured', 'when' => 'When a visa enquiry comes in', 'vars' => ['first_name', 'visa_type']],
+                ['key' => 'immigration.lead.captured', 'label' => 'New enquiry captured', 'when' => 'When a client submits a visa assessment on the website', 'vars' => ['first_name', 'visa_type']],
                 ['key' => 'immigration.assessment.ready', 'label' => 'Assessment result ready', 'when' => 'When eligibility scoring finishes', 'vars' => ['first_name', 'eligibility_score']],
                 ['key' => 'immigration.lead.cold', 'label' => 'Lead went cold', 'when' => 'No client reply for 7 days', 'vars' => ['first_name'], 'scheduled' => true],
             ]],

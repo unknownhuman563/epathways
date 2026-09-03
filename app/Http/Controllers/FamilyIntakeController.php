@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
+use App\Http\Controllers\Concerns\HandlesIntakeDocuments;
 use App\Models\Assessment;
 use App\Models\FamilyIntake;
-use App\Http\Controllers\Concerns\HandlesIntakeDocuments;
 use App\Support\IntakeVisaTypeMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Log;
  */
 class FamilyIntakeController extends Controller
 {
+    use FiresEnquiryAutomation;
     use HandlesIntakeDocuments;
 
     public function showForm()
@@ -42,9 +44,9 @@ class FamilyIntakeController extends Controller
             $storedFiles = $this->persistIntakeFiles($request, 'family-intakes', $intakeId);
 
             $intake = FamilyIntake::create(array_merge($validated, [
-                'intake_id'      => $intakeId,
-                'status'         => 'Submitted',
-                'documents'      => ! empty($validated['documents']) ? $validated['documents'] : null,
+                'intake_id' => $intakeId,
+                'status' => 'Submitted',
+                'documents' => ! empty($validated['documents']) ? $validated['documents'] : null,
                 'document_files' => $storedFiles ?: null,
             ]));
 
@@ -63,6 +65,8 @@ class FamilyIntakeController extends Controller
             }
 
             DB::commit();
+
+            $this->fireEnquiryCaptured($intake, 'Family Visa (Partner / Child)');
 
             return back()->with('intake_submitted', 'Family Visa (Partner / Child)');
         } catch (\Throwable $e) {
