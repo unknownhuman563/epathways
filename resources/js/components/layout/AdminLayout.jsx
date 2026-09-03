@@ -56,7 +56,7 @@ const ADMIN_NAV = [
         ],
     },
     { name: "Document Queue", href: "/admin/document-queue", icon: <Inbox size={20} /> },
-    { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} /> },
+    { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} />, module: "portal_invitation" },
     { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },
     { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
     { name: "Daily Time Record", href: "/admin/dtr", icon: <Clock size={20} /> },
@@ -68,6 +68,7 @@ const ADMIN_NAV = [
     { name: "Visa Approved", href: "/admin/visa-approvals", icon: <Award size={20} /> },
     // Restricted module — hidden unless granted (default super-admin-only).
     { name: "Agents", href: "/admin/agents", icon: <UserCheck size={20} />, module: "agents" },
+    { name: "Program Verification", href: "/program-verification", icon: <BadgeCheck size={20} />, module: "program_verification" },
     {
         name: "Social",
         icon: <Radio size={20} />,

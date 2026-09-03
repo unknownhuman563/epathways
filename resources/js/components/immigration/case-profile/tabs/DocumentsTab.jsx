@@ -1904,6 +1904,10 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
 function RequestRow({ req, leadId }) {
     const [busy, setBusy] = useState(false);
     const [sending, setSending] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+    // A description is "long" once it's likely to be clipped on one line — show
+    // the See more / See less toggle only then.
+    const longDesc = (req.description || "").length > 90;
     const cancel = () => {
         if (busy) return;
         setBusy(true);
@@ -1935,7 +1939,20 @@ function RequestRow({ req, leadId }) {
                 <p className="text-[12px] font-medium text-gray-800 truncate">
                     {req.label}{req.required && <span className="text-rose-500"> *</span>}
                 </p>
-                {req.description && <p className="text-[10.5px] text-gray-400 truncate">{req.description}</p>}
+                {req.description && (
+                    <div className="text-[10.5px] text-gray-500">
+                        <p className={expanded ? "whitespace-pre-wrap" : "truncate"}>{req.description}</p>
+                        {longDesc && (
+                            <button
+                                type="button"
+                                onClick={() => setExpanded((v) => !v)}
+                                className="font-semibold text-teal-600 hover:text-teal-800"
+                            >
+                                {expanded ? "See less" : "See more"}
+                            </button>
+                        )}
+                    </div>
+                )}
                 <p className="text-[10px] text-gray-400">
                     Requested {fmt(req.requested_at)}{req.requested_by ? ` · ${req.requested_by}` : ""}
                 </p>

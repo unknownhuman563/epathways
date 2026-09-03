@@ -131,10 +131,14 @@ class LeadController extends Controller
      */
     public function storeDashboardLead(Request $request)
     {
-        $data = $request->validate($this->dashboardLeadRules(Lead::STAGES));
+        $data = $request->validate(
+            $this->dashboardLeadRules(Lead::STAGES) + $this->dashboardDocumentRules()
+        );
 
         try {
             $lead = $this->createDashboardLead($data);
+            // Persist the modal's CV / passport / diploma / transcript uploads.
+            $this->storeDashboardLeadDocuments($lead, $request);
 
             return back()->with('success', "Lead {$lead->lead_id} added.");
         } catch (\Throwable $e) {
@@ -208,9 +212,9 @@ class LeadController extends Controller
             // 1. Create Base Lead
             $leadData = $request->except(['education', 'study_plans']);
 
-            // Generate a temporary unique LP identifier if none provided
+            // Generate a collision-safe LP identifier if none provided.
             if (! isset($leadData['lead_id'])) {
-                $leadData['lead_id'] = 'LP-'.rand(10000, 99999);
+                $leadData['lead_id'] = Lead::generateLeadId();
             }
 
             $lead = Lead::create($leadData);
@@ -2583,7 +2587,7 @@ class LeadController extends Controller
                         $updated++;
                     } else {
                         // Create new.
-                        $payload['lead_id'] = 'LP-'.str_pad((string) ((int) Lead::max('id') + 1001), 5, '0', STR_PAD_LEFT);
+                        $payload['lead_id'] = Lead::generateLeadId();
                         $payload['source'] = 'csv-import';
                         // status uses the canonical stage too — keeps the
                         // pipeline filter chips matching after import.

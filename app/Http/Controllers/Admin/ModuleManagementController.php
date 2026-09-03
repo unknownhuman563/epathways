@@ -26,9 +26,19 @@ class ModuleManagementController extends Controller
                 'key' => $key,
                 'label' => $cfg['label'] ?? ucfirst($key),
                 'description' => $cfg['description'] ?? '',
+                // Grantable sub-parts. Granting the whole module implies them all.
+                'features' => collect($cfg['features'] ?? [])
+                    ->map(fn ($f, $fk) => [
+                        'key' => "{$key}.{$fk}",
+                        'label' => $f['label'] ?? ucfirst($fk),
+                        'description' => $f['description'] ?? '',
+                    ])->values()->all(),
             ])
             ->values()
             ->all();
+
+        // Every valid grantable key (parents + dotted features).
+        $validKeys = $this->validKeys();
 
         // Staff accounts only — leads/clients don't have a module sidebar to gate.
         $users = User::query()
@@ -40,11 +50,11 @@ class ModuleManagementController extends Controller
                 'name' => $u->name,
                 'email' => $u->email,
                 'role' => $u->role,
-                // Super admins implicitly hold every restricted module.
+                // Super admins implicitly hold every module + feature.
                 'is_super_admin' => $u->isSuperAdmin(),
                 'modules' => $u->isSuperAdmin()
-                    ? array_keys($restricted)
-                    : array_values(array_intersect((array) ($u->module_permissions ?? []), array_keys($restricted))),
+                    ? $validKeys
+                    : array_values(array_intersect((array) ($u->module_permissions ?? []), $validKeys)),
             ])
             ->values();
 
@@ -56,11 +66,11 @@ class ModuleManagementController extends Controller
 
     public function update(Request $request, User $user)
     {
-        $restricted = array_keys(config('modules.restricted', []));
+        $validKeys = $this->validKeys();
 
         $data = $request->validate([
             'modules' => ['array'],
-            'modules.*' => [Rule::in($restricted)],
+            'modules.*' => [Rule::in($validKeys)],
         ]);
 
         // Super admins already see everything — nothing to store for them.
@@ -68,11 +78,33 @@ class ModuleManagementController extends Controller
             return back()->with('error', 'Super admins already have every module.');
         }
 
-        // Keep only valid, de-duped restricted keys.
-        $granted = array_values(array_unique(array_intersect($data['modules'] ?? [], $restricted)));
+        // Keep valid, de-duped keys; drop a redundant feature key when its whole
+        // parent module is granted (the grant already implies every feature).
+        $granted = array_values(array_unique(array_intersect($data['modules'] ?? [], $validKeys)));
+        $granted = array_values(array_filter($granted, function ($k) use ($granted) {
+            if (! str_contains($k, '.')) {
+                return true;
+            }
+
+            return ! in_array(explode('.', $k, 2)[0], $granted, true);
+        }));
 
         $user->update(['module_permissions' => $granted]);
 
         return back()->with('success', "Module access updated for {$user->name}.");
+    }
+
+    /** Every grantable key: each restricted module plus its dotted feature keys. */
+    private function validKeys(): array
+    {
+        $keys = [];
+        foreach (config('modules.restricted', []) as $key => $cfg) {
+            $keys[] = $key;
+            foreach (array_keys($cfg['features'] ?? []) as $fk) {
+                $keys[] = "{$key}.{$fk}";
+            }
+        }
+
+        return $keys;
     }
 }

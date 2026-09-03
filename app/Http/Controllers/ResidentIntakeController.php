@@ -330,6 +330,7 @@ class ResidentIntakeController extends Controller
                 'ticked'      => $intake->documents ?? (object) [],
                 'files'       => $intake->document_files ?? (object) [],
                 'other_label' => 'Other supporting documents',
+                'base'        => "/admin/immigration/resident-intakes/{$intake->id}/documents",
             ],
             'assessment' => $assessment ? [
                 'id'      => $assessment->id,

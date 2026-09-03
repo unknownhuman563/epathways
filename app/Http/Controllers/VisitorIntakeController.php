@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Assessment;
 use App\Models\VisaType;
 use App\Models\VisitorIntake;
+use App\Http\Controllers\Concerns\HandlesIntakeDocuments;
 use App\Support\IntakeVisaTypeMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 class VisitorIntakeController extends Controller
 {
+    use HandlesIntakeDocuments;
+
     public function showForm()
     {
         return inertia('visa/VisitorInterestPage');
@@ -34,9 +37,15 @@ class VisitorIntakeController extends Controller
 
             $intakeId = 'VI-' . strtoupper(uniqid());
 
+            // Document tab — files to the private disk, kept out of mass-assignment.
+            unset($validated['document_files']);
+            $storedFiles = $this->persistIntakeFiles($request, 'visitor-intakes', $intakeId);
+
             $intake = VisitorIntake::create(array_merge($validated, [
-                'intake_id' => $intakeId,
-                'status'    => 'Submitted',
+                'intake_id'      => $intakeId,
+                'status'         => 'Submitted',
+                'documents'      => ! empty($validated['documents']) ? $validated['documents'] : null,
+                'document_files' => $storedFiles ?: null,
             ]));
 
             // Tracking-only Assessment row — payment + booking stay
@@ -71,6 +80,8 @@ class VisitorIntakeController extends Controller
     private function rules(): array
     {
         return [
+            // Shared document-tab rules (passport, visa copies, files, …).
+            ...$this->intakeDocumentRules(),
             'family_name'           => 'required|string|max:255',
             'first_name'            => 'required|string|max:255',
             'other_names'           => 'nullable|string|max:255',

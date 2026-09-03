@@ -28,8 +28,41 @@ export default function ModuleManagement({ modules = [], users = [] }) {
         setGranted(new Set(u.modules || []));
     };
 
-    const toggle = (key) => setGranted((prev) => {
+    const featureKeys = (m) => (m.features || []).map((f) => f.key);
+
+    // "Full access" is a convenience that mirrors "every part on" — but the
+    // individual parts stay independently toggleable. We store the individual
+    // feature keys (not the bare parent) so you can enable/disable any single
+    // part freely; a legacy bare-parent grant is expanded to parts on first edit.
+    const wholeOn = (m) => {
+        const fks = featureKeys(m);
+        if (fks.length === 0) return granted.has(m.key);        // module with no parts
+        return granted.has(m.key) || fks.every((k) => granted.has(k));
+    };
+    const featureOn = (m, key) => granted.has(m.key) || granted.has(key);
+
+    const toggleWhole = (m) => setGranted((prev) => {
         const next = new Set(prev);
+        const fks = featureKeys(m);
+        if (fks.length === 0) {                                 // no parts → simple toggle
+            next.has(m.key) ? next.delete(m.key) : next.add(m.key);
+            return next;
+        }
+        const on = next.has(m.key) || fks.every((k) => next.has(k));
+        next.delete(m.key);                                    // drop legacy bare-parent form
+        fks.forEach((k) => next.delete(k));
+        if (! on) fks.forEach((k) => next.add(k));             // turning ON = every part
+        return next;
+    });
+
+    const toggleFeature = (m, key) => setGranted((prev) => {
+        const next = new Set(prev);
+        // Expand a legacy whole-module grant into explicit parts so a single
+        // part can be flipped without losing the others.
+        if (next.has(m.key)) {
+            next.delete(m.key);
+            featureKeys(m).forEach((k) => next.add(k));
+        }
         next.has(key) ? next.delete(key) : next.add(key);
         return next;
     });
@@ -160,24 +193,53 @@ export default function ModuleManagement({ modules = [], users = [] }) {
                                     <>
                                         <div className="space-y-2.5">
                                             {modules.map((m) => {
-                                                const on = granted.has(m.key);
+                                                const on = wholeOn(m);
+                                                const hasFeatures = (m.features || []).length > 0;
                                                 return (
-                                                    <button
-                                                        key={m.key}
-                                                        type="button"
-                                                        onClick={() => toggle(m.key)}
-                                                        className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
-                                                            on ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200 hover:border-gray-300"
-                                                        }`}
-                                                    >
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="text-sm font-semibold text-gray-900">{m.label}</div>
-                                                            {m.description && <div className="text-[11px] text-gray-500 mt-0.5">{m.description}</div>}
-                                                        </div>
-                                                        <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-gray-300"}`}>
-                                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
-                                                        </span>
-                                                    </button>
+                                                    <div key={m.key} className={`rounded-xl border transition-colors ${on ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200"}`}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleWhole(m)}
+                                                            className="w-full text-left flex items-center gap-3 px-4 py-3"
+                                                        >
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="text-sm font-semibold text-gray-900">
+                                                                    {m.label}{hasFeatures && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">Full access</span>}
+                                                                </div>
+                                                                {m.description && <div className="text-[11px] text-gray-500 mt-0.5">{m.description}</div>}
+                                                            </div>
+                                                            <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-gray-300"}`}>
+                                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
+                                                            </span>
+                                                        </button>
+
+                                                        {hasFeatures && (
+                                                            <div className="border-t border-gray-100 px-3 py-2 space-y-1">
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 pb-0.5">
+                                                                    Grant specific parts
+                                                                </p>
+                                                                {m.features.map((f) => {
+                                                                    const fon = featureOn(m, f.key);
+                                                                    return (
+                                                                        <button
+                                                                            key={f.key}
+                                                                            type="button"
+                                                                            onClick={() => toggleFeature(m, f.key)}
+                                                                            className="w-full text-left flex items-center gap-3 pl-4 pr-2 py-2 rounded-lg transition-colors hover:bg-gray-50"
+                                                                        >
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="text-[13px] font-medium text-gray-800">{f.label}</div>
+                                                                                {f.description && <div className="text-[11px] text-gray-500 mt-0.5">{f.description}</div>}
+                                                                            </div>
+                                                                            <span className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${fon ? "bg-emerald-500" : "bg-gray-300"}`}>
+                                                                                <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${fon ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                                                                            </span>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>

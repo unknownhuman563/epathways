@@ -47,12 +47,19 @@ class AgentModuleController extends Controller
         $leads = Lead::where('agent_id', $agent->id)
             ->orderByDesc('created_at')
             ->limit(200)
-            ->get(['id', 'lead_id', 'first_name', 'last_name', 'status', 'email', 'phone', 'residence_city', 'residence_country', 'country', 'created_at'])
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'status', 'education_stage', 'english_stage', 'immigration_stage', 'is_student', 'is_english_student', 'is_immigration_case', 'email', 'phone', 'residence_city', 'residence_country', 'country', 'created_at'])
             ->map(fn (Lead $l) => [
                 'id' => $l->id,
                 'lead_id' => $l->lead_id,
                 'name' => trim("{$l->first_name} {$l->last_name}") ?: '—',
-                'status' => $l->status,
+                // Show the department stage the lead has actually moved to
+                // (e.g. education "Started Course") rather than the stale sales
+                // status — matches the commission counter, which keys on
+                // education_stage.
+                'status' => $l->education_stage
+                    ?: ($l->english_stage
+                    ?: (($l->is_immigration_case ? $l->immigration_stage : null)
+                    ?: $l->status)),
                 'email' => $l->email,
                 'phone' => $l->phone,
                 // Combined "Location" label — city + country when present.

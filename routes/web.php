@@ -141,6 +141,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/admin/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('admin.dtr');
     Route::get('/admin/dtr/manage', [\App\Http\Controllers\DtrController::class, 'manage'])->name('admin.dtr.manage');
+    Route::post('/admin/dtr/archive', [\App\Http\Controllers\DtrController::class, 'archiveStaff'])->name('admin.dtr.archive');
     Route::get('/admin/dtr/history/{user}', [\App\Http\Controllers\DtrController::class, 'settingHistory'])->name('admin.dtr.history');
     Route::get('/admin/dtr/reports', [\App\Http\Controllers\DtrController::class, 'reports'])->name('admin.dtr.reports');
     Route::post('/admin/dtr/entry', [\App\Http\Controllers\DtrController::class, 'adminUpdateEntry'])->name('admin.dtr.entry.update');
@@ -521,6 +522,20 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.agents.agreement.download');
     });
 
+    // Program Verification module — restricted (default super-admin-only,
+    // grantable per user via Module Management, e.g. to Dinah). Gated only by
+    // the module so it's reachable from any portal the grantee is in.
+    Route::middleware('module:program_verification')->group(function () {
+        Route::get('/program-verification', [\App\Http\Controllers\ProgramVerificationController::class, 'index'])
+            ->name('program-verification.index');
+        Route::post('/program-verification/{lead}/programs', [\App\Http\Controllers\ProgramVerificationController::class, 'updatePrograms'])
+            ->name('program-verification.programs');
+        Route::post('/program-verification/{lead}/verify', [\App\Http\Controllers\ProgramVerificationController::class, 'verify'])
+            ->name('program-verification.verify');
+        Route::post('/program-verification/{lead}/approve', [\App\Http\Controllers\ProgramVerificationController::class, 'approve'])
+            ->name('program-verification.approve');
+    });
+
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
     Route::middleware('portal:admin')->group(function () {
         Route::redirect('/admin', '/admin/dashboard');
@@ -703,19 +718,22 @@ Route::middleware(['auth'])->group(function () {
         });
 
         // Lead Portal invitations — admin approval / rejection / revocation.
-        // Sales requests via /portal/sales/... (separate route below).
-        Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
-            ->name('admin.portal-invitations');
-        Route::post('/admin/leads/{id}/portal-invitation/approve', [LeadPortalInvitationController::class, 'approve'])
-            ->name('admin.portal-invitation.approve');
-        Route::post('/admin/leads/{id}/portal-invitation/reject', [LeadPortalInvitationController::class, 'reject'])
-            ->name('admin.portal-invitation.reject');
-        Route::post('/admin/leads/{id}/portal-invitation/revoke', [LeadPortalInvitationController::class, 'revoke'])
-            ->name('admin.portal-invitation.revoke');
-        Route::post('/admin/leads/{id}/portal-invitation/generate-credentials', [LeadPortalInvitationController::class, 'generateCredentials'])
-            ->name('admin.portal-invitation.generate-credentials');
-        Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
-            ->name('admin.portal-invitation.reset-password');
+        // Gated by the Portal Invitations module (admins + super always pass via
+        // admin_default; grantable to others). Sales requests are separate below.
+        Route::middleware('module:portal_invitation')->group(function () {
+            Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
+                ->name('admin.portal-invitations');
+            Route::post('/admin/leads/{id}/portal-invitation/approve', [LeadPortalInvitationController::class, 'approve'])
+                ->name('admin.portal-invitation.approve');
+            Route::post('/admin/leads/{id}/portal-invitation/reject', [LeadPortalInvitationController::class, 'reject'])
+                ->name('admin.portal-invitation.reject');
+            Route::post('/admin/leads/{id}/portal-invitation/revoke', [LeadPortalInvitationController::class, 'revoke'])
+                ->name('admin.portal-invitation.revoke');
+            Route::post('/admin/leads/{id}/portal-invitation/generate-credentials', [LeadPortalInvitationController::class, 'generateCredentials'])
+                ->name('admin.portal-invitation.generate-credentials');
+            Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
+                ->name('admin.portal-invitation.reset-password');
+        });
     });
 
     // Consultation bookings — admin + education (education triages/converts
@@ -1061,6 +1079,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/immigration/resident-intakes', [ResidentIntakeController::class, 'adminIndex'])->name('admin.immigration.resident-intakes');
         Route::get('/admin/immigration/resident-intakes/{id}', [ResidentIntakeController::class, 'adminShow'])->name('admin.immigration.resident-intakes.show');
         Route::get('/admin/immigration/resident-intakes/{id}/documents/{key}/{index?}', [ResidentIntakeController::class, 'downloadDocument'])->name('admin.immigration.resident-intakes.document');
+        // Generic intake-document stream for the Work / Student / Visitor / Family
+        // document tab — same private-disk streaming as resident, keyed by type.
+        Route::get('/admin/immigration/intakes/{type}/{id}/documents/{key}/{index?}', [ImmigrationController::class, 'downloadIntakeDocument'])->name('admin.immigration.intakes.document');
         Route::post('/admin/immigration/resident-intakes/{id}/edit-link', [ResidentIntakeController::class, 'generateEditLink'])->name('admin.immigration.resident-intakes.edit-link');
 
         Route::get('/admin/immigration/user-reviews', fn () => app(UserReviewController::class)->adminIndex('immigration'))->name('admin.immigration.user-reviews');

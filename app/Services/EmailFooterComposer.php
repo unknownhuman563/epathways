@@ -25,18 +25,20 @@ class EmailFooterComposer
      * Composite the footer (cached by source + labels) and return a public URL
      * to the result, or null if it can't be produced.
      */
-    public function composeUrl(string $imagePath, string $bookLabel, ?string $callLabel): ?string
+    public function composeUrl(string $imagePath, string $bookLabel, ?string $callLabel, ?string $accent = null): ?string
     {
         if (! is_file($imagePath)) {
             return null;
         }
 
-        $key = md5($imagePath.'|'.(@filemtime($imagePath) ?: 0).'|'.$bookLabel.'|'.$callLabel);
+        // Accent color is part of the cache key so switching a department's
+        // button colour re-bakes the footer instead of serving the old one.
+        $key = md5($imagePath.'|'.(@filemtime($imagePath) ?: 0).'|'.$bookLabel.'|'.$callLabel.'|'.($accent ?? 'green'));
         $rel = 'email-footers/'.$key.'.jpg';
         $disk = Storage::disk('public');
 
         if (! $disk->exists($rel)) {
-            $bytes = $this->composeBytes($imagePath, $bookLabel, $callLabel);
+            $bytes = $this->composeBytes($imagePath, $bookLabel, $callLabel, $accent);
             if (! $bytes) {
                 return null;
             }
@@ -57,7 +59,7 @@ class EmailFooterComposer
      * @return string|null Composited (or original) PNG/JPEG bytes, or null if
      *                     the source can't be read at all.
      */
-    public function composeBytes(string $imagePath, string $bookLabel, ?string $callLabel): ?string
+    public function composeBytes(string $imagePath, string $bookLabel, ?string $callLabel, ?string $accent = null): ?string
     {
         if (! is_file($imagePath)) {
             return null;
@@ -106,13 +108,16 @@ class EmailFooterComposer
             $y = (int) round($h * 0.68 - $btnH / 2);
             $y = max($y, (int) round($h * 0.06));
 
-            $green = imagecolorallocate($img, 46, 125, 50);    // #2e7d32
-            $darkGreen = imagecolorallocate($img, 27, 94, 32); // #1b5e20
+            // Button colours — default brand green, or a per-department accent
+            // (e.g. immigration cyan #0692af). The 2nd pill is a darker shade.
+            [$r, $g, $b] = $this->hexToRgb($accent) ?? [46, 125, 50]; // #2e7d32
+            $primary = imagecolorallocate($img, $r, $g, $b);
+            $secondary = imagecolorallocate($img, (int) round($r * 0.72), (int) round($g * 0.72), (int) round($b * 0.72));
             $white = imagecolorallocate($img, 255, 255, 255);
 
             foreach ($labels as $i => $label) {
                 $bx = $x0 + $i * ($btnW + $gap);
-                $this->pill($img, $bx, $y, $btnW, $btnH, $i === 0 ? $green : $darkGreen);
+                $this->pill($img, $bx, $y, $btnW, $btnH, $i === 0 ? $primary : $secondary);
                 $this->centeredText($img, $bx, $y, $btnW, $btnH, $font, $white, $label);
             }
 
@@ -135,6 +140,20 @@ class EmailFooterComposer
 
             return $raw;
         }
+    }
+
+    /** Parse a "#rrggbb" (or "rrggbb") hex string to [r,g,b], or null if invalid. */
+    private function hexToRgb(?string $hex): ?array
+    {
+        if (! $hex) {
+            return null;
+        }
+        $hex = ltrim(trim($hex), '#');
+        if (! preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
+            return null;
+        }
+
+        return [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))];
     }
 
     /** Draw a fully-rounded ("pill") filled rectangle. */

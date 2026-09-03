@@ -5,6 +5,7 @@ import IntakeFormShell from '@/components/visa/IntakeFormShell';
 import IntakeConfirmModal from '@/components/visa/IntakeConfirmModal';
 import IntakeSuccessModal from '@/components/visa/IntakeSuccessModal';
 import IntakeTermsStep from '@/components/visa/IntakeTermsStep';
+import IntakeDocumentsStep from '@/components/visa/IntakeDocumentsStep';
 import {
     TextField, TextareaField, DateField, SelectField, YesNoField, FieldGrid, SectionTitle,
 } from '@/components/visa/IntakeFields';
@@ -66,6 +67,8 @@ export default function FamilyInterestPage() {
         current_employer_phone: '', current_employer_email: '', current_occupation: '',
         current_start: '', current_end: '',
         nz_contacts: '', declaration_accepted: false, signature_name: '', signature_date: '',
+        // Shared document tab — files can't serialise to the local draft.
+        documents: {}, document_files: {},
         ...(draft || {}),
     });
     const set = (k) => (v) => setData(k, v);
@@ -118,7 +121,7 @@ export default function FamilyInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 7; n++) {
+        for (let n = 1; n <= 8; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -278,6 +281,12 @@ export default function FamilyInterestPage() {
                     </FieldGrid>
                     <div className="mt-4"><TextareaField label="Address of organisation" rows={2} value={data.current_employer_address} onChange={set('current_employer_address')} /></div>
                 </>
+            ),
+        },
+        {
+            title: 'Documents',
+            render: () => (
+                <IntakeDocumentsStep data={data} setData={setData} />
             ),
         },
         {

@@ -13,11 +13,12 @@ use Illuminate\Database\Eloquent\Model;
 class LeadProposal extends Model
 {
     protected $fillable = [
-        'lead_id', 'program_ids', 'selected_program_id', 'created_by',
+        'lead_id', 'program_ids', 'reasons', 'selected_program_id', 'created_by',
     ];
 
     protected $casts = [
         'program_ids' => 'array',
+        'reasons' => 'array',
     ];
 
     public function lead()

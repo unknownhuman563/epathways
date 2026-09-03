@@ -110,9 +110,12 @@ class DtrController extends Controller
             'minLeaveDate' => now($setting?->timezone ?: config('app.timezone', 'UTC'))->addDays(7)->toDateString(),
             'account' => ['name' => $user->name, 'email' => $user->email],
             'today' => $today,
-            // HR/admin get a link to the team-wide summary + setup manager.
-            'canSummary' => in_array($user->role, ['admin', 'super_admin'], true),
-            'canManage' => in_array($user->role, ['admin', 'super_admin'], true),
+            // Per-feature access drives the DTR admin toolbar links. Admins +
+            // super admins always have all three; other staff only what they've
+            // been granted in Module Management (DTR module / its features).
+            'canSummary' => $user->canSeeModule('dtr.summary'),
+            'canReports' => $user->canSeeModule('dtr.reports'),
+            'canManage' => $user->canSeeModule('dtr.manage'),
         ]);
     }
 
@@ -124,7 +127,7 @@ class DtrController extends Controller
      */
     public function manage()
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        abort_unless(auth()->user()->canSeeModule('dtr.manage'), 403);
 
         $settings = DtrSetting::get()->keyBy('user_id');
 
@@ -137,11 +140,44 @@ class DtrController extends Controller
                 'email' => $u->email,
                 'role' => $u->role,
                 'setting' => $settings->get($u->id),
+                // Archived staff (ex-employees) are hidden from the active list
+                // by default; the manager can toggle to show + restore them.
+                'archived' => (bool) optional($settings->get($u->id))->archived_at,
             ])->values();
 
         return inertia('admin/DtrManage', [
             'staff' => $staff,
         ]);
+    }
+
+    /**
+     * Archive (or restore) staff in the DTR Setup Manager — e.g. ex-employees.
+     * Keyed on the per-user dtr_settings row; a staff member who was never set
+     * up gets a stub row so they can still be archived off the active list.
+     */
+    public function archiveStaff(Request $request)
+    {
+        abort_unless(auth()->user()->canSeeModule('dtr.manage'), 403);
+
+        $data = $request->validate([
+            'user_ids' => 'required|array|min:1',
+            'user_ids.*' => 'integer|exists:users,id',
+            'restore' => 'nullable|boolean',
+        ]);
+
+        $restore = (bool) ($data['restore'] ?? false);
+
+        foreach ($data['user_ids'] as $uid) {
+            $setting = DtrSetting::firstOrNew(['user_id' => $uid]);
+            $setting->archived_at = $restore ? null : now();
+            $setting->save();
+        }
+
+        $n = count($data['user_ids']);
+
+        return back()->with('success', $restore
+            ? "Restored {$n} staff member".($n === 1 ? '' : 's').'.'
+            : "Archived {$n} staff member".($n === 1 ? '' : 's').'.');
     }
 
     /**
@@ -249,7 +285,7 @@ class DtrController extends Controller
      */
     public function reports(Request $request)
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        abort_unless(auth()->user()->canSeeModule('dtr.reports'), 403);
 
         $tz = config('app.timezone', 'UTC');
         $date = Carbon::parse($request->query('date') ?: now($tz))->toDateString();
@@ -316,7 +352,7 @@ class DtrController extends Controller
      */
     public function adminUpdateEntry(Request $request)
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        abort_unless(auth()->user()->canSeeModule('dtr.reports'), 403);
 
         $data = $request->validate([
             'user_id' => 'required|integer|exists:users,id',
@@ -356,11 +392,23 @@ class DtrController extends Controller
             if (! in_array($status, ['todo', 'done', 'carry'], true)) {
                 $status = trim($pending) !== '' ? 'carry' : 'done';
             }
+            // Carry over the original completion stamp; stamp now if it just
+            // became done; clear it when moved out of Completed.
+            $completedAt = $existingTasks[$i]['completed_at'] ?? null;
+            if ($status === 'done') {
+                $completedAt = $completedAt ?: now()->toIso8601String();
+            } else {
+                $completedAt = null;
+            }
             $tasks[] = [
                 'task' => $task,
                 'pending' => $pending,
                 'status' => $status,
                 'pending_done' => (bool) ($t['pending_done'] ?? false),
+                'kind' => $existingTasks[$i]['kind'] ?? 'main',
+                'parent' => $existingTasks[$i]['parent'] ?? null,
+                'tid' => $existingTasks[$i]['tid'] ?? null,
+                'completed_at' => $completedAt,
             ];
         }
 
@@ -383,7 +431,7 @@ class DtrController extends Controller
      */
     public function adminDeleteEntry(Request $request)
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        abort_unless(auth()->user()->canSeeModule('dtr.reports'), 403);
 
         $data = $request->validate([
             'user_id' => 'required|integer',
@@ -410,7 +458,9 @@ class DtrController extends Controller
         ]);
         $date = Carbon::parse($data['date'])->toDateString();
 
-        $isAdmin = in_array(auth()->user()->role, ['admin', 'super_admin'], true);
+        // "Reports" access (admin/super, or a Team Daily Reports grant) may pull
+        // any staffer's report; everyone else only their own.
+        $isAdmin = auth()->user()->canSeeModule('dtr.reports');
         $targetId = ($isAdmin && ! empty($data['user'])) ? (int) $data['user'] : auth()->id();
         abort_if(! $isAdmin && ! empty($data['user']) && (int) $data['user'] !== auth()->id(), 403);
 
@@ -560,7 +610,7 @@ class DtrController extends Controller
     /** Team Summary dashboard — every staffer's DTR figures over a period. */
     public function summary(Request $request)
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        abort_unless(auth()->user()->canSeeModule('dtr.summary'), 403);
 
         $tz = config('app.timezone', 'UTC');
         $start = \Illuminate\Support\Carbon::parse($request->query('start') ?: now($tz)->startOfMonth())->startOfDay();
@@ -660,7 +710,7 @@ class DtrController extends Controller
      */
     public function saveSetup(Request $request)
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        abort_unless(auth()->user()->canSeeModule('dtr.manage'), 403);
 
         $data = $request->validate([
             'user_id' => 'required|integer|exists:users,id',
@@ -807,7 +857,7 @@ class DtrController extends Controller
      */
     public function settingHistory($userId)
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        abort_unless(auth()->user()->canSeeModule('dtr.manage'), 403);
 
         $tz = config('app.timezone', 'UTC');
 
@@ -860,6 +910,8 @@ class DtrController extends Controller
             'tasks.*.kind' => 'nullable|in:main,side',
             'tasks.*.parent' => 'nullable|string|max:32',
             'tasks.*.tid' => 'nullable|string|max:32',
+            // Realtime completion stamp (ISO-8601) round-tripped from the client.
+            'tasks.*.completed_at' => 'nullable|string|max:40',
             'close_carried' => 'nullable|array|max:200',
             'close_carried.*.entry_id' => 'required|integer',
             'close_carried.*.index' => 'required|integer|min:0',
@@ -875,17 +927,33 @@ class DtrController extends Controller
         // Completed (task) and for-tomorrow (pending) items are the record; to-do
         // rows are stored too (status=todo) so the plan survives a refresh, but
         // they're kept out of every count/report/carry-over below.
-        $tasks = array_values(array_map(fn ($t) => [
-            'task' => (string) ($t['task'] ?? ''),
-            'pending' => (string) ($t['pending'] ?? ''),
-            'status' => in_array($t['status'] ?? '', ['todo', 'done', 'carry'], true)
+        $nowIso = now($setting->timezone ?: config('app.timezone', 'UTC'))->toIso8601String();
+        $tasks = array_values(array_map(function ($t) use ($nowIso) {
+            $status = in_array($t['status'] ?? '', ['todo', 'done', 'carry'], true)
                 ? $t['status']
-                : (trim((string) ($t['pending'] ?? '')) !== '' ? 'carry' : 'done'),
-            'pending_done' => (bool) ($t['pending_done'] ?? false),
-            'kind' => ($t['kind'] ?? 'main') === 'side' ? 'side' : 'main',
-            'parent' => $t['parent'] ?? null,
-            'tid' => $t['tid'] ?? null,
-        ], $data['tasks'] ?? []));
+                : (trim((string) ($t['pending'] ?? '')) !== '' ? 'carry' : 'done');
+
+            // Realtime completion timestamp: stamp the moment a task becomes
+            // "done" (server-authoritative), preserve it across autosaves, and
+            // clear it if the task is moved back out of Completed.
+            $completedAt = trim((string) ($t['completed_at'] ?? '')) ?: null;
+            if ($status === 'done') {
+                $completedAt = $completedAt ?: $nowIso;
+            } else {
+                $completedAt = null;
+            }
+
+            return [
+                'task' => (string) ($t['task'] ?? ''),
+                'pending' => (string) ($t['pending'] ?? ''),
+                'status' => $status,
+                'pending_done' => (bool) ($t['pending_done'] ?? false),
+                'kind' => ($t['kind'] ?? 'main') === 'side' ? 'side' : 'main',
+                'parent' => $t['parent'] ?? null,
+                'tid' => $t['tid'] ?? null,
+                'completed_at' => $completedAt,
+            ];
+        }, $data['tasks'] ?? []));
 
         DtrEntry::updateOrCreate(
             ['user_id' => auth()->id(), 'work_date' => $data['work_date']],

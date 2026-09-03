@@ -103,6 +103,9 @@ class CaseProfileController extends Controller
             'unstructuredDocuments' => $checklist->unstructuredDocuments($lead),
             'checklistProgress' => $checklist->progress($lead),
             'communications' => $this->loadCommunications($lead),
+            // Inbound replies FROM the client (IMAP-synced email_replies) — so
+            // staff see and can answer what the client sent back.
+            'clientReplies' => $this->loadClientReplies($lead),
             'agreements' => $this->loadAgreements($lead),
             'notes' => $this->loadNotes($lead),
             'activity' => $this->loadActivity($lead),
@@ -1403,6 +1406,9 @@ class CaseProfileController extends Controller
             'inz_application_number' => 'nullable|string|max:60',
             'inz_medical_ref' => 'nullable|string|max:60',
             'nzer_number' => 'nullable|string|max:60',
+            // The actual INZ lodgement date — drives the days-in-processing
+            // tracker against the visa type's expected window.
+            'inz_lodged_at' => 'nullable|date',
         ]);
 
         $lead->update($validated);
@@ -1568,19 +1574,7 @@ class CaseProfileController extends Controller
             }
         }
 
-        // Newest wins — a freshly taken assessment supersedes the stamped one.
-        $assessment = $candidates->unique('id')->sortByDesc('id')->first();
-
-        if (! $assessment) {
-            return [null, null];
-        }
-
-        $intake = $assessment->intakeable;
-        if (! $intake) {
-            return [null, null];
-        }
-
-        $type = match ($intake::class) {
+        $typeFor = fn ($intake) => match ($intake ? $intake::class : null) {
             ResidentIntake::class => 'resident',
             WorkIntake::class => 'work',
             StudentIntake::class => 'student',
@@ -1589,16 +1583,26 @@ class CaseProfileController extends Controller
             default => null,
         };
 
-        if ($type === null) {
-            return [null, null];
+        // Prefer the newest assessment, but walk the list newest-first and return
+        // the first one that actually resolves to a usable intake. A newer but
+        // half-finished / unsupported submission must NOT hide a good earlier
+        // assessment — otherwise switching the case's visa type made the original
+        // (e.g. partner) assessment disappear even though it's still on file.
+        $sorted = $candidates->unique('id')->sortByDesc('id')->values();
+        foreach ($sorted as $candidate) {
+            $intake = $candidate->intakeable;
+            $type = $typeFor($intake);
+            if ($intake && $type !== null) {
+                return [$type, array_merge($intake->toArray(), [
+                    'assessment_id' => $candidate->id,
+                    'assessment_status' => $candidate->status,
+                    'assessment_payment_status' => $candidate->payment_status,
+                    'assessment_booking_id' => $candidate->booking_id,
+                ])];
+            }
         }
 
-        return [$type, array_merge($intake->toArray(), [
-            'assessment_id' => $assessment->id,
-            'assessment_status' => $assessment->status,
-            'assessment_payment_status' => $assessment->payment_status,
-            'assessment_booking_id' => $assessment->booking_id,
-        ])];
+        return [null, null];
     }
 
     private function serializeLead(Lead $lead): array
@@ -1635,8 +1639,13 @@ class CaseProfileController extends Controller
             'inz_medical_ref' => $lead->inz_medical_ref,
             'nzer_number' => $lead->nzer_number,
             'inz_status' => $lead->inz_status,
-            'inz_lodged_at' => $lead->inz_lodged_at,
+            'inz_lodged_at' => optional($lead->inz_lodged_at)->format('Y-m-d'),
             'inz_decision_at' => $lead->inz_decision_at,
+            // INZ's expected processing window for this visa type (staff-set from
+            // the INZ website) — drives the lodgement→outcome day tracker.
+            'expected_processing_days' => optional(
+                \App\Models\VisaType::where('name', $lead->inz_visa_type)->first()
+            )->expected_processing_days,
             'is_immigration_case' => (bool) $lead->is_immigration_case,
             'immigration_converted_at' => $lead->immigration_converted_at,
             'immigration_converted_by' => $lead->immigration_converted_by,
@@ -1794,6 +1803,8 @@ class CaseProfileController extends Controller
                 'channel' => $row->channel,
                 'subject' => $row->subject,
                 'snippet' => $this->snippet($row->body),
+                // Full body for the detail pane (HTML for email, text for SMS).
+                'body' => $row->body,
                 'status' => $row->status,
                 'recipient_address' => $row->recipient_address,
                 'sent_at' => $row->sent_at,
@@ -1811,6 +1822,40 @@ class CaseProfileController extends Controller
         $plain = trim(strip_tags($body));
 
         return mb_strlen($plain) > 160 ? mb_substr($plain, 0, 160).'…' : $plain;
+    }
+
+    /**
+     * Inbound replies from the client — IMAP-synced `email_replies`, matched by
+     * lead_id or the client's email. Body is returned as PLAIN TEXT: inbound
+     * HTML is untrusted (external sender), so it is never rendered as markup.
+     */
+    private function loadClientReplies(Lead $lead): array
+    {
+        return \App\Models\EmailReply::query()
+            ->where(function ($q) use ($lead) {
+                $q->where('lead_id', $lead->id);
+                if ($lead->email) {
+                    $q->orWhere('from_email', $lead->email);
+                }
+            })
+            ->orderByDesc('received_at')
+            ->limit(50)
+            ->get()
+            ->map(function (\App\Models\EmailReply $r) {
+                $text = $r->body_text ?: trim(strip_tags((string) $r->body_html));
+
+                return [
+                    'id' => $r->id,
+                    'from_name' => $r->from_name ?: $r->from_email,
+                    'from_email' => $r->from_email,
+                    'subject' => $r->subject,
+                    'snippet' => $this->snippet($r->body_html ?: $r->body_text),
+                    'body' => $text,
+                    'is_read' => (bool) $r->is_read,
+                    'received_at' => optional($r->received_at)->toIso8601String(),
+                ];
+            })
+            ->all();
     }
 
     /**

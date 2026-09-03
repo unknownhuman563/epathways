@@ -160,6 +160,26 @@ class Lead extends Model
      * Pipeline can show exactly when each status was reached, and `by_name`
      * snapshots the acting staff member.
      */
+    /**
+     * Study-proposal verification status: 'pending' | 'verified' | 'approved',
+     * or null when there's no proposal under review (legacy proposals — those
+     * with programs but no review record — are treated as already live).
+     */
+    public function proposalStatus(): ?string
+    {
+        $r = is_array($this->proposal_review) ? $this->proposal_review : [];
+
+        return $r['status'] ?? null;
+    }
+
+    /** A proposal is visible to the client only once approved (or legacy-live). */
+    public function proposalIsLive(): bool
+    {
+        $status = $this->proposalStatus();
+
+        return $status === 'approved' || $status === null;
+    }
+
     public function pushStageHistory(string $department, ?string $stage, ?string $assignee = null): void
     {
         $history = $this->stage_history ?? [];
@@ -273,6 +293,10 @@ class Lead extends Model
         // the "Proposal" tab on the Proposal & Agreements page and the
         // program shortlist rendered on the tracker.
         'proposed_program_ids',
+        // Per-program "why this program" reasons, keyed by program id.
+        'proposed_program_reasons',
+        // Study-proposal verification workflow (pending → verified → approved).
+        'proposal_review',
         // Lead's chosen program (FK to programs.id) from that shortlist,
         // set by the tracker's "Choose this one" action.
         'preferred_program_id', 'preferred_program_chosen_at',
@@ -399,6 +423,8 @@ class Lead extends Model
         'hidden_track_documents' => 'array',
         'custom_documents' => 'array',
         'proposed_program_ids' => 'array',
+        'proposed_program_reasons' => 'array',
+        'proposal_review' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',
@@ -484,6 +510,40 @@ class Lead extends Model
     public function contactProfile()
     {
         return $this->hasOne(LeadContactProfile::class);
+    }
+
+    /**
+     * A guaranteed-unique `LP-NNNNN` identifier.
+     *
+     * The old inline schemes (`LP-`.rand(...) and `LP-`.(max(id)+1000)) both
+     * collide: `rand` can repeat, and basing the number on the primary-key max
+     * breaks once the id and lead_id sequences drift apart (deletes, imports,
+     * other creation paths) — the number then lands on a lead_id that already
+     * exists and the insert dies on `leads_lead_id_unique`. Because a failed
+     * insert never advances max(id), every retry recomputes the SAME colliding
+     * value and fails forever (see the Sumit Kumar conversion loop).
+     *
+     * This derives the next number from the highest EXISTING `LP-` value (not
+     * the pk), then steps forward past anything already taken — checking
+     * soft-deleted rows too, since they still hold the unique lead_id.
+     */
+    public static function generateLeadId(): string
+    {
+        $maxLpNumber = (int) static::withTrashed()
+            ->where('lead_id', 'like', 'LP-%')
+            ->selectRaw('MAX(CAST(SUBSTRING(lead_id, 4) AS UNSIGNED)) as n')
+            ->value('n');
+
+        // Stay ahead of both the highest LP- number and the historical
+        // max(id)+1000 baseline, so numbers never move backwards.
+        $next = max($maxLpNumber + 1, (int) static::withTrashed()->max('id') + 1001);
+
+        do {
+            $candidate = 'LP-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+            $next++;
+        } while (static::withTrashed()->where('lead_id', $candidate)->exists());
+
+        return $candidate;
     }
 
     /** Staff member who flipped is_student=true (or null on legacy rows). */

@@ -48,7 +48,9 @@ class ModuleManagementTest extends TestCase
             ->post("/admin/module-management/{$admin->id}", ['modules' => ['not_a_real_module']])
             ->assertSessionHasErrors('modules.0');
 
-        $this->assertEmpty($admin->fresh()->grantedModules());
+        // Nothing was stored (the invalid key was rejected).
+        $this->assertEmpty($admin->fresh()->module_permissions ?? []);
+        $this->assertNotContains('not_a_real_module', $admin->fresh()->grantedModules());
     }
 
     public function test_super_admin_sees_every_restricted_module_implicitly(): void
@@ -59,11 +61,17 @@ class ModuleManagementTest extends TestCase
         $this->assertContains('agents', $super->grantedModules());
     }
 
-    public function test_grandfathered_default_hides_restricted_module_from_ungranted_admin(): void
+    public function test_super_only_modules_hidden_from_ungranted_admin(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->assertSame([], $admin->grantedModules());
+        // super-only restricted modules stay hidden until granted…
         $this->assertFalse($admin->canSeeModule('agents'));
+        $this->assertFalse($admin->canSeeModule('program_verification'));
+        $this->assertNotContains('agents', $admin->grantedModules());
+
+        // …but admin_default modules (DTR, Portal Invitations) are always visible.
+        $this->assertTrue($admin->canSeeModule('dtr'));
+        $this->assertTrue($admin->canSeeModule('portal_invitation'));
     }
 }

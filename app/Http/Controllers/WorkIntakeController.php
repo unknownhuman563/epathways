@@ -21,6 +21,39 @@ class WorkIntakeController extends Controller
         return inertia('visa/WorkInterestPage');
     }
 
+    /** Document-checklist keys for the "Work Interest & Qualifications" tab. */
+    public const DOCUMENT_KEYS = [
+        'passport', 'job_offer', 'job_token', 'employment_contract',
+        'valid_pcc', 'current_nz_visa', 'anzsco_skills', 'english_test', 'ird_earnings',
+    ];
+
+    /**
+     * Store each uploaded document under the intake's folder on the PRIVATE
+     * disk and return [key => [paths...]]. Mirrors ResidentIntakeController:
+     * these files hold personal data on an unauthenticated public form, so they
+     * never touch the public disk.
+     */
+    private function persistUploadedFiles(Request $request, string $intakeId): array
+    {
+        $files = [];
+        foreach ((array) $request->file('document_files', []) as $key => $uploads) {
+            if (! in_array($key, self::DOCUMENT_KEYS, true)) {
+                continue;
+            }
+            $paths = [];
+            foreach ((array) $uploads as $file) {
+                if ($file instanceof \Illuminate\Http\UploadedFile) {
+                    $paths[] = $file->store("work-intakes/{$intakeId}", 'local');
+                }
+            }
+            if (! empty($paths)) {
+                $files[$key] = $paths;
+            }
+        }
+
+        return $files;
+    }
+
     public function store(Request $request)
     {
         // Inertia ships untouched empty inputs as "" rather than null, which
@@ -38,9 +71,15 @@ class WorkIntakeController extends Controller
 
             $intakeId = 'WI-' . strtoupper(uniqid());
 
+            // Uploaded files are handled manually, never mass-assigned.
+            unset($validated['document_files']);
+            $storedFiles = $this->persistUploadedFiles($request, $intakeId);
+
             $intake = WorkIntake::create(array_merge($validated, [
-                'intake_id' => $intakeId,
-                'status'    => 'Submitted',
+                'intake_id'      => $intakeId,
+                'status'         => 'Submitted',
+                'documents'      => ! empty($validated['documents']) ? $validated['documents'] : null,
+                'document_files' => $storedFiles ?: null,
             ]));
 
             // Tracking-only Assessment row — payment + booking stay
@@ -149,6 +188,13 @@ class WorkIntakeController extends Controller
             'declaration_accepted'  => 'required|accepted',
             'signature_name'        => 'nullable|string|max:255',
             'signature_date'        => 'nullable|date',
+
+            // Work Interest & Qualifications document tab.
+            'documents'             => 'nullable|array',
+            'documents.*'           => 'nullable|string|max:20',
+            'document_files'        => 'nullable|array',
+            'document_files.*'      => 'nullable|array',
+            'document_files.*.*'    => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ];
     }
 }
