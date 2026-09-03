@@ -267,27 +267,42 @@ class CommunicationService
      * the caller. Logs with source='compose' and recipient_type 'lead'/'raw'.
      * $rawHtml=true sends a self-contained builder email (no branded shell).
      */
-    public function sendComposedEmail(string $address, ?string $subject, string $body, array $attachments = [], bool $rawHtml = false, ?int $leadId = null): MessageLog
+    public function sendComposedEmail(string|array $address, ?string $subject, string $body, array $attachments = [], bool $rawHtml = false, ?int $leadId = null, ?string $toExtra = null, ?string $cc = null, ?string $bcc = null): MessageLog
     {
-        $address = strtolower(trim($address));
+        // Primary To address(es) plus any template "To — also send to" extras,
+        // lower-cased and deduped. Accepts a single address or a list (a staff
+        // notice resolves several role recipients).
+        $recipients = collect(is_array($address) ? $address : [$address])
+            ->merge($this->parseAddresses($toExtra))
+            ->map(fn ($e) => strtolower(trim((string) $e)))
+            ->filter()->unique()->values()->all();
 
         $log = $this->log([
             'source' => 'compose',
             'channel' => MessageLog::CHANNEL_EMAIL,
             'recipient_type' => $leadId ? 'lead' : 'raw',
             'recipient_id' => $leadId,
-            'recipient_address' => $address,
+            'recipient_address' => implode(', ', $recipients),
             'subject' => $subject,
             'body' => $body,
             'status' => MessageLog::STATUS_QUEUED,
         ]);
 
+        if (empty($recipients)) {
+            $log->update(['status' => MessageLog::STATUS_FAILED, 'error_message' => 'No valid recipient address.', 'failed_at' => now()]);
+
+            return $log;
+        }
+
         try {
-            Mail::to($address)->queue(
-                new TemplatedMessage($subject ?? '', $body, $attachments, null, null, $log->id, null, null, null, null, null, $rawHtml)
+            // Cc/Bcc ride along via TemplatedMessage's envelope, same as the
+            // templated client path — so a staff notice honours the template's
+            // configured Cc/Bcc, not just the resolved role address.
+            Mail::to($recipients)->queue(
+                new TemplatedMessage($subject ?? '', $body, $attachments, null, null, $log->id, null, null, $cc, $bcc, null, $rawHtml)
             );
         } catch (\Throwable $e) {
-            Log::error('Composed email failed', ['address' => $address, 'error' => $e->getMessage()]);
+            Log::error('Composed email failed', ['address' => implode(', ', $recipients), 'error' => $e->getMessage()]);
             $log->update(['status' => MessageLog::STATUS_FAILED, 'error_message' => $e->getMessage(), 'failed_at' => now()]);
         }
 
