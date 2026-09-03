@@ -564,22 +564,25 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
         const serviceFee = baseFee && includeGst
             ? Math.round(baseFee * (1 + GST_RATE) * 100) / 100
             : baseFee;
-        const seed = [];
-        if (serviceFee) {
-            seed.push({
+        // Always seed the two standard immigration lines so their DESCRIPTIONS
+        // stay put when the applicant location changes — even if the chosen
+        // location has no fees configured on the Visas page (offshore is often
+        // blank, e.g. the Religious Worker Work Visa). The amount is pre-filled
+        // when known, otherwise left blank for the staff member to enter
+        // manually (see the "missingFees" hint below).
+        const seed = [
+            {
                 description: `Consulting and Service Fee - [${visa} Application] (assessing client's eligibility, documents review, providing advice and lodging the above visa application on behalf of client) - pay in advance`,
                 quantity: 1,
-                unit_price: serviceFee,
-            });
-        }
-        if (inzFee) {
-            seed.push({
+                unit_price: serviceFee || "",
+            },
+            {
                 description: `Disbursement - INZ [${visa}] application fee - pay in advance`,
                 quantity: 1,
-                unit_price: inzFee,
-            });
-        }
-        setItems(seed.length ? seed : [{ description: "", quantity: 1, unit_price: "" }]);
+                unit_price: inzFee || "",
+            },
+        ];
+        setItems(seed);
     }, [selectedCase, feeTier, feeLocation, includeGst]);
 
     const filteredCases = useMemo(() => {

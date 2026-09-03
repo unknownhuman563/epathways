@@ -704,7 +704,8 @@ function DocumentsCard({ intakeId, documents }) {
 
     const totalFiles = [...docKeys, 'other'].reduce((n, k) => n + filesFor(k).length, 0);
     const docChecked = docKeys.filter((k) => !! ticked[k]).length;
-    const docUrl = (key, index = 0) => `/admin/immigration/resident-intakes/${intakeId}/documents/${key}/${index}`;
+    const base = documents.base || `/admin/immigration/resident-intakes/${intakeId}/documents`;
+    const docUrl = (key, index = 0) => `${base}/${key}/${index}`;
 
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

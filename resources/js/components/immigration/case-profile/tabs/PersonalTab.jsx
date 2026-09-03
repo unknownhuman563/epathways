@@ -42,6 +42,9 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
         inz_application_number: lead.inz_application_number || "",
         inz_medical_ref:        lead.inz_medical_ref || "",
         nzer_number:            lead.nzer_number || "",
+        ird_number:             lead.ird_number || "",
+        inz_lodged_at:          lead.inz_lodged_at || "",
+        target_lodgement_at:    lead.target_lodgement_at || "",
     });
     const { data, setData, post, processing, errors, isDirty } = form;
 
@@ -200,6 +203,15 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
                         </F>
                         <F label="NZER number">
                             <input type="text" value={data.nzer_number} onChange={(e) => setData("nzer_number", e.target.value)} className={IC} maxLength={60} placeholder="Not supplied" />
+                        </F>
+                        <F label="IRD number">
+                            <input type="text" value={data.ird_number} onChange={(e) => setData("ird_number", e.target.value)} className={IC} maxLength={60} placeholder="Not supplied" />
+                        </F>
+                        <F label="INZ lodgement date" badge={data.inz_lodged_at ? { text: "Lodged", tone: "ok" } : null}>
+                            <input type="date" value={data.inz_lodged_at || ""} onChange={(e) => setData("inz_lodged_at", e.target.value)} className={IC} />
+                        </F>
+                        <F label="Target lodgement date">
+                            <input type="date" value={data.target_lodgement_at || ""} onChange={(e) => setData("target_lodgement_at", e.target.value)} className={IC} />
                         </F>
                         <F label="Suffix">
                             <input type="text" value={data.suffix} onChange={(e) => setData("suffix", e.target.value)} className={IC} maxLength={20} placeholder="Jr., Sr., III…" />

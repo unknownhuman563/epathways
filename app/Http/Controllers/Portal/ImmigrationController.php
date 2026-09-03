@@ -1312,12 +1312,12 @@ class ImmigrationController extends Controller
             }
             $user = auth()->user();
             \App\Models\LeadNote::create([
-                'lead_id'     => $lead->id,
-                'user_id'     => $user?->id,
+                'lead_id' => $lead->id,
+                'user_id' => $user?->id,
                 'author_name' => $user?->name,
                 'author_role' => $user?->role,
-                'kind'        => 'note',
-                'body'        => "Stage → {$newStage}: {$stageNote}",
+                'kind' => 'note',
+                'body' => "Stage → {$newStage}: {$stageNote}",
             ]);
         };
 
@@ -1844,12 +1844,14 @@ class ImmigrationController extends Controller
                 // is always (re)linked so the case profile resolves THIS
                 // exact assessment, not a same-email one.
                 $patch = ['inz_visa_type' => $visaName, 'assessment_id' => $assessment->id];
+                $becameCase = false;
                 if (! $lead->is_immigration_case) {
                     $patch['is_immigration_case'] = true;
                     $patch['immigration_converted_at'] = now();
                     $patch['immigration_converted_by'] = auth()->id();
                     $patch['stage_updated_at'] = now();
                     $patch['stage_updated_by'] = auth()->id();
+                    $becameCase = true;
                 }
                 $lead->fill($patch)->save();
 
@@ -1860,6 +1862,12 @@ class ImmigrationController extends Controller
                 // the case's Documents tab.
                 if ($intake instanceof ResidentIntake) {
                     \App\Services\Immigration\IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
+                } elseif ($intake instanceof \App\Models\WorkIntake) {
+                    \App\Services\Immigration\IntakeDocumentMigrator::fromWorkIntake($intake, $lead);
+                } elseif ($intake instanceof \App\Models\StudentIntake
+                    || $intake instanceof \App\Models\VisitorIntake
+                    || $intake instanceof \App\Models\FamilyIntake) {
+                    \App\Services\Immigration\IntakeDocumentMigrator::fromIntake($intake, $lead);
                 }
                 \App\Services\Immigration\IntakeDocumentMigrator::fromLeadUploads($lead);
 
@@ -1868,6 +1876,12 @@ class ImmigrationController extends Controller
                 // assessment lifecycle reflects the handoff.
                 $intake->update(['status' => 'Engaged']);
                 $assessment->update(['status' => 'completed']);
+
+                // Only fire on a genuinely NEW conversion — a re-run (already a
+                // case) must not re-notify.
+                if ($becameCase) {
+                    $this->fireCaseConverted($lead);
+                }
 
                 return redirect("/portal/immigration/cases/{$lead->id}/profile?tab=documents")
                     ->with('success', "Converted {$lead->first_name} to an immigration case.");
@@ -1912,6 +1926,7 @@ class ImmigrationController extends Controller
                 ]);
             }
 
+            $becameCase = false;
             if (! $lead->is_immigration_case) {
                 $lead->fill([
                     'is_immigration_case' => true,
@@ -1920,6 +1935,7 @@ class ImmigrationController extends Controller
                     'stage_updated_at' => now(),
                     'stage_updated_by' => auth()->id(),
                 ])->save();
+                $becameCase = true;
             }
 
             // Carry the applicant's assessment uploads into the case documents.
@@ -1927,9 +1943,26 @@ class ImmigrationController extends Controller
 
             $intake->update(['status' => 'Engaged']);
 
+            if ($becameCase) {
+                $this->fireCaseConverted($lead);
+            }
+
             return redirect("/portal/immigration/cases/{$lead->id}/profile?tab=documents")
                 ->with('success', "Converted {$intake->first_name} to an immigration case.");
         });
+    }
+
+    /**
+     * Fire the configurable "Converted to case" email automation. A no-op
+     * unless an admin enabled a message for `immigration.case.converted`
+     * (client welcome and/or a notice to the case's adviser/manager/team), and
+     * it never throws — so it can't break a conversion.
+     */
+    private function fireCaseConverted(Lead $lead): void
+    {
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.case.converted', $lead, [
+            'visa_type' => $lead->inz_visa_type ?? '',
+        ]);
     }
 
     /** "resident-intake" / "work-intake" / "student-intake" / "visitor-intake". */
@@ -3068,7 +3101,84 @@ class ImmigrationController extends Controller
                 'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
                 'status' => $lead->status,
             ] : null,
+            // Uploaded documents (shared tab) — shown in the assessment-module
+            // Documents card and streamed from the private disk.
+            'documents' => $this->intakeDocumentsPayload($type, $intake),
         ]);
+    }
+
+    /**
+     * Documents-card payload for the assessment-module intake view — the
+     * uploaded files (keyed) + human labels + a type-aware download base. Null
+     * (so the card hides) when the intake carries no uploads.
+     */
+    private function intakeDocumentsPayload(?string $type, $intake): ?array
+    {
+        $files = $intake->document_files ?? null;
+        if (empty($files) || ! is_array($files)) {
+            return null;
+        }
+
+        // Merged label map across the shared checklist and the work tab; any
+        // unknown key is humanised.
+        $labels = [
+            'passport' => 'Passport (all pages)', 'visa_copies' => 'All NZ visa copies',
+            'contracts' => 'NZ employment contracts + JD', 'payslips' => 'Payslips — first 2 mo + latest 1 mo',
+            'ird_summary' => 'IRD summary of earnings (monthly)', 'education_certs' => 'Education certificates / transcripts',
+            'cv' => 'CV (NZ + overseas history)', 'other' => 'Other supporting documents',
+            'job_offer' => 'Job Offer', 'job_token' => 'Job Token / Job Check',
+            'employment_contract' => 'Employment Contract', 'valid_pcc' => 'Valid PCC',
+            'current_nz_visa' => 'Current NZ Visa Copy', 'anzsco_skills' => 'ANZSCO Skills 3/4/5 evidence',
+            'english_test' => 'English Proficiency Test Result', 'ird_earnings' => 'IRD Earnings Summary',
+        ];
+        $present = [];
+        foreach (array_keys($files) as $k) {
+            if ($k === 'other') {
+                continue;
+            }
+            $present[$k] = $labels[$k] ?? ucwords(str_replace('_', ' ', (string) $k));
+        }
+
+        return [
+            'labels' => $present,
+            'ticked' => $intake->documents ?? (object) [],
+            'files' => $files,
+            'other_label' => 'Other supporting documents',
+            'base' => "/admin/immigration/intakes/{$type}/{$intake->id}/documents",
+        ];
+    }
+
+    /**
+     * Stream one uploaded intake document (Work / Student / Visitor / Family)
+     * from the PRIVATE disk. Role-gated by the route group.
+     */
+    public function downloadIntakeDocument(\Illuminate\Http\Request $request, string $type, $id, string $key, $index = 0)
+    {
+        $map = [
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
+        ];
+        abort_unless(isset($map[$type]), 404);
+
+        $intake = $map[$type]::findOrFail($id);
+        $files = $intake->document_files ?? [];
+        abort_unless(isset($files[$key]), 404);
+
+        $entry = $files[$key];
+        $paths = is_array($entry) ? array_values($entry) : [$entry];
+        $i = (int) $index;
+        abort_unless(isset($paths[$i]), 404);
+        $path = $paths[$i];
+        abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+
+        $ext = pathinfo($path, PATHINFO_EXTENSION) ?: 'pdf';
+        $filename = $intake->intake_id.' - '.$key.'.'.$ext;
+
+        return $request->boolean('download')
+            ? \Illuminate\Support\Facades\Storage::disk('local')->download($path, $filename)
+            : \Illuminate\Support\Facades\Storage::disk('local')->response($path, $filename);
     }
 
     /**

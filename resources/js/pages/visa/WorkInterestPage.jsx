@@ -53,6 +53,42 @@ function loadDraft() {
     } catch { return null; }
 }
 
+// Document rows for the "Work Interest & Qualifications" tab. Keys are the
+// contract with the backend (WorkIntakeController::DOCUMENT_KEYS) — don't rename.
+const WORK_INTEREST_DOCS = [
+    { key: 'passport', label: 'Passport' },
+    { key: 'job_offer', label: 'Job Offer' },
+    { key: 'job_token', label: 'Job Token / Job Check' },
+    { key: 'employment_contract', label: 'Employment Contract' },
+];
+const QUALIFICATION_DOCS = [
+    { key: 'current_nz_visa', label: 'Current NZ Visa Copy' },
+    { key: 'anzsco_skills', label: 'ANZSCO Skills 3, 4, 5 — supporting evidence', hint: 'If your work falls under ANZSCO Skill Level 3, 4 or 5.' },
+    { key: 'english_test', label: 'English Proficiency Test Result' },
+];
+
+// One upload row — PDF or image. Files are held in form state and posted on
+// submit (Inertia switches to multipart automatically when files are present).
+function DocRow({ id, label, hint, files = [], onChange }) {
+    const chosen = Array.isArray(files) ? files : (files ? [files] : []);
+    return (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <div className="min-w-0">
+                <p className="text-sm font-semibold text-[#282728]">{label}</p>
+                {hint && <p className="text-[11px] text-gray-500 mt-0.5">{hint}</p>}
+                {chosen.length > 0 && (
+                    <p className="text-[11px] text-emerald-600 font-medium mt-1 truncate">{chosen.map((f) => f.name).join(', ')}</p>
+                )}
+            </div>
+            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold border border-gray-200 text-[#282728] hover:bg-gray-50 flex-shrink-0 cursor-pointer">
+                {chosen.length > 0 ? 'Replace' : 'Upload'}
+                <input id={id} type="file" accept="application/pdf,image/*" multiple className="hidden"
+                    onChange={(e) => onChange(Array.from(e.target.files || []))} />
+            </label>
+        </div>
+    );
+}
+
 export default function WorkInterestPage() {
     const draft = loadDraft();
     const { data, setData, post, processing, errors: serverErrors } = useForm({
@@ -86,6 +122,11 @@ export default function WorkInterestPage() {
         military_compulsory: '', military_undertaken: '', military_details: '',
 
         travelled_internationally: '', travel_trips: [],
+
+        // Work Interest & Qualifications document tab. `documents` holds answers
+        // (e.g. the PCC yes/no); `document_files` holds picked files keyed by doc.
+        // Files can't serialise to the local draft, so they're re-selected on reload.
+        documents: {}, document_files: {},
 
         declaration_accepted: false, signature_name: '', signature_date: '',
         // Privacy & Terms — gated by step 1.
@@ -191,7 +232,7 @@ export default function WorkInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 8; n++) {
+        for (let n = 1; n <= 9; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -243,7 +284,7 @@ export default function WorkInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 8; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= 9; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
@@ -409,6 +450,47 @@ export default function WorkInterestPage() {
                     </div>
                 </>
             ),
+        },
+        {
+            title: 'Documents',
+            render: () => {
+                const df = data.document_files || {};
+                const dq = data.documents || {};
+                const setFile = (key, files) => setData('document_files', { ...df, [key]: files });
+                const setAns = (key, val) => setData('documents', { ...dq, [key]: val });
+                return (
+                    <>
+                        <SectionTitle title="Work Interest & Qualifications" subtitle="Upload any documents you already have (PDF or image). You can provide the rest later." />
+
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#009688] mt-2 mb-2">Work interest</p>
+                        <div className="space-y-2">
+                            {WORK_INTEREST_DOCS.map((d) => (
+                                <DocRow key={d.key} id={`wd_${d.key}`} label={d.label} files={df[d.key]} onChange={(f) => setFile(d.key, f)} />
+                            ))}
+                        </div>
+
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#009688] mt-6 mb-2">Qualifications</p>
+                        <div className="space-y-2">
+                            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                                <YesNoField
+                                    label="Do you have a valid PCC? (valid 2 years from the date of your previous visa lodgement)"
+                                    value={dq.valid_pcc || ''}
+                                    onChange={(v) => setAns('valid_pcc', v)}
+                                />
+                                <div className="mt-2">
+                                    <DocRow id="wd_valid_pcc" label="Upload PCC (if available)" files={df.valid_pcc} onChange={(f) => setFile('valid_pcc', f)} />
+                                </div>
+                            </div>
+                            {QUALIFICATION_DOCS.map((d) => (
+                                <DocRow key={d.key} id={`wd_${d.key}`} label={d.label} hint={d.hint} files={df[d.key]} onChange={(f) => setFile(d.key, f)} />
+                            ))}
+
+                            <p className="text-[11px] font-semibold text-gray-500 mt-3 mb-1">Under employment</p>
+                            <DocRow id="wd_ird_earnings" label="IRD Earnings Summary (Monthly Breakdown)" files={df.ird_earnings} onChange={(f) => setFile('ird_earnings', f)} />
+                        </div>
+                    </>
+                );
+            },
         },
         {
             title: 'Declaration',

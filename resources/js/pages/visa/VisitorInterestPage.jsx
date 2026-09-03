@@ -5,6 +5,7 @@ import IntakeFormShell from '@/components/visa/IntakeFormShell';
 import IntakeConfirmModal from '@/components/visa/IntakeConfirmModal';
 import IntakeSuccessModal from '@/components/visa/IntakeSuccessModal';
 import IntakeTermsStep from '@/components/visa/IntakeTermsStep';
+import IntakeDocumentsStep from '@/components/visa/IntakeDocumentsStep';
 import {
     TextField, TextareaField, DateField, SelectField, YesNoField, FieldGrid, SectionTitle,
 } from '@/components/visa/IntakeFields';
@@ -93,6 +94,8 @@ export default function VisitorInterestPage() {
         has_other_assets: '', other_assets_details: '',
 
         declaration_accepted: false, signature_name: '', signature_date: '',
+        // Shared document tab — files can't serialise to the local draft.
+        documents: {}, document_files: {},
         // Privacy & Terms — gated by step 1.
         terms_accepted: false,
         ...(draft || {}),
@@ -180,7 +183,7 @@ export default function VisitorInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 8; n++) {
+        for (let n = 1; n <= 9; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -230,7 +233,7 @@ export default function VisitorInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 8; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= 9; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
@@ -399,6 +402,12 @@ export default function VisitorInterestPage() {
                         </div>
                     )}
                 </>
+            ),
+        },
+        {
+            title: 'Documents',
+            render: () => (
+                <IntakeDocumentsStep data={data} setData={setData} />
             ),
         },
         {

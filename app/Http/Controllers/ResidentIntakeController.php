@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
 use App\Models\Assessment;
 use App\Models\ResidentIntake;
-use App\Models\VisaType;
 use App\Support\IntakeVisaTypeMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +14,8 @@ use Illuminate\Support\Str;
 
 class ResidentIntakeController extends Controller
 {
+    use FiresEnquiryAutomation;
+
     /** Document-checklist keys that may carry uploaded PDFs (plus an "other" bucket). */
     private const DOCUMENT_KEYS = [
         'passport', 'visa_copies', 'contracts', 'payslips',
@@ -21,14 +23,14 @@ class ResidentIntakeController extends Controller
     ];
 
     private const DOCUMENT_LABELS = [
-        'passport'        => 'Passport (all pages)',
-        'visa_copies'     => 'All NZ visa copies',
-        'contracts'       => 'NZ employment contracts + JD',
-        'payslips'        => 'Payslips — first 2 mo + latest 1 mo',
-        'ird_summary'     => 'IRD summary of earnings (monthly)',
+        'passport' => 'Passport (all pages)',
+        'visa_copies' => 'All NZ visa copies',
+        'contracts' => 'NZ employment contracts + JD',
+        'payslips' => 'Payslips — first 2 mo + latest 1 mo',
+        'ird_summary' => 'IRD summary of earnings (monthly)',
         'education_certs' => 'Education certificates / transcripts',
-        'cv'              => 'CV (NZ + overseas history)',
-        'other'           => 'Other supporting documents',
+        'cv' => 'CV (NZ + overseas history)',
+        'other' => 'Other supporting documents',
     ];
 
     /**
@@ -46,58 +48,58 @@ class ResidentIntakeController extends Controller
     private function intakeRules(bool $requireTerms = true): array
     {
         return [
-            'terms_accepted'           => ($requireTerms ? 'required|accepted' : 'nullable|boolean'),
+            'terms_accepted' => ($requireTerms ? 'required|accepted' : 'nullable|boolean'),
 
-            'first_name'               => 'required|string|max:255',
-            'last_name'                => 'required|string|max:255',
-            'dob'                      => 'required|date',
-            'nationality'              => 'required|string|max:120',
-            'email'                    => 'required|email|max:255',
-            'phone'                    => 'required|string|max:25',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'dob' => 'required|date',
+            'nationality' => 'required|string|max:120',
+            'email' => 'required|email|max:255',
+            'phone' => 'required|string|max:25',
 
-            'passport_number'          => 'required|string|max:60',
-            'passport_expiry'          => 'required|date',
-            'issuing_country'          => 'required|string|max:120',
+            'passport_number' => 'required|string|max:60',
+            'passport_expiry' => 'required|date',
+            'issuing_country' => 'required|string|max:120',
 
-            'current_visa_type'        => 'required|in:AEWV,Essential Skills,Work to Residence,Other',
-            'current_visa_other'       => 'nullable|required_if:current_visa_type,Other|string|max:255',
-            'current_visa_expiry'      => 'required|date',
-            'nz_arrival_date'          => 'required|date',
+            'current_visa_type' => 'required|in:AEWV,Essential Skills,Work to Residence,Other',
+            'current_visa_other' => 'nullable|required_if:current_visa_type,Other|string|max:255',
+            'current_visa_expiry' => 'required|date',
+            'nz_arrival_date' => 'required|date',
             'previous_nz_visa_history' => 'nullable|string',
 
-            'job_title'                => 'required|string|max:255',
-            'employment_start'         => 'required|date',
-            'employment_type'          => 'required|string|max:120',
-            'hourly_rate'              => 'required|numeric|min:0',
+            'job_title' => 'required|string|max:255',
+            'employment_start' => 'required|date',
+            'employment_type' => 'required|string|max:120',
+            'hourly_rate' => 'required|numeric|min:0',
 
-            'highest_qualification'    => 'required|string|max:120',
-            'institution_name'         => 'nullable|string|max:255',
-            'country_of_study'         => 'nullable|string|max:120',
-            'nzqa_status'              => 'nullable|string|max:120',
-            'nzqa_iqa_reference'       => 'nullable|required_if:nzqa_status,Yes — IQA completed|string|max:60',
+            'highest_qualification' => 'required|string|max:120',
+            'institution_name' => 'nullable|string|max:255',
+            'country_of_study' => 'nullable|string|max:120',
+            'nzqa_status' => 'nullable|string|max:120',
+            'nzqa_iqa_reference' => 'nullable|required_if:nzqa_status,Yes — IQA completed|string|max:60',
 
-            'nz_skilled_years'         => 'required|numeric|min:0',
-            'total_skilled_years'      => 'required|numeric|min:0',
-            'career_summary'           => 'nullable|string',
+            'nz_skilled_years' => 'required|numeric|min:0',
+            'total_skilled_years' => 'required|numeric|min:0',
+            'career_summary' => 'nullable|string',
 
-            'english_evidence'         => 'required|string|max:120',
-            'english_test_score'       => 'nullable|required_if:english_evidence,IELTS|required_if:english_evidence,TOEFL|required_if:english_evidence,PTE Academic|string|max:30',
-            'english_test_date'        => 'nullable|required_if:english_evidence,IELTS|required_if:english_evidence,TOEFL|required_if:english_evidence,PTE Academic|date',
+            'english_evidence' => 'required|string|max:120',
+            'english_test_score' => 'nullable|required_if:english_evidence,IELTS|required_if:english_evidence,TOEFL|required_if:english_evidence,PTE Academic|string|max:30',
+            'english_test_date' => 'nullable|required_if:english_evidence,IELTS|required_if:english_evidence,TOEFL|required_if:english_evidence,PTE Academic|date',
 
-            'include_family'           => 'required|string|max:60',
-            'family_members'           => 'nullable|array',
-            'family_members.*.full_name'        => 'nullable|required_with:family_members.*.relationship|string|max:255',
-            'family_members.*.relationship'     => 'nullable|in:Spouse / partner,Dependent child',
-            'family_members.*.dob'              => 'nullable|date',
-            'family_members.*.passport_number'  => 'nullable|string|max:60',
+            'include_family' => 'required|string|max:60',
+            'family_members' => 'nullable|array',
+            'family_members.*.full_name' => 'nullable|required_with:family_members.*.relationship|string|max:255',
+            'family_members.*.relationship' => 'nullable|in:Spouse / partner,Dependent child',
+            'family_members.*.dob' => 'nullable|date',
+            'family_members.*.passport_number' => 'nullable|string|max:60',
 
-            'documents'                => 'nullable|array',
-            'document_files'           => 'nullable|array',
-            'document_files.*'         => 'nullable|array',
-            'document_files.*.*'       => 'nullable|file|mimes:pdf|max:10240',
+            'documents' => 'nullable|array',
+            'document_files' => 'nullable|array',
+            'document_files.*' => 'nullable|array',
+            'document_files.*.*' => 'nullable|file|mimes:pdf|max:10240',
 
             'character_health_disclosure' => 'nullable|string',
-            'other_notes'                 => 'nullable|string',
+            'other_notes' => 'nullable|string',
         ];
     }
 
@@ -109,7 +111,7 @@ class ResidentIntakeController extends Controller
     {
         $files = $existingFiles;
         foreach ((array) $request->file('document_files', []) as $key => $uploads) {
-            if (!in_array($key, self::DOCUMENT_KEYS, true)) {
+            if (! in_array($key, self::DOCUMENT_KEYS, true)) {
                 continue;
             }
             $newPaths = [];
@@ -118,7 +120,7 @@ class ResidentIntakeController extends Controller
                     $newPaths[] = $file->store("resident-intakes/{$intakeId}", 'local');
                 }
             }
-            if (!empty($newPaths)) {
+            if (! empty($newPaths)) {
                 $existing = isset($files[$key])
                     ? (is_array($files[$key]) ? $files[$key] : [$files[$key]])
                     : [];
@@ -128,6 +130,7 @@ class ResidentIntakeController extends Controller
                 }
             }
         }
+
         return [$files, $documents];
     }
 
@@ -150,16 +153,16 @@ class ResidentIntakeController extends Controller
         try {
             DB::beginTransaction();
 
-            $intakeId = 'RI-' . strtoupper(uniqid());
+            $intakeId = 'RI-'.strtoupper(uniqid());
 
             [$storedFiles, $documents] = $this->persistUploadedFiles($request, $intakeId, [], $documents);
 
             $intake = ResidentIntake::create(array_merge(
                 $validated,
                 [
-                    'intake_id'      => $intakeId,
-                    'status'         => 'Submitted',
-                    'documents'      => $documents ?: null,
+                    'intake_id' => $intakeId,
+                    'status' => 'Submitted',
+                    'documents' => $documents ?: null,
                     'document_files' => $storedFiles ?: null,
                 ]
             ));
@@ -183,11 +186,14 @@ class ResidentIntakeController extends Controller
 
             DB::commit();
 
+            $this->fireEnquiryCaptured($intake, 'Resident Visa (SMC)');
+
             // return redirect()->route('assessment.pay', $assessment->token);
             return back()->with('intake_submitted', 'Resident Visa (SMC)');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Resident intake storage failed', ['error' => $e->getMessage()]);
+
             return redirect()->back()->withErrors([
                 'error' => 'Failed to submit intake. Please try again.',
             ]);
@@ -210,7 +216,7 @@ class ResidentIntakeController extends Controller
 
         return back()->with([
             'edit_link_intake_id' => $intake->id,
-            'edit_link_url'       => url('/resident-interest/edit/' . $intake->edit_token),
+            'edit_link_url' => url('/resident-interest/edit/'.$intake->edit_token),
         ]);
     }
 
@@ -223,7 +229,7 @@ class ResidentIntakeController extends Controller
 
         return inertia('visa/ResidentIntakePage', [
             'editIntake' => $intake,
-            'editToken'  => $token,
+            'editToken' => $token,
         ]);
     }
 
@@ -252,20 +258,21 @@ class ResidentIntakeController extends Controller
             [$mergedFiles, $documents] = $this->persistUploadedFiles($request, $intake->intake_id, $existingFiles, $documents);
 
             $intake->update(array_merge($validated, [
-                'documents'      => $documents ?: $intake->documents,
+                'documents' => $documents ?: $intake->documents,
                 'document_files' => $mergedFiles ?: null,
             ]));
 
             DB::commit();
 
             return redirect()->back()->with([
-                'success'   => true,
+                'success' => true,
                 'intake_id' => $intake->intake_id,
-                'edited'    => true,
+                'edited' => true,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Resident intake edit-link update failed', ['error' => $e->getMessage()]);
+
             return redirect()->back()->withErrors([
                 'error' => 'Failed to save your changes. Please try again.',
             ]);
@@ -289,6 +296,7 @@ class ResidentIntakeController extends Controller
     public function adminIndex()
     {
         $intakes = ResidentIntake::latest()->get();
+
         return inertia($this->immigrationPagePath('ResidentIntakes'), [
             'intakes' => $intakes,
         ]);
@@ -306,7 +314,7 @@ class ResidentIntakeController extends Controller
         // detail page surfaces a "Converted to case" shortcut in the
         // sidebar when so.
         $email = strtolower(trim((string) ($intake->email ?? '')));
-        $lead  = null;
+        $lead = null;
         if ($email !== '') {
             $lead = \App\Models\Lead::where('is_immigration_case', true)
                 ->whereRaw('LOWER(email) = ?', [$email])
@@ -320,34 +328,35 @@ class ResidentIntakeController extends Controller
             ->first();
 
         return inertia($this->immigrationPagePath('ResidentIntakeDetails'), [
-            'type'   => 'resident',
+            'type' => 'resident',
             'intake' => $intake->toArray(),
             // Documents payload — the unified DocumentsCard reads
             // `labels` (chrome), `ticked` (checkbox state), `files`
             // (uploaded files keyed by doc kind), and `other_label`.
             'documents' => [
-                'labels'      => self::DOCUMENT_LABELS,
-                'ticked'      => $intake->documents ?? (object) [],
-                'files'       => $intake->document_files ?? (object) [],
+                'labels' => self::DOCUMENT_LABELS,
+                'ticked' => $intake->documents ?? (object) [],
+                'files' => $intake->document_files ?? (object) [],
                 'other_label' => 'Other supporting documents',
+                'base' => "/admin/immigration/resident-intakes/{$intake->id}/documents",
             ],
             'assessment' => $assessment ? [
-                'id'      => $assessment->id,
-                'status'  => $assessment->status,
-                'token'   => $assessment->token,
+                'id' => $assessment->id,
+                'status' => $assessment->status,
+                'token' => $assessment->token,
                 'paid_at' => $assessment->paid_at,
                 'booking' => $assessment->booking ? [
-                    'id'               => $assessment->booking->id,
-                    'status'           => $assessment->booking->status,
+                    'id' => $assessment->booking->id,
+                    'status' => $assessment->booking->status,
                     'appointment_date' => $assessment->booking->appointment_date,
                     'appointment_time' => $assessment->booking->appointment_time,
                 ] : null,
             ] : null,
             'linkedLead' => $lead ? [
-                'id'      => $lead->id,
+                'id' => $lead->id,
                 'lead_id' => $lead->lead_id,
-                'name'    => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
-                'status'  => $lead->status,
+                'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
+                'status' => $lead->status,
             ] : null,
         ]);
     }
@@ -377,8 +386,8 @@ class ResidentIntakeController extends Controller
         abort_unless(Storage::disk('local')->exists($path), 404);
 
         $label = self::DOCUMENT_LABELS[$key] ?? $key;
-        $suffix = count($paths) > 1 ? ' (' . ($i + 1) . ')' : '';
-        $filename = $intake->intake_id . ' - ' . $label . $suffix . '.pdf';
+        $suffix = count($paths) > 1 ? ' ('.($i + 1).')' : '';
+        $filename = $intake->intake_id.' - '.$label.$suffix.'.pdf';
 
         if ($request->boolean('download')) {
             return Storage::disk('local')->download($path, $filename);

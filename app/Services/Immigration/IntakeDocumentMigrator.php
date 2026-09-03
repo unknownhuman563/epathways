@@ -49,6 +49,22 @@ class IntakeDocumentMigrator
         return self::countPaths(self::normalize($intake->document_files));
     }
 
+    // ── Work intake uploads (document_files, local disk) ────────────────────
+
+    public static function fromWorkIntake(\App\Models\WorkIntake $intake, Lead $lead): int
+    {
+        return self::migratePaths($lead, self::normalize($intake->document_files), 'local');
+    }
+
+    /**
+     * Generic private-disk document_files carry-over for any intake that has the
+     * shared document tab (Student / Visitor / Family — same shape as Resident).
+     */
+    public static function fromIntake($intake, Lead $lead): int
+    {
+        return self::migratePaths($lead, self::normalize($intake->document_files ?? null), 'local');
+    }
+
     // ── Lead-level uploads (education_notes.uploaded_files + passport, public) ─
 
     public static function fromLeadUploads(Lead $lead): int

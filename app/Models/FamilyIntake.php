@@ -36,12 +36,15 @@ class FamilyIntake extends Model
         'nz_contacts',
         // H — Declaration
         'declaration_accepted', 'signature_name', 'signature_date', 'terms_accepted',
+        'documents', 'document_files',
     ];
 
     protected $casts = [
         'dob' => 'date',
         'signature_date' => 'date',
         'previous_work' => 'array',
+        'documents' => 'array',
+        'document_files' => 'array',
         'declaration_accepted' => 'bool',
         'terms_accepted' => 'bool',
     ];

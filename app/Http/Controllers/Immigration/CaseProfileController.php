@@ -1406,6 +1406,12 @@ class CaseProfileController extends Controller
             'inz_application_number' => 'nullable|string|max:60',
             'inz_medical_ref' => 'nullable|string|max:60',
             'nzer_number' => 'nullable|string|max:60',
+            // The actual INZ lodgement date — drives the days-in-processing
+            // tracker against the visa type's expected window.
+            'inz_lodged_at' => 'nullable|date',
+            // Planned filing date (feeds "Next deadlines") + applicant IRD number.
+            'target_lodgement_at' => 'nullable|date',
+            'ird_number' => 'nullable|string|max:60',
         ]);
 
         $lead->update($validated);
@@ -1571,19 +1577,7 @@ class CaseProfileController extends Controller
             }
         }
 
-        // Newest wins — a freshly taken assessment supersedes the stamped one.
-        $assessment = $candidates->unique('id')->sortByDesc('id')->first();
-
-        if (! $assessment) {
-            return [null, null];
-        }
-
-        $intake = $assessment->intakeable;
-        if (! $intake) {
-            return [null, null];
-        }
-
-        $type = match ($intake::class) {
+        $typeFor = fn ($intake) => match ($intake ? $intake::class : null) {
             ResidentIntake::class => 'resident',
             WorkIntake::class => 'work',
             StudentIntake::class => 'student',
@@ -1592,16 +1586,26 @@ class CaseProfileController extends Controller
             default => null,
         };
 
-        if ($type === null) {
-            return [null, null];
+        // Prefer the newest assessment, but walk the list newest-first and return
+        // the first one that actually resolves to a usable intake. A newer but
+        // half-finished / unsupported submission must NOT hide a good earlier
+        // assessment — otherwise switching the case's visa type made the original
+        // (e.g. partner) assessment disappear even though it's still on file.
+        $sorted = $candidates->unique('id')->sortByDesc('id')->values();
+        foreach ($sorted as $candidate) {
+            $intake = $candidate->intakeable;
+            $type = $typeFor($intake);
+            if ($intake && $type !== null) {
+                return [$type, array_merge($intake->toArray(), [
+                    'assessment_id' => $candidate->id,
+                    'assessment_status' => $candidate->status,
+                    'assessment_payment_status' => $candidate->payment_status,
+                    'assessment_booking_id' => $candidate->booking_id,
+                ])];
+            }
         }
 
-        return [$type, array_merge($intake->toArray(), [
-            'assessment_id' => $assessment->id,
-            'assessment_status' => $assessment->status,
-            'assessment_payment_status' => $assessment->payment_status,
-            'assessment_booking_id' => $assessment->booking_id,
-        ])];
+        return [null, null];
     }
 
     private function serializeLead(Lead $lead): array
@@ -1637,9 +1641,16 @@ class CaseProfileController extends Controller
             'inz_application_number' => $lead->inz_application_number,
             'inz_medical_ref' => $lead->inz_medical_ref,
             'nzer_number' => $lead->nzer_number,
+            'ird_number' => $lead->ird_number,
+            'target_lodgement_at' => optional($lead->target_lodgement_at)->format('Y-m-d'),
             'inz_status' => $lead->inz_status,
-            'inz_lodged_at' => $lead->inz_lodged_at,
+            'inz_lodged_at' => optional($lead->inz_lodged_at)->format('Y-m-d'),
             'inz_decision_at' => $lead->inz_decision_at,
+            // INZ's expected processing window for this visa type (staff-set from
+            // the INZ website) — drives the lodgement→outcome day tracker.
+            'expected_processing_days' => optional(
+                \App\Models\VisaType::where('name', $lead->inz_visa_type)->first()
+            )->expected_processing_days,
             'is_immigration_case' => (bool) $lead->is_immigration_case,
             'immigration_converted_at' => $lead->immigration_converted_at,
             'immigration_converted_by' => $lead->immigration_converted_by,
