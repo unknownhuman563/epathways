@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { Clock, ArrowLeft, Settings, CheckCircle2, CircleDashed, X, Save, Search, Download, History, ArrowRight, Sparkles } from "lucide-react";
+import { Clock, ArrowLeft, Settings, CheckCircle2, CircleDashed, X, Save, Search, Download, History, ArrowRight, Sparkles, Archive, RotateCcw, CheckSquare, Square } from "lucide-react";
 
 // Known teams → their timezone. Picking a team auto-fills the tz so PH/NZ
 // staff can't mismatch them. Add teams here as they're onboarded.
@@ -388,14 +388,52 @@ export default function DtrManage({ staff = [] }) {
     const [reportFor, setReportFor] = useState(null);
     const [historyFor, setHistoryFor] = useState(null);
     const [q, setQ] = useState("");
+    // Archive: default shows active staff; toggle to review/restore archived
+    // (ex-employees). Selection drives the bulk Archive/Restore bar.
+    const [showArchived, setShowArchived] = useState(false);
+    const [selected, setSelected] = useState(() => new Set());
+    const [busy, setBusy] = useState(false);
+
+    const archivedCount = staff.filter((s) => s.archived).length;
 
     const filtered = useMemo(() => {
         const t = q.trim().toLowerCase();
-        if (!t) return staff;
-        return staff.filter((s) => `${s.name} ${s.email} ${roleName(s.role)} ${s.setting?.team || ""}`.toLowerCase().includes(t));
-    }, [staff, q]);
+        return staff.filter((s) => {
+            if (showArchived ? !s.archived : s.archived) return false;
+            if (!t) return true;
+            return `${s.name} ${s.email} ${roleName(s.role)} ${s.setting?.team || ""}`.toLowerCase().includes(t);
+        });
+    }, [staff, q, showArchived]);
 
-    const setUpCount = staff.filter((s) => s.setting?.is_complete).length;
+    const setUpCount = staff.filter((s) => s.setting?.is_complete && !s.archived).length;
+
+    // Selection helpers — scoped to the rows currently visible.
+    const toggleOne = (id) => setSelected((prev) => {
+        const n = new Set(prev);
+        n.has(id) ? n.delete(id) : n.add(id);
+        return n;
+    });
+    const visibleIds = filtered.map((s) => s.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+    const toggleAll = () => setSelected((prev) => {
+        const n = new Set(prev);
+        if (allVisibleSelected) visibleIds.forEach((id) => n.delete(id));
+        else visibleIds.forEach((id) => n.add(id));
+        return n;
+    });
+    const clearSelection = () => setSelected(new Set());
+
+    const doArchive = (restore) => {
+        const ids = [...selected];
+        if (ids.length === 0) return;
+        if (!restore && !confirm(`Archive ${ids.length} staff member${ids.length === 1 ? "" : "s"}? They'll be hidden from the active list (their records are kept).`)) return;
+        setBusy(true);
+        router.post("/admin/dtr/archive", { user_ids: ids, restore }, {
+            preserveScroll: true,
+            onSuccess: () => clearSelection(),
+            onFinish: () => setBusy(false),
+        });
+    };
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
@@ -415,6 +453,13 @@ export default function DtrManage({ staff = [] }) {
                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Set up</p>
                         <p className="text-lg font-bold text-[#436235]">{setUpCount}<span className="text-gray-300"> / {staff.length}</span></p>
                     </div>
+                    <button
+                        onClick={() => { setShowArchived((v) => !v); clearSelection(); }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${showArchived ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                        title="Show archived staff"
+                    >
+                        <Archive size={15} /> {showArchived ? "Viewing archived" : `Archived${archivedCount ? ` (${archivedCount})` : ""}`}
+                    </button>
                     <div className="relative">
                         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search staff…"
@@ -423,12 +468,36 @@ export default function DtrManage({ staff = [] }) {
                 </div>
             </div>
 
+            {/* Bulk action bar — appears once staff are selected. */}
+            {selected.size > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5">
+                    <p className="text-sm font-semibold text-gray-700">{selected.size} selected</p>
+                    <div className="flex items-center gap-2">
+                        <button onClick={clearSelection} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 hover:text-gray-900">Clear</button>
+                        {showArchived ? (
+                            <button onClick={() => doArchive(true)} disabled={busy} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#436235] text-white hover:bg-[#375029] disabled:opacity-50">
+                                <RotateCcw size={13} /> Restore selected
+                            </button>
+                        ) : (
+                            <button onClick={() => doArchive(false)} disabled={busy} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gray-900 text-white hover:bg-black disabled:opacity-50">
+                                <Archive size={13} /> Archive selected
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Staff table */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                         <thead>
                             <tr className="bg-gray-900 text-white text-[10px] font-bold uppercase tracking-wider">
+                                <th className="pl-4 pr-1 py-3 w-8">
+                                    <button onClick={toggleAll} title={allVisibleSelected ? "Deselect all" : "Select all"} className="align-middle text-white/80 hover:text-white">
+                                        {allVisibleSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+                                    </button>
+                                </th>
                                 <th className="px-4 py-3">Staff</th>
                                 <th className="px-3 py-3">Role</th>
                                 <th className="px-3 py-3">Position</th>
@@ -441,12 +510,18 @@ export default function DtrManage({ staff = [] }) {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filtered.length === 0 ? (
-                                <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">No staff match your search.</td></tr>
+                                <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">{showArchived ? "No archived staff." : "No staff match your search."}</td></tr>
                             ) : filtered.map((s) => {
                                 const set = s.setting;
                                 const ready = set?.is_complete;
+                                const checked = selected.has(s.id);
                                 return (
-                                    <tr key={s.id} className="hover:bg-gray-50/60">
+                                    <tr key={s.id} className={`hover:bg-gray-50/60 ${checked ? "bg-[#436235]/[0.04]" : ""}`}>
+                                        <td className="pl-4 pr-1 py-3">
+                                            <button onClick={() => toggleOne(s.id)} className={checked ? "text-[#436235]" : "text-gray-300 hover:text-gray-500"}>
+                                                {checked ? <CheckSquare size={16} /> : <Square size={16} />}
+                                            </button>
+                                        </td>
                                         <td className="px-4 py-3">
                                             <p className="font-semibold text-gray-800 flex items-center gap-1.5">
                                                 {s.name}

@@ -131,10 +131,14 @@ class LeadController extends Controller
      */
     public function storeDashboardLead(Request $request)
     {
-        $data = $request->validate($this->dashboardLeadRules(Lead::STAGES));
+        $data = $request->validate(
+            $this->dashboardLeadRules(Lead::STAGES) + $this->dashboardDocumentRules()
+        );
 
         try {
             $lead = $this->createDashboardLead($data);
+            // Persist the modal's CV / passport / diploma / transcript uploads.
+            $this->storeDashboardLeadDocuments($lead, $request);
 
             return back()->with('success', "Lead {$lead->lead_id} added.");
         } catch (\Throwable $e) {

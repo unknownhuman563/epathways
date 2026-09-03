@@ -42,8 +42,10 @@
 
         $banner = $bannerRel ? $abs(Storage::disk('public')->url($bannerRel)) : $brandAssets['bannerUrl'];
         // Footer buttons are baked in, then the composite is served from a URL.
+        // Per-department accent colour for the buttons (immigration = cyan).
+        $ctaAccent = \App\Models\EmailBranding::accentFor($branding ?? 'default');
         $footer = $footerPath && is_file($footerPath)
-            ? app(\App\Services\EmailFooterComposer::class)->composeUrl($footerPath, 'BOOK NOW', $callNumber ? 'CALL '.$callNumber : null)
+            ? app(\App\Services\EmailFooterComposer::class)->composeUrl($footerPath, 'BOOK NOW', $callNumber ? 'CALL '.$callNumber : null, $ctaAccent)
             : null;
     @endphp
 

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import { ThreadItem, ThreadComposer } from '@/components/immigration/case-profile/threads';
+import { LeadDocViewerModal, LeadDocFileMenu } from '@/components/ui/LeadDocViewerModal';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
 import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
 import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
@@ -3625,9 +3626,8 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
     const [generating, setGenerating] = useState(false);
     const [variantOpen, setVariantOpen] = useState(false);
     const [notesOpen, setNotesOpen] = useState(false);
+    const [previewDoc, setPreviewDoc] = useState(null);
     const fileInputRef = useRef(null);
-    const replaceInputRef = useRef(null);
-    const [replacingId, setReplacingId] = useState(null);
 
     // Per-document discussion (shared thread system with immigration). A note
     // is anchored to this checklist item by anchor_key = item.id. Root notes
@@ -3668,31 +3668,6 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
             onFinish: () => {
                 setUploading(false);
                 if (fileInputRef.current) fileInputRef.current.value = '';
-            },
-        });
-    };
-
-    // Replace a specific attachment: upload the new file, then delete the old
-    // one once the upload succeeds so the item never briefly loses its doc.
-    const startReplace = (fileId) => { setReplacingId(fileId); replaceInputRef.current?.click(); };
-    const handleReplace = (e) => {
-        const file = e.target.files?.[0];
-        const oldId = replacingId;
-        if (!file || !oldId) { setReplacingId(null); return; }
-        const form = new FormData();
-        form.append('files[]', file);
-        setUploading(true);
-        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/upload`, form, {
-            preserveScroll: true,
-            preserveState: true,
-            forceFormData: true,
-            onSuccess: () => {
-                router.delete(`/admin/leads/${lead.id}/documents/${oldId}`, { preserveScroll: true, preserveState: true });
-            },
-            onFinish: () => {
-                setUploading(false);
-                setReplacingId(null);
-                if (replaceInputRef.current) replaceInputRef.current.value = '';
             },
         });
     };
@@ -3763,24 +3738,16 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                                 : <Paperclip size={11} className="text-gray-400 shrink-0" />}
                             <span className="truncate max-w-[150px] text-[11px] font-medium text-gray-700" title={f.original_name}>{f.original_name}</span>
                             <div className="flex items-center gap-0.5">
-                                <a href={`/admin/documents/${f.id}/download?inline=1`} target="_blank" rel="noreferrer" title="View"
-                                    className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                                    <Eye size={12} />
-                                </a>
-                                <a href={`/admin/documents/${f.id}/download`} title="Download"
-                                    className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-                                    <Download size={12} />
-                                </a>
-                                <button type="button" onClick={() => startReplace(f.id)} disabled={uploading} title="Replace"
-                                    className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-40">
-                                    <RefreshCw size={12} />
+                                <button type="button" onClick={() => setPreviewDoc(f)} title="View"
+                                    className="inline-flex items-center gap-1 px-1.5 h-6 rounded text-[11px] font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                                    <Eye size={12} /> View
                                 </button>
+                                <LeadDocFileMenu doc={f} leadId={lead.id} checklistKey={item.id} />
                             </div>
                         </div>
                     ))}
 
                     <input ref={fileInputRef} type="file" multiple onChange={handleFiles} className="hidden" />
-                    <input ref={replaceInputRef} type="file" onChange={handleReplace} className="hidden" />
 
                     <div className="flex items-center gap-2 flex-wrap">
                         <button
@@ -3896,6 +3863,19 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                     </div>
                 </td>
             </tr>
+        )}
+        {previewDoc && (
+            <LeadDocViewerModal
+                doc={previewDoc}
+                label={item.name}
+                leadId={lead.id}
+                staffOptions={staffOptions}
+                threads={rootThreads}
+                childrenOf={childrenOf}
+                anchor={docAnchor}
+                basePath="/admin/leads"
+                onClose={() => setPreviewDoc(null)}
+            />
         )}
         </>
     );
