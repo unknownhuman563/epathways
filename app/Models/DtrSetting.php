@@ -13,7 +13,7 @@ class DtrSetting extends Model
     protected $fillable = [
         'user_id', 'label', 'position', 'employment_type', 'team', 'timezone',
         'sched_in', 'sched_out', 'weekly_schedule', 'schedule_type', 'break_hours', 'reports_to',
-        'std_hours', 'grace_mins', 'break_after', 'is_complete',
+        'std_hours', 'grace_mins', 'break_after', 'is_complete', 'archived_at',
     ];
 
     protected $casts = [
@@ -23,6 +23,7 @@ class DtrSetting extends Model
         'grace_mins' => 'integer',
         'is_complete' => 'boolean',
         'weekly_schedule' => 'array',
+        'archived_at' => 'datetime',
     ];
 
     public function user()

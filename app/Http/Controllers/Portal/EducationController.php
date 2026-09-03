@@ -212,10 +212,14 @@ class EducationController extends Controller
     /** Manually add a lead from the dashboard "Add Lead" form. */
     public function storeLead(Request $request)
     {
-        $validated = $request->validate($this->dashboardLeadRules(self::LEAD_STATUSES));
+        $validated = $request->validate(
+            $this->dashboardLeadRules(self::LEAD_STATUSES) + $this->dashboardDocumentRules()
+        );
 
         try {
             $lead = $this->createDashboardLead($validated);
+            // Persist the modal's CV / passport / diploma / transcript uploads.
+            $this->storeDashboardLeadDocuments($lead, $request);
 
             return back()->with('success', "Lead {$lead->lead_id} added.");
         } catch (\Throwable $e) {

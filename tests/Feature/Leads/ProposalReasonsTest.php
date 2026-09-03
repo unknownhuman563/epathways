@@ -57,6 +57,9 @@ class ProposalReasonsTest extends TestCase
             'reasons' => [(string) $p1->id => 'Strong graduate outcomes.'],
         ]);
 
+        // Proposals now require approval before the tracker shows them.
+        $lead->update(['proposal_review' => ['status' => 'approved']]);
+
         $this->get('/track/RSN456')
             ->assertOk()
             ->assertInertia(fn ($p) => $p

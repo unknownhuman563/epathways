@@ -160,6 +160,26 @@ class Lead extends Model
      * Pipeline can show exactly when each status was reached, and `by_name`
      * snapshots the acting staff member.
      */
+    /**
+     * Study-proposal verification status: 'pending' | 'verified' | 'approved',
+     * or null when there's no proposal under review (legacy proposals — those
+     * with programs but no review record — are treated as already live).
+     */
+    public function proposalStatus(): ?string
+    {
+        $r = is_array($this->proposal_review) ? $this->proposal_review : [];
+
+        return $r['status'] ?? null;
+    }
+
+    /** A proposal is visible to the client only once approved (or legacy-live). */
+    public function proposalIsLive(): bool
+    {
+        $status = $this->proposalStatus();
+
+        return $status === 'approved' || $status === null;
+    }
+
     public function pushStageHistory(string $department, ?string $stage, ?string $assignee = null): void
     {
         $history = $this->stage_history ?? [];
@@ -275,6 +295,8 @@ class Lead extends Model
         'proposed_program_ids',
         // Per-program "why this program" reasons, keyed by program id.
         'proposed_program_reasons',
+        // Study-proposal verification workflow (pending → verified → approved).
+        'proposal_review',
         // Lead's chosen program (FK to programs.id) from that shortlist,
         // set by the tracker's "Choose this one" action.
         'preferred_program_id', 'preferred_program_chosen_at',
@@ -402,6 +424,7 @@ class Lead extends Model
         'custom_documents' => 'array',
         'proposed_program_ids' => 'array',
         'proposed_program_reasons' => 'array',
+        'proposal_review' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',

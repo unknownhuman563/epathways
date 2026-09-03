@@ -35,10 +35,12 @@ export default function AgentShow({
 
     const stageChip = (s) => {
         if (! s) return "bg-gray-100 text-gray-500 border-gray-200";
+        if (/started course|approved|unconditional offer/i.test(s)) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+        if (/not qualified/i.test(s)) return "bg-gray-100 text-gray-500 border-gray-200";
         if (/new/i.test(s)) return "bg-rose-50 text-rose-700 border-rose-200";
         if (/qualified/i.test(s)) return "bg-amber-50 text-amber-700 border-amber-200";
         if (/consultation/i.test(s)) return "bg-purple-50 text-purple-700 border-purple-200";
-        if (/proposal|endorsed/i.test(s)) return "bg-teal-50 text-teal-700 border-teal-200";
+        if (/proposal|endorsed|offer/i.test(s)) return "bg-teal-50 text-teal-700 border-teal-200";
         return "bg-gray-100 text-gray-600 border-gray-200";
     };
 

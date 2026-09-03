@@ -392,6 +392,22 @@ class CommunicationService
             }
         }
 
+        // Self-service booking links from the lead's most recent booking token,
+        // so booking templates sent via a LEAD path (e.g. the "Missed the
+        // Meeting" follow-ups: missed_the_booking_1/2) still get a working
+        // {{reschedule_url}} / {{cancel_url}}. Falls back to the tracker link.
+        $trackerUrl = rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code;
+        $booking = \App\Models\Booking::where('lead_id', $lead->id)
+            ->whereNotNull('manage_token')
+            ->latest('id')
+            ->first();
+        $rescheduleUrl = $booking?->manage_token
+            ? url('/booking/reschedule/'.$booking->manage_token)
+            : $trackerUrl;
+        $cancelUrl = $booking?->manage_token
+            ? url('/booking/cancel/'.$booking->manage_token)
+            : $trackerUrl;
+
         return array_merge([
             'first_name' => $lead->first_name ?? '',
             'last_name' => $lead->last_name ?? '',
@@ -399,6 +415,8 @@ class CommunicationService
             'email' => $lead->email ?? '',
             'phone' => $lead->phone ?? '',
             'stage' => $lead->stage ?? ($lead->status ?? ''),
+            'reschedule_url' => $rescheduleUrl,
+            'cancel_url' => $cancelUrl,
             'visa_type' => $lead->inz_visa_type ?? '',
             // The case's most recent invoice number (blank if none issued yet);
             // an invoice-event context can override with a specific one.
@@ -406,7 +424,7 @@ class CommunicationService
                 \App\Models\LeadDocument::where('lead_id', $lead->id)
                     ->whereNotNull('invoice_number')->latest('id')->first()
             )->invoice_number ?? '',
-            'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
+            'tracker_url' => $trackerUrl,
             'client_portal_url' => $this->clientPortalUrl($lead),
             // Portal sign-in link + username (their email) — for templates that
             // ask the client to log in and act (e.g. re-upload a document).

@@ -1575,6 +1575,20 @@ class LeadDocumentController extends Controller
 
             $lead->proposed_program_ids = $ids ?: null;
             $lead->proposed_program_reasons = $reasons ?: null;
+
+            // Study proposals now go through verification (Dinah's Program
+            // Verification module) before they reach the client. Saving a
+            // non-empty shortlist submits it as PENDING — it stays hidden on the
+            // tracker and no email fires until it's approved. Clearing resets it.
+            if (! empty($ids)) {
+                $lead->proposal_review = [
+                    'status' => 'pending',
+                    'submitted_at' => now()->toIso8601String(),
+                    'submitted_by' => optional($request->user())->id,
+                ];
+            } else {
+                $lead->proposal_review = null;
+            }
             $lead->save();
 
             // Snapshot the new version. Clearing (empty list) only resets the
@@ -1591,7 +1605,7 @@ class LeadDocumentController extends Controller
             $count = count($ids);
             $msg = $count === 0
                 ? "Proposal cleared for {$lead->first_name} {$lead->last_name}."
-                : "Proposed {$count} program".($count === 1 ? '' : 's')." for {$lead->first_name} {$lead->last_name}.";
+                : "Submitted {$count} program".($count === 1 ? '' : 's').' for verification — the client sees them once approved.';
 
             return back()->with('success', $msg);
         } catch (\Throwable $e) {
@@ -1691,6 +1705,35 @@ class LeadDocumentController extends Controller
      *  - {{program_1}}..{{program_5}} : the same values as individual plain-text
      *    lines, kept for older templates. Unselected slots are empty strings.
      */
+    /**
+     * Send the client the "Study Proposal ready" email and advance the pipeline
+     * to "Proposal Sent". Shared by the Notify button and the Program
+     * Verification approval step. Safe no-op when the lead has no email.
+     */
+    public function sendProposalReadyEmail(Lead $lead): bool
+    {
+        if (empty($lead->email)) {
+            return false;
+        }
+
+        $stages = \App\Models\Lead::STAGES;
+        $curIdx = array_search($lead->status, $stages, true);
+        $tgtIdx = array_search('Proposal Sent', $stages, true);
+        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+            $lead->status = 'Proposal Sent';
+            $lead->save();
+        }
+
+        $res = app(\App\Services\CommunicationService::class)
+            ->sendTemplated('program_proposal', $lead, $this->proposalProgramVars($lead));
+
+        if (! ($res['email'] ?? null)) {
+            Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'proposal'));
+        }
+
+        return true;
+    }
+
     private function proposalProgramVars(Lead $lead): array
     {
         $ids = is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : [];
@@ -2007,6 +2050,18 @@ class LeadDocumentController extends Controller
             }
         } catch (\Throwable $e) {
             Log::error('Lead-portal document notify failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
+
+        // Email automation — fires the configured "document uploaded" staff
+        // notice (a no-op unless a message is enabled for the key). Kept in its
+        // own try so a template/send problem never blocks the in-app alert above.
+        try {
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.document.uploaded', $lead, [
+                'document_name' => $document->original_name,
+                'adviser_name' => optional($lead->assignee)->name ?? '',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Document-uploaded automation failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
         }
     }
 

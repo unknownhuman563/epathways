@@ -373,13 +373,22 @@ class BookingController extends Controller
             }
 
             // Store uploaded documents on the PRIVATE disk and record them as
-            // LeadDocuments (never the world-readable public disk).
+            // LeadDocuments (never the world-readable public disk). Map the
+            // upload bucket to the CANONICAL checklist key so the doc lands in
+            // the right slot on the lead's Documents tab (raw bucket names like
+            // "cv" match no slot, so they'd never reflect).
+            $bucketKeys = [
+                'cv' => 'acad.cv',
+                'passport' => 'pers.passport',
+                'diploma' => 'acad.degree_diploma',
+                'transcript' => 'acad.transcript',
+            ];
             foreach ($request->file('documents', []) as $bucket => $files) {
                 foreach ((array) $files as $file) {
                     $path = $file->store("lead-documents/{$lead->id}", 'local');
                     \App\Models\LeadDocument::create([
                         'lead_id' => $lead->id,
-                        'checklist_key' => (string) $bucket,
+                        'checklist_key' => $bucketKeys[$bucket] ?? (string) $bucket,
                         'original_name' => $file->getClientOriginalName(),
                         'file_path' => $path,
                         'mime' => $file->getClientMimeType(),

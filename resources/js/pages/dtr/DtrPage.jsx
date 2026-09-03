@@ -12,8 +12,21 @@ function SaveStatus({ state }) {
     return null;
 }
 
+// Format a task's realtime completion timestamp (ISO) as "2 Sep · 9:45 PM".
+function fmtStamp(iso, tz) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d)) return null;
+    try {
+        return d.toLocaleString("en-NZ", {
+            timeZone: tz || "UTC", day: "numeric", month: "short",
+            hour: "numeric", minute: "2-digit", hour12: true,
+        }).replace(",", " ·");
+    } catch { return null; }
+}
+
 // Read-only list of recorded tasks for a closed day (Completed / For tomorrow).
-function ReadOnlyList({ title, tone, icon, items, empty }) {
+function ReadOnlyList({ title, tone, icon, items, empty, tz }) {
     const filled = items.filter((t) => t.text.trim());
     const head = tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700";
     const box = tone === "amber" ? "border-amber-200 divide-amber-50" : "border-emerald-200 divide-emerald-50";
@@ -23,7 +36,14 @@ function ReadOnlyList({ title, tone, icon, items, empty }) {
             <div className={`divide-y ${box.split(" ")[1]}`}>
                 {filled.length === 0 ? (
                     <p className="px-3 py-3 text-xs text-gray-400">{empty}</p>
-                ) : filled.map((t, i) => <div key={i} className="px-3 py-2 text-sm text-gray-800">{t.text}</div>)}
+                ) : filled.map((t, i) => (
+                    <div key={i} className="px-3 py-2 text-sm text-gray-800 flex items-center justify-between gap-2">
+                        <span className="min-w-0 flex-1">{t.text}</span>
+                        {tone !== "amber" && fmtStamp(t.completed_at, tz) && (
+                            <span className="text-[10px] font-semibold text-emerald-600 whitespace-nowrap shrink-0">{fmtStamp(t.completed_at, tz)}</span>
+                        )}
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -721,13 +741,13 @@ const compute = (timeIn, timeOut, s, date = null) => {
     return { net, variance, attendance };
 };
 
-export default function DtrPage({ setting = null, entries = [], carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account = {}, today = "", canSummary = false, canManage = false, adminLeaves = [], adminPendingLeaves = [] }) {
+export default function DtrPage({ setting = null, entries = [], carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account = {}, today = "", canSummary = false, canManage = false, canReports = false, adminLeaves = [], adminPendingLeaves = [] }) {
     const ready = setting && setting.is_complete;
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
             <Head title="DTR — Daily Time & Task Record" />
             {ready
-                ? <DailyRecord setting={setting} entries={entries} carried={carried} leaves={leaves} leaveTypes={leaveTypes} minLeaveDate={minLeaveDate} holidays={holidays} account={account} today={today} canSummary={canSummary} canManage={canManage} adminLeaves={adminLeaves} adminPendingLeaves={adminPendingLeaves} />
+                ? <DailyRecord setting={setting} entries={entries} carried={carried} leaves={leaves} leaveTypes={leaveTypes} minLeaveDate={minLeaveDate} holidays={holidays} account={account} today={today} canSummary={canSummary} canManage={canManage} canReports={canReports} adminLeaves={adminLeaves} adminPendingLeaves={adminPendingLeaves} />
                 : <NotSetUp account={account} canManage={canManage} />}
         </div>
     );
@@ -793,8 +813,8 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     // kind: "main" (default) or "side" (a sub-task nested under a main task,
     // linked by `parent` = the parent's tid). Side tasks act like main tasks
     // (own status, counted in the day) but render indented + colour-coded.
-    const mk = (text, status, source = null, from = null, kind = "main", parent = null, tid = null) =>
-        ({ uid: uidRef.current++, tid: tid || rid(), text, status, source, from, kind, parent });
+    const mk = (text, status, source = null, from = null, kind = "main", parent = null, tid = null, completed_at = null) =>
+        ({ uid: uidRef.current++, tid: tid || rid(), text, status, source, from, kind, parent, completed_at });
     // A task item is one of three states: `todo` (planned / ongoing — not
     // recorded), `done` (completed — recorded), `carry` (pending for tomorrow —
     // recorded and rolls forward). The stored entry keeps only done (in `task`)
@@ -811,10 +831,11 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
             const k = r.kind === "side" ? "side" : "main";
             const par = r.parent || null;
             const tid = r.tid || null;
+            const done = r.completed_at || null;
             if (st === "todo") { rows.push(mk(r.task || "", "todo", null, null, k, par, tid)); return; }
-            if (st === "done") { if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done", null, null, k, par, tid)); return; }
+            if (st === "done") { if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done", null, null, k, par, tid, done)); return; }
             if (st === "carry") { if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry", null, null, k, par, tid)); return; }
-            if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done", null, null, k, par, tid));
+            if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done", null, null, k, par, tid, done));
             if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry", null, null, k, par, tid));
         });
         rows.push(mk("", "todo")); // a blank line to type the next plan into
@@ -841,7 +862,12 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     const carryCount = carryItems.filter((t) => t.text.trim()).length;
     const setText = (uid) => (e) => setTasks((p) => p.map((t) => t.uid === uid ? { ...t, text: e.target.value } : t));
     const move = (uid, status) => setTasks((p) => {
-        const next = p.map((t) => t.uid === uid ? { ...t, status } : t);
+        // Stamp the realtime completion moment when a task moves to Completed;
+        // preserve it if already stamped; clear it when moved back out.
+        const nowIso = new Date().toISOString();
+        const next = p.map((t) => t.uid === uid
+            ? { ...t, status, completed_at: status === "done" ? (t.completed_at || nowIso) : null }
+            : t);
         if (!next.some((t) => t.status === "todo" && !t.text.trim())) next.push(mk("", "todo"));
         return next;
     });
@@ -868,7 +894,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
             time_out: (override.time_out ?? timeOut) || null,
             tasks: recorded.map((t) => t.status === "carry"
                 ? { task: "", pending: t.text.trim(), status: "carry", pending_done: false, kind: t.kind, parent: t.parent, tid: t.tid }
-                : { task: t.text.trim(), pending: "", status: t.status, pending_done: false, kind: t.kind, parent: t.parent, tid: t.tid }),
+                : { task: t.text.trim(), pending: "", status: t.status, pending_done: false, kind: t.kind, parent: t.parent, tid: t.tid, completed_at: t.completed_at || null }),
             // Carried items resolved today → close them on their source entry so
             // they stop rolling forward.
             close_carried: tasks.filter((t) => t.source && (t.status === "done" || t.status === "carry")).map((t) => t.source),
@@ -916,12 +942,15 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     // neutral rather than a red/green surplus/deficit.
     const isFlexi = setting.schedule_type === "flexi";
     const varTone = live.variance == null ? "" : isFlexi ? "text-gray-600" : live.variance >= 0 ? "text-emerald-600" : "text-rose-600";
+    // The New Zealand team no longer clocks in/out — they only log tasks. Hide
+    // the clock card + attendance stat strip for them; the task board stays.
+    const isNZ = (setting.team || "").trim() === "New Zealand";
 
     return (
         <div className="p-6 space-y-5">
             {/* Overnight open shift — clocked in on an earlier day, never clocked
                 out. Surfaced here because today's card looks fresh otherwise. */}
-            {isToday && openShift && (
+            {!isNZ && isToday && openShift && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><AlertTriangle size={18} /></div>
@@ -941,7 +970,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                 </div>
             )}
 
-            {isToday && (
+            {!isNZ && isToday && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-[#436235]/[0.06] to-transparent border border-gray-100 px-5 py-4">
                     <div className="flex items-center gap-3">
                         <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
@@ -963,7 +992,8 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                 </div>
             )}
 
-            {/* Unified stat strip */}
+            {/* Unified stat strip — attendance metrics; hidden for the NZ team. */}
+            {!isNZ && (
             <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-y sm:divide-y-0 divide-gray-100">
                     <div className="p-4">
@@ -998,6 +1028,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                     </div>
                 </div>
             </div>
+            )}
 
             {/* Task board — plan in "To do", then arrow each item into Completed
                 or carry it to tomorrow. Only completed + for-tomorrow are saved. */}
@@ -1022,7 +1053,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
 
                 {readOnly ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <ReadOnlyList title="Completed" tone="emerald" icon={<CheckCircle size={12} />} items={doneItems} empty="No tasks were completed this day." />
+                        <ReadOnlyList title="Completed" tone="emerald" icon={<CheckCircle size={12} />} items={doneItems} empty="No tasks were completed this day." tz={setting.timezone} />
                         {/* On a closed day, leftover to-dos count as carried forward. */}
                         <ReadOnlyList title="Pending / for tomorrow" tone="amber" icon={<CalendarClock size={12} />} items={[...carryItems, ...todoItems]} empty="Nothing was carried over." />
                     </div>
@@ -1104,6 +1135,9 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                                             <CheckCircle size={14} className={`${t.kind === "side" ? "text-indigo-500" : "text-emerald-500"} shrink-0 ml-1`} />
                                             <input className="flex-1 min-w-0 px-1 py-1.5 text-sm bg-transparent outline-none" value={t.text} onChange={setText(t.uid)} />
                                             {t.kind === "side" && <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5 shrink-0">Side</span>}
+                                            {fmtStamp(t.completed_at, setting.timezone) && (
+                                                <span className="text-[10px] font-semibold text-emerald-600 whitespace-nowrap shrink-0" title="Completed at">{fmtStamp(t.completed_at, setting.timezone)}</span>
+                                            )}
                                             <button type="button" onClick={() => move(t.uid, "todo")} title="Move back to to do" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"><Undo2 size={14} /></button>
                                         </div>
                                     ))}
@@ -1157,7 +1191,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     );
 }
 
-function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account, today, canSummary = false, canManage = false, adminLeaves = [], adminPendingLeaves = [] }) {
+function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account, today, canSummary = false, canManage = false, canReports = false, adminLeaves = [], adminPendingLeaves = [] }) {
     const [expanded, setExpanded] = useState(null);
     const [view, setView] = useState("dtr");
     const pendingLeaveCount = adminPendingLeaves.length;
@@ -1194,7 +1228,7 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
                     <button onClick={() => exportCsv(entries, setting)} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                         <Download size={15} /> Export CSV
                     </button>
-                    {canManage && (
+                    {canReports && (
                         <Link href="/admin/dtr/reports" className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                             <CalendarDays size={15} /> Daily Reports
                         </Link>

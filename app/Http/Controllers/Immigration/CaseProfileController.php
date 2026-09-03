@@ -103,6 +103,9 @@ class CaseProfileController extends Controller
             'unstructuredDocuments' => $checklist->unstructuredDocuments($lead),
             'checklistProgress' => $checklist->progress($lead),
             'communications' => $this->loadCommunications($lead),
+            // Inbound replies FROM the client (IMAP-synced email_replies) — so
+            // staff see and can answer what the client sent back.
+            'clientReplies' => $this->loadClientReplies($lead),
             'agreements' => $this->loadAgreements($lead),
             'notes' => $this->loadNotes($lead),
             'activity' => $this->loadActivity($lead),
@@ -1794,6 +1797,8 @@ class CaseProfileController extends Controller
                 'channel' => $row->channel,
                 'subject' => $row->subject,
                 'snippet' => $this->snippet($row->body),
+                // Full body for the detail pane (HTML for email, text for SMS).
+                'body' => $row->body,
                 'status' => $row->status,
                 'recipient_address' => $row->recipient_address,
                 'sent_at' => $row->sent_at,
@@ -1811,6 +1816,40 @@ class CaseProfileController extends Controller
         $plain = trim(strip_tags($body));
 
         return mb_strlen($plain) > 160 ? mb_substr($plain, 0, 160).'…' : $plain;
+    }
+
+    /**
+     * Inbound replies from the client — IMAP-synced `email_replies`, matched by
+     * lead_id or the client's email. Body is returned as PLAIN TEXT: inbound
+     * HTML is untrusted (external sender), so it is never rendered as markup.
+     */
+    private function loadClientReplies(Lead $lead): array
+    {
+        return \App\Models\EmailReply::query()
+            ->where(function ($q) use ($lead) {
+                $q->where('lead_id', $lead->id);
+                if ($lead->email) {
+                    $q->orWhere('from_email', $lead->email);
+                }
+            })
+            ->orderByDesc('received_at')
+            ->limit(50)
+            ->get()
+            ->map(function (\App\Models\EmailReply $r) {
+                $text = $r->body_text ?: trim(strip_tags((string) $r->body_html));
+
+                return [
+                    'id' => $r->id,
+                    'from_name' => $r->from_name ?: $r->from_email,
+                    'from_email' => $r->from_email,
+                    'subject' => $r->subject,
+                    'snippet' => $this->snippet($r->body_html ?: $r->body_text),
+                    'body' => $text,
+                    'is_read' => (bool) $r->is_read,
+                    'received_at' => optional($r->received_at)->toIso8601String(),
+                ];
+            })
+            ->all();
     }
 
     /**
