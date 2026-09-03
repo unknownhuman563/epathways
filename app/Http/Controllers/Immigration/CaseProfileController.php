@@ -1409,6 +1409,9 @@ class CaseProfileController extends Controller
             // The actual INZ lodgement date — drives the days-in-processing
             // tracker against the visa type's expected window.
             'inz_lodged_at' => 'nullable|date',
+            // Planned filing date (feeds "Next deadlines") + applicant IRD number.
+            'target_lodgement_at' => 'nullable|date',
+            'ird_number' => 'nullable|string|max:60',
         ]);
 
         $lead->update($validated);
@@ -1638,6 +1641,8 @@ class CaseProfileController extends Controller
             'inz_application_number' => $lead->inz_application_number,
             'inz_medical_ref' => $lead->inz_medical_ref,
             'nzer_number' => $lead->nzer_number,
+            'ird_number' => $lead->ird_number,
+            'target_lodgement_at' => optional($lead->target_lodgement_at)->format('Y-m-d'),
             'inz_status' => $lead->inz_status,
             'inz_lodged_at' => optional($lead->inz_lodged_at)->format('Y-m-d'),
             'inz_decision_at' => $lead->inz_decision_at,
