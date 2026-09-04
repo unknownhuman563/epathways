@@ -485,6 +485,7 @@ function variantToTypeKey(doc) {
         const mode = parts[2] === 'couple' ? 'couple' : 'single';
         // Onshore engagement + offshore each map to their own single DOC_TYPE.
         if (scenario === 'onshore') return 'consultancy_onshore';
+        if (scenario === 'offshore_zero') return 'consultancy_offshore_zero';
         if (scenario === 'offshore') return 'consultancy_offshore';
         const backend = `consultancy_${scenario}`;
         const match = DOC_TYPES.find((t) => t.backendType === backend && t.applicantMode === mode);
@@ -1264,6 +1265,7 @@ const DOC_TYPES = [
     { value: 'consultancy_onshore',               label: 'Onshore Engagement (free)',                      category: 'onshore',     hint: 'Applicant already in NZ. Education engagement — FREE OF CHARGE (no consultancy fees). Refers to a Licensed Immigration Adviser.', backendType: 'consultancy_onshore', free: true },
 
     { value: 'consultancy_offshore',              label: 'Standard · Offshore',                            category: 'offshore',    hint: 'Applicant offshore. Single package fee — Documentation, School Enrolment & Visa Application. NZ$ + ANZ.', backendType: 'consultancy_offshore', applicantMode: 'single', defaultSchoolFee: 3500, singleFee: true },
+    { value: 'consultancy_offshore_zero',         label: 'Standard · Offshore — Zero fees',                category: 'offshore',    hint: 'Applicant offshore. Same document as Standard · Offshore, but all fees waived (NZ$0).', backendType: 'consultancy_offshore_zero', applicantMode: 'single', defaultSchoolFee: 0, singleFee: true, zeroFees: true },
 ];
 // Consultancy types that carry a fee/bank panel (excludes the free onshore).
 const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType && ! t.free).map((t) => t.value));
@@ -1708,14 +1710,21 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                     </span>
                                 </div>
                                 {typeMeta?.singleFee ? (
-                                    // Onshore: one package fee, no English add-on / combined line.
-                                    <FeeInput
-                                        label="Package fee"
-                                        value={schoolFee}
-                                        onChange={setSchoolFee}
-                                        step={500}
-                                        symbol={cur.symbol}
-                                    />
+                                    // Single package fee (offshore / onshore). The "Zero fees"
+                                    // variant just defaults this to 0 — staff can still type an
+                                    // amount, and $0 keeps the waived wording in the document.
+                                    <>
+                                        <FeeInput
+                                            label="Package fee"
+                                            value={schoolFee}
+                                            onChange={setSchoolFee}
+                                            step={500}
+                                            symbol={cur.symbol}
+                                        />
+                                        {typeMeta?.zeroFees && Number(schoolFee) === 0 && (
+                                            <p className="text-[10px] text-gray-500 mt-1.5">Defaults to {cur.symbol}0 (fees waived) — type an amount to charge.</p>
+                                        )}
+                                    </>
                                 ) : (
                                     <>
                                         <div className="grid grid-cols-2 gap-2">

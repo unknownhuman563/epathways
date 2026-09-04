@@ -642,9 +642,12 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore'], true)) {
+            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)) {
                 if ($type === 'consultancy_onshore') {
                     $generator->onshoreEngagement($lead, $overrides);
+                } elseif ($type === 'consultancy_offshore_zero') {
+                    // Same offshore document, all fees waived (NZ$0).
+                    $generator->consultancyOffshore($lead, array_merge($overrides, ['zero_fees' => true]));
                 } elseif ($type === 'consultancy_offshore') {
                     $generator->consultancyOffshore($lead, $overrides);
                 } else {
@@ -1465,8 +1468,11 @@ class LeadDocumentController extends Controller
             $payload = $generator->buildOnshoreEngagementPayload($lead, $overrides);
             $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
             $view = 'agreements.onshore-engagement';
-        } elseif ($type === 'consultancy_offshore') {
-            $payload = $generator->buildOffshorePayload($lead, $overrides);
+        } elseif ($type === 'consultancy_offshore' || $type === 'consultancy_offshore_zero') {
+            $offshoreOverrides = $type === 'consultancy_offshore_zero'
+                ? array_merge($overrides, ['zero_fees' => true])
+                : $overrides;
+            $payload = $generator->buildOffshorePayload($lead, $offshoreOverrides);
             $payload['preview'] = true;
             $view = 'agreements.consultancy-offshore';
         } elseif ($consultancyScenario !== null) {
