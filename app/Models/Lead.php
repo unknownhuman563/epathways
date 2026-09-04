@@ -295,6 +295,9 @@ class Lead extends Model
         'proposed_program_ids',
         // Per-program "why this program" reasons, keyed by program id.
         'proposed_program_reasons',
+        // Per-program verification overrides (fee/school/intake/status/edited),
+        // keyed by program id — drives the Program Verification table.
+        'proposed_program_meta',
         // Study-proposal verification workflow (pending → verified → approved).
         'proposal_review',
         // Lead's chosen program (FK to programs.id) from that shortlist,
@@ -426,6 +429,7 @@ class Lead extends Model
         'custom_documents' => 'array',
         'proposed_program_ids' => 'array',
         'proposed_program_reasons' => 'array',
+        'proposed_program_meta' => 'array',
         'proposal_review' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
