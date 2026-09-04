@@ -32,6 +32,7 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
   const [roomFilter, setRoomFilter] = useState('all');
   const [bedFilter, setBedFilter] = useState('all');
   const [suburbFilter, setSuburbFilter] = useState('all');
+  const [propertyTypeFilter, setPropertyTypeFilter] = useState('all');
 
   const money = (v) => (v == null ? null : `$${Number(v).toFixed(0)}`);
 
@@ -86,11 +87,12 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
     const roomOk = roomFilter === 'all' || p.room_type === roomFilter;
     const bedOk = bedFilter === 'all' || p.bed_type === bedFilter;
     const suburbOk = suburbFilter === 'all' || p.suburb === suburbFilter;
+    const propertyTypeOk = propertyTypeFilter === 'all' || p.property_type === propertyTypeFilter;
     const q = search.trim().toLowerCase();
     const searchOk = !q || [p.name, p.suburb, p.location, p.includes]
       .filter(Boolean)
       .some((v) => v.toLowerCase().includes(q));
-    return roomOk && bedOk && suburbOk && searchOk;
+    return roomOk && bedOk && suburbOk && propertyTypeOk && searchOk;
   });
 
   return (
@@ -143,21 +145,6 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
               </a>
             </div>
 
-            <div className="pt-10">
-              <p className="text-[10px] font-bold text-gray-500 mb-4">Trusted by</p>
-              <div className="flex items-center gap-6 opacity-50 flex-wrap">
-                 <span className="font-bold text-lg tracking-tight flex items-center gap-1">
-                     <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center text-white text-[8px] font-black">S</div>
-                     Samsonite
-                 </span>
-                 <span className="font-bold text-xl tracking-tighter flex items-center gap-1">
-                    <svg className="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
-                    airbnb
-                 </span>
-                 <span className="font-bold text-lg tracking-wider">Emirates</span>
-                 <span className="font-bold text-sm tracking-tight"><span className="text-blue-600">United</span>travel</span>
-              </div>
-            </div>
           </div>
 
           {/* Right Image — auto-rotating carousel of property images */}
@@ -281,6 +268,19 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
               className="w-full rounded-full border border-gray-200 bg-white pl-11 pr-5 py-3 text-xs font-bold text-gray-600 focus:border-black focus:ring-black"
             />
           </div>
+
+          <select
+            value={propertyTypeFilter}
+            onChange={(e) => setPropertyTypeFilter(e.target.value)}
+            className="rounded-full border border-gray-200 bg-white px-5 py-3 text-xs font-bold text-gray-600 cursor-pointer focus:border-black focus:ring-black"
+          >
+            <option value="all">All place types</option>
+            <option value="House">House</option>
+            <option value="Apartment">Apartment</option>
+            <option value="Townhouse">Townhouse</option>
+            <option value="Studio">Studio</option>
+            <option value="Room">Room</option>
+          </select>
 
           <select
             value={roomFilter}
