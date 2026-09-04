@@ -240,7 +240,16 @@ class AgreementGenerator
         $clientReference = Str::slug($clientName ?: 'ClientName', '') ?: 'ClientName';
         $today = now();
 
-        $packageFee = (int) ($overrides['school_enrolment_fee'] ?? 3500);
+        // Fee is flexible. Standard offshore defaults to 3,500; the "Zero fees"
+        // variant defaults to 0 but staff can still type any amount. The package
+        // scope is fixed per variant: the "Zero fees" variant always covers
+        // Documentation + School Enrolment (no Visa Application Fee) whatever the
+        // amount; standard offshore covers all three.
+        $zero = ! empty($overrides['zero_fees']);
+        $packageFee = (int) ($overrides['school_enrolment_fee'] ?? ($zero ? 0 : 3500));
+        $packageScope = $zero
+            ? 'Documentation and School Enrolment'
+            : 'Documentation, School Enrolment, and Visa Application Fee';
 
         // Offshore is a NZ-based agreement — default NZ$ + ANZ. Staff can
         // still switch either in the modal.
@@ -263,6 +272,7 @@ class AgreementGenerator
 
         return [
             'package_fee' => $packageFee,
+            'package_scope' => $packageScope,
             'currency' => $currency,
             'currency_symbol' => $currencySymbol,
             'bank_heading' => $bankHeading,
@@ -282,6 +292,7 @@ class AgreementGenerator
 
     public function consultancyOffshore(Lead $lead, array $overrides = []): LeadDocument
     {
+        $zero = ! empty($overrides['zero_fees']);
         $payload = $this->buildOffshorePayload($lead, $overrides);
 
         $pdf = Pdf::loadView('agreements.consultancy-offshore', $payload)
@@ -290,7 +301,7 @@ class AgreementGenerator
         $binary = $pdf->output();
 
         $safeName = $this->safeBaseName($payload['client_name'] ?: 'Client');
-        $filename = "CA-{$safeName}-offshore.pdf";
+        $filename = $zero ? "CA-{$safeName}-offshore-zero.pdf" : "CA-{$safeName}-offshore.pdf";
         $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
 
         Storage::disk(self::DISK)->put($path, $binary);
@@ -305,7 +316,7 @@ class AgreementGenerator
             'size' => strlen($binary),
             'status' => LeadDocument::STATUS_SUBMITTED,
             'source' => LeadDocument::SOURCE_GENERATED,
-            'source_variant' => 'consultancy:offshore:single',
+            'source_variant' => $zero ? 'consultancy:offshore_zero:single' : 'consultancy:offshore:single',
             'uploaded_by' => Auth::id(),
         ]);
     }

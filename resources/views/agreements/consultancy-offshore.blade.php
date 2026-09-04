@@ -120,7 +120,7 @@
             <td>
                 <strong>STANDARD</strong><br>
                 <strong>MAIN APPLICANT (Single)</strong>
-                <div style="margin-top: 4px;">Documentation, School Enrolment, and Visa Application Fee</div>
+                <div style="margin-top: 4px;">{{ $package_scope ?? 'Documentation, School Enrolment, and Visa Application Fee' }}</div>
             </td>
             <td class="fee-cell">{{ $curSym }} {{ number_format((float) $package_fee, 2) }}</td>
         </tr>
