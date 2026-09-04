@@ -32,6 +32,7 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
   const [roomFilter, setRoomFilter] = useState('all');
   const [bedFilter, setBedFilter] = useState('all');
   const [suburbFilter, setSuburbFilter] = useState('all');
+  const [propertyTypeFilter, setPropertyTypeFilter] = useState('all');
 
   const money = (v) => (v == null ? null : `$${Number(v).toFixed(0)}`);
 
@@ -86,11 +87,12 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
     const roomOk = roomFilter === 'all' || p.room_type === roomFilter;
     const bedOk = bedFilter === 'all' || p.bed_type === bedFilter;
     const suburbOk = suburbFilter === 'all' || p.suburb === suburbFilter;
+    const propertyTypeOk = propertyTypeFilter === 'all' || p.property_type === propertyTypeFilter;
     const q = search.trim().toLowerCase();
     const searchOk = !q || [p.name, p.suburb, p.location, p.includes]
       .filter(Boolean)
       .some((v) => v.toLowerCase().includes(q));
-    return roomOk && bedOk && suburbOk && searchOk;
+    return roomOk && bedOk && suburbOk && propertyTypeOk && searchOk;
   });
 
   return (
@@ -266,6 +268,19 @@ const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }
               className="w-full rounded-full border border-gray-200 bg-white pl-11 pr-5 py-3 text-xs font-bold text-gray-600 focus:border-black focus:ring-black"
             />
           </div>
+
+          <select
+            value={propertyTypeFilter}
+            onChange={(e) => setPropertyTypeFilter(e.target.value)}
+            className="rounded-full border border-gray-200 bg-white px-5 py-3 text-xs font-bold text-gray-600 cursor-pointer focus:border-black focus:ring-black"
+          >
+            <option value="all">All place types</option>
+            <option value="House">House</option>
+            <option value="Apartment">Apartment</option>
+            <option value="Townhouse">Townhouse</option>
+            <option value="Studio">Studio</option>
+            <option value="Room">Room</option>
+          </select>
 
           <select
             value={roomFilter}

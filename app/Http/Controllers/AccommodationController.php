@@ -11,10 +11,15 @@ class AccommodationController extends Controller
 {
     public function index()
     {
+        // property_type is internal by default (see Property::MANAGEMENT_FIELDS
+        // + $hidden) — surface it here so the public grid can filter on
+        // House / Studio / Room without exposing the rest of the internal
+        // management columns.
         $properties = Property::with('images')
             ->where('status', 'available')
             ->latest()
-            ->get();
+            ->get()
+            ->each->makeVisible(['property_type']);
 
         return inertia('accommodation/AccommodationPage', [
             'properties' => $properties,
