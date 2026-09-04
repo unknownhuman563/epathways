@@ -578,12 +578,31 @@ function assessCsrf() {
 // Applicant review modal: LEFT = the submitted visa-assessment form in an
 // official, sectioned layout — the AI runs automatically and highlights the
 // fields it flags (red/amber). RIGHT = the adviser's panel: notes + actions.
-function IntakeViewModal({ intake: i, data: dataProp, loading, onClose }) {
+export function IntakeViewModal({ intake: i, data: providedData, loading: providedLoading, onClose, notesOverride, onPostNote }) {
     const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" }) : "");
 
-    // Inline-edit refresh merged over the parent-fetched payload — the workspace
-    // fields (sections / readiness / flags) update in place, while notes &
-    // ai_review stay from the original fetch so locally-posted notes aren't lost.
+    // Self-fetch the payload when the parent didn't pre-load it — lets the case
+    // profile's "Preview VIF" open this same modal with just { visa_type, id }.
+    const selfFetch = providedData === undefined;
+    const [fetched, setFetched] = useState(null);
+    const [fetching, setFetching] = useState(selfFetch);
+    useEffect(() => {
+        if (! selfFetch) return;
+        const url = i.data_url || `/portal/immigration/intakes/${i.visa_type}/${i.id}/data`;
+        setFetching(true);
+        fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => setFetched(d))
+            .catch(() => {})
+            .finally(() => setFetching(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const dataProp = selfFetch ? fetched : providedData;
+    const loading = selfFetch ? fetching : providedLoading;
+
+    // Inline-edit refresh merged over the fetched payload — workspace fields
+    // (sections / readiness / flags) update in place; notes & ai_review stay so
+    // locally-posted notes aren't lost.
     const [dataPatch, setDataPatch] = useState(null);
     const data = useMemo(() => (dataPatch ? { ...dataProp, ...dataPatch } : dataProp), [dataProp, dataPatch]);
     const sections = data?.sections || [];
@@ -614,11 +633,13 @@ function IntakeViewModal({ intake: i, data: dataProp, loading, onClose }) {
         return () => { document.body.style.overflow = prev; };
     }, []);
 
-    // Adopt the review + attributed notes that shipped with the intake data.
+    // Adopt the review + notes. When a caller supplies its own notes (e.g. the
+    // case profile's VIF-row thread), those win over the assessment notes.
     useEffect(() => {
         if (dataProp?.ai_review) setReview(dataProp.ai_review);
-        if (dataProp) setNotes(dataProp.notes || []);
-    }, [dataProp]);
+        if (notesOverride !== undefined) setNotes(notesOverride);
+        else if (dataProp) setNotes(dataProp.notes || []);
+    }, [dataProp, notesOverride]);
 
     // Run the AI automatically the first time — no manual button needed.
     useEffect(() => {
@@ -655,6 +676,15 @@ function IntakeViewModal({ intake: i, data: dataProp, loading, onClose }) {
         const body = noteDraft.trim();
         if (!body || postingNote) return;
         setPostingNote(true);
+        // A caller-supplied poster (case profile) handles persistence + refresh;
+        // otherwise post to the assessment's own notes.
+        if (onPostNote) {
+            Promise.resolve(onPostNote(body))
+                .then((ok) => { if (ok !== false) setNoteDraft(""); })
+                .catch(() => {})
+                .finally(() => setPostingNote(false));
+            return;
+        }
         fetch(notesBase, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json", "X-Requested-With": "XMLHttpRequest", ...assessCsrf() }, body: JSON.stringify({ body }) })
             .then((r) => (r.ok ? r.json() : null))
             .then((d) => { if (d?.note) { setNotes((prev) => [d.note, ...prev]); setNoteDraft(""); } })
