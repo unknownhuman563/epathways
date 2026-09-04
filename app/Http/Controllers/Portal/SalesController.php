@@ -658,8 +658,8 @@ class SalesController extends Controller
             // Tab: Proposals — leads with a program shortlist saved. Each
             // row exposes the picked programs (id + title) so the frontend
             // can render badges without a second lookup.
-            $programCatalog = Program::orderBy('title')
-                ->get(['id', 'title', 'level', 'category', 'price_text', 'location', 'industry']);
+            $programCatalog = Program::with('school:id,name')->orderBy('title')
+                ->get(['id', 'title', 'level', 'category', 'price_text', 'location', 'industry', 'school_id', 'institution']);
             $programMap = $programCatalog->keyBy('id');
 
             // Reusable: turn a list of program ids into badge payloads,
@@ -674,6 +674,7 @@ class SalesController extends Controller
                     'category' => $p->category,
                     'price_text' => $p->price_text,
                     'location' => $p->location,
+                    'school' => $p->school?->name ?: ($p->institution ?: null),
                 ])
                 ->values();
 
@@ -817,6 +818,7 @@ class SalesController extends Controller
                     'price_text' => $p->price_text,
                     'location' => $p->location,
                     'industry' => $p->industry,
+                    'school' => $p->school?->name ?: ($p->institution ?: null),
                 ])->values(),
             ]);
         } catch (\Throwable $e) {

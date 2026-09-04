@@ -832,7 +832,7 @@ function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedId
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search title, location or level…"
+                        placeholder="Search title, school, location or level…"
                         className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-gray-900"
                     />
                 </div>
@@ -867,6 +867,11 @@ function ProgramPicker({ allPrograms = [], programs, search, setSearch, pickedId
                                         )}
                                     </div>
                                     <p className="text-sm font-semibold truncate">{p.title}</p>
+                                    {p.school && (
+                                        <p className={`text-[11px] font-medium truncate ${picked ? 'text-gray-200' : 'text-gray-600'}`} title={p.school}>
+                                            {p.school}
+                                        </p>
+                                    )}
                                     <div className={`flex items-center gap-2 mt-1 text-[11px] ${picked ? 'text-gray-300' : 'text-gray-500'}`}>
                                         {p.location && <span>{p.location}</span>}
                                         {p.price_text && <span>· {p.price_text}</span>}
@@ -1406,12 +1411,13 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         });
     };
 
-    // Filtered programs for the picker (case-insensitive title / level / location).
+    // Filtered programs for the picker (case-insensitive title / school / level / location).
     const filteredPrograms = useMemo(() => {
         const q = programSearch.trim().toLowerCase();
         if (! q) return programs;
         return programs.filter((p) =>
             (p.title || '').toLowerCase().includes(q)
+            || (p.school || '').toLowerCase().includes(q)
             || (p.location || '').toLowerCase().includes(q)
             || String(p.level ?? '').includes(q)
         );
