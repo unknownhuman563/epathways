@@ -112,17 +112,55 @@ class ProgramVerificationTest extends TestCase
         }
     }
 
-    public function test_request_changes_flags_the_proposal(): void
+    public function test_verification_updates_surface_on_proposals_agreements_page(): void
     {
         $prog = Program::create(['title' => 'Prog', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
         $lead = $this->proposalLead([$prog->id]);
+        $reviewer = $this->reviewer();
+
+        // Reviewer sets an internal note + verifies the program, and requests changes.
+        $this->actingAs($reviewer)->post("/program-verification/{$lead->id}/programs-meta", [
+            'meta' => [(string) $prog->id => ['note' => 'Check the intake with AUT', 'school' => 'AUT', 'status' => 'verified']],
+        ])->assertRedirect();
+        $this->actingAs($reviewer)->post("/program-verification/{$lead->id}/request-changes", [
+            'message' => 'Confirm the fee', 'program_ids' => [$prog->id],
+        ])->assertRedirect();
+
+        $this->actingAs($reviewer)
+            ->get('/admin/leads/proposals-agreements')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('proposals', fn (Assert $list) => $list
+                    ->where('0.changes_requested.message', 'Confirm the fee')
+                    ->where('0.changes_requested.program_ids.0', $prog->id)
+                    ->has('0.programs.0', fn (Assert $pr) => $pr
+                        ->where('note', 'Check the intake with AUT')
+                        ->where('school', 'AUT')
+                        ->where('verify_status', 'verified')
+                        ->etc()
+                    )
+                    ->etc()
+                )
+                ->etc()
+            );
+    }
+
+    public function test_request_changes_flags_the_proposal_and_specific_programs(): void
+    {
+        $a = Program::create(['title' => 'A', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $b = Program::create(['title' => 'B', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $lead = $this->proposalLead([$a->id, $b->id]);
 
         $this->actingAs($this->reviewer())
-            ->post("/program-verification/{$lead->id}/request-changes", ['message' => 'Fix the fee'])
+            ->post("/program-verification/{$lead->id}/request-changes", [
+                'message' => 'Fix the fee',
+                'program_ids' => [$a->id, 999], // 999 is not on the shortlist → dropped
+            ])
             ->assertRedirect();
 
         $review = $lead->refresh()->proposal_review;
         $this->assertSame('pending', $review['status']);
         $this->assertSame('Fix the fee', $review['changes_requested']['message']);
+        $this->assertSame([$a->id], $review['changes_requested']['program_ids']);
     }
 }
