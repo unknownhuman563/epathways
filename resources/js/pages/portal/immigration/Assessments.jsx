@@ -744,7 +744,9 @@ export function IntakeViewModal({ intake: i, data: providedData, loading: provid
             .then((r) => (r.ok ? r.json() : null))
             .then((fresh) => {
                 if (fresh?.sections) {
-                    setDataPatch({ sections: fresh.sections, readiness: fresh.readiness, flags: fresh.flags, documents_count: fresh.documents_count });
+                    // Merge the whole fresh payload (keys the endpoint omits keep
+                    // their existing value — e.g. free assessments have no docs count).
+                    setDataPatch(fresh);
                     setEditSection(null);
                     setDraft({});
                     toast.success("Saved.");

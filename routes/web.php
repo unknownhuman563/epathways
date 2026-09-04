@@ -1482,9 +1482,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}/data', [ImmigrationController::class, 'intakeData'])
                 ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.data');
-            // Staff inline edit of an intake's form fields from the "Open" modal.
+            // Staff inline edit of an intake's form fields from the "Open" modal
+            // ('free' edits the underlying Lead's Personal-detail columns).
             Route::patch('/intakes/{type}/{id}', [ImmigrationController::class, 'updateIntakeFields'])
-                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family|free', 'id' => '[0-9]+'])
                 ->name('intakes.update');
             // Free-assessment (FA-… Lead) submission JSON for the "Open" modal.
             Route::get('/assessments/free/{id}/data', [ImmigrationController::class, 'freeAssessmentData'])
