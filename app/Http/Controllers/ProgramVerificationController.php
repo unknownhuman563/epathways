@@ -3,61 +3,129 @@
 namespace App\Http\Controllers;
 
 use App\Models\Lead;
+use App\Models\LeadDocument;
 use App\Models\Program;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Program Verification — a restricted module (module:program_verification,
  * default super-admin-only, grantable per user). Staff submit a Study Proposal
- * "for verification"; here it is reviewed in two steps — Verify then Approve.
- * Only on approval does the proposal become visible on the client's tracker and
- * the client email fire.
+ * "for verification"; here it is reviewed — programs checked, fees/schools/
+ * intakes confirmed — then Verify → Approve. Only on approval does the proposal
+ * become visible on the client's tracker and the client email fire.
  */
 class ProgramVerificationController extends Controller
 {
+    /** Checklist keys that count as a "transcript" on file. */
+    private const TRANSCRIPT_KEYS = ['transcript', 'diploma', 'academic_transcript'];
+
+    // ── Read ────────────────────────────────────────────────────────────────
+
     public function index(Request $request)
     {
-        // Leads whose study proposal is awaiting review (pending or verified).
+        // Every proposal that is under review OR was actioned today (so the
+        // "verified / approved today" columns and filters have rows to show).
+        $todayStart = now()->startOfDay()->toIso8601String();
         $leads = Lead::query()
             ->whereNotNull('proposed_program_ids')
-            ->whereIn('proposal_review->status', ['pending', 'verified'])
+            ->where(function ($q) use ($todayStart) {
+                $q->whereIn('proposal_review->status', ['pending', 'verified'])
+                    ->orWhere('proposal_review->approved_at', '>=', $todayStart)
+                    ->orWhere('proposal_review->verified_at', '>=', $todayStart);
+            })
             ->orderByDesc('updated_at')
-            ->limit(200)
+            ->limit(300)
+            ->with(['documents:id,lead_id,checklist_key,status'])
             ->get();
 
-        // Programs across every pending shortlist, resolved once.
+        // Resolve every program + staff name referenced, in two queries.
         $allIds = $leads->flatMap(fn ($l) => is_array($l->proposed_program_ids) ? $l->proposed_program_ids : [])
             ->map(fn ($x) => (int) $x)->unique()->values();
         $programs = Program::whereIn('id', $allIds)
-            ->get(['id', 'title', 'level', 'category', 'location', 'price_text'])
+            ->with('school:id,name')
+            ->get([
+                'id', 'school_id', 'title', 'level', 'category', 'location', 'institution',
+                'price_text', 'tuition_fee', 'tuition_fees', 'intake_months',
+                'duration_months', 'credits', 'residency_points',
+            ])
             ->keyBy('id');
 
-        $rows = $leads->map(function (Lead $l) use ($programs) {
+        $userIds = $leads->flatMap(function (Lead $l) {
+            $r = is_array($l->proposal_review) ? $l->proposal_review : [];
+            return [$r['submitted_by'] ?? null, $r['verified_by'] ?? null, $r['approved_by'] ?? null];
+        })->filter()->unique()->values();
+        $userNames = User::whereIn('id', $userIds)->pluck('name', 'id');
+
+        $counts = ['pending' => 0, 'verified' => 0, 'approved_today' => 0];
+
+        $rows = $leads->map(function (Lead $l) use ($programs, $userNames, &$counts) {
             $ids = is_array($l->proposed_program_ids) ? array_map('intval', $l->proposed_program_ids) : [];
             $reasons = is_array($l->proposed_program_reasons) ? $l->proposed_program_reasons : [];
+            $meta = is_array($l->proposed_program_meta) ? $l->proposed_program_meta : [];
             $review = is_array($l->proposal_review) ? $l->proposal_review : [];
+            $status = $review['status'] ?? 'pending';
+
+            if ($status === 'pending') {
+                $counts['pending']++;
+            } elseif ($status === 'verified') {
+                $counts['verified']++;
+            }
+            if (! empty($review['approved_at']) && $review['approved_at'] >= now()->startOfDay()->toIso8601String()) {
+                $counts['approved_today']++;
+            }
+
+            $progRows = collect($ids)
+                ->map(fn ($id) => $programs->get($id))
+                ->filter()
+                ->map(function (Program $p) use ($meta, $reasons, $l) {
+                    $m = is_array($meta[(string) $p->id] ?? null) ? $meta[(string) $p->id] : [];
+                    $fee = array_key_exists('fee', $m) && $m['fee'] !== null && $m['fee'] !== ''
+                        ? (float) $m['fee']
+                        : $this->programFeeNumeric($p);
+
+                    return [
+                        'id' => $p->id,
+                        'title' => $p->title,
+                        'level' => $p->level,
+                        'category' => $p->category,
+                        'school' => $m['school'] ?? (optional($p->school)->name ?: $p->institution),
+                        'intake' => $m['intake'] ?? $p->intake_months,
+                        'fee' => $fee,
+                        'fee_confirmed' => (bool) ($m['fee_confirmed'] ?? false),
+                        'p_status' => $m['status'] ?? 'needs_check', // verified | needs_check
+                        'edited' => (bool) ($m['edited'] ?? false),
+                        'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null,
+                        'is_first_choice' => (int) $l->preferred_program_id === (int) $p->id,
+                    ];
+                })->values();
+
+            $checks = $this->buildChecks($l, $progRows);
+            $totalTuition = $progRows->sum(fn ($r) => $r['fee_confirmed'] ? (float) $r['fee'] : 0.0);
 
             return [
                 'id' => $l->id,
                 'lead_id' => $l->lead_id,
                 'name' => trim("{$l->first_name} {$l->last_name}") ?: '—',
+                'initials' => $this->initials("{$l->first_name} {$l->last_name}"),
                 'email' => $l->email,
-                'status' => $review['status'] ?? 'pending',
+                'status' => $status,
                 'submitted_at' => $review['submitted_at'] ?? null,
                 'verified_at' => $review['verified_at'] ?? null,
-                'programs' => collect($ids)
-                    ->map(fn ($id) => $programs->get($id))
-                    ->filter()
-                    ->map(fn ($p) => [
-                        'id' => $p->id,
-                        'title' => $p->title,
-                        'level' => $p->level,
-                        'category' => $p->category,
-                        'location' => $p->location,
-                        'price_text' => $p->price_text,
-                        'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null,
-                    ])->values(),
+                'approved_at' => $review['approved_at'] ?? null,
+                'submitted_by' => $userNames[$review['submitted_by'] ?? null] ?? null,
+                'verified_by' => $userNames[$review['verified_by'] ?? null] ?? null,
+                'approved_by' => $userNames[$review['approved_by'] ?? null] ?? null,
+                'staff_proposed_count' => (int) ($review['staff_proposed_count'] ?? count($ids)),
+                'edited_count' => $progRows->where('edited', true)->count(),
+                'documents_count' => $l->documents->count(),
+                'programs' => $progRows,
+                'programs_count' => $progRows->count(),
+                'total_tuition' => $totalTuition,
+                'checks' => $checks,
+                'note' => $this->sidebarNote($status, $progRows, $checks),
+                'changes_requested' => $review['changes_requested'] ?? null,
             ];
         })->values();
 
@@ -66,26 +134,33 @@ class ProgramVerificationController extends Controller
         $isEducation = $request->user()?->role === 'education';
         $component = $isEducation ? 'portal/education/ProgramVerification' : 'admin/ProgramVerification';
 
-        // Full program catalogue so Dinah can swap / add / remove programs.
+        // Full program catalogue so staff can swap / add / remove programs.
         $catalogue = Program::orderBy('title')
-            ->get(['id', 'title', 'level', 'category', 'location', 'price_text'])
+            ->with('school:id,name')
+            ->get(['id', 'school_id', 'title', 'level', 'category', 'location', 'institution', 'price_text', 'tuition_fee', 'tuition_fees', 'intake_months'])
             ->map(fn ($p) => [
                 'id' => $p->id, 'title' => $p->title, 'level' => $p->level,
-                'category' => $p->category, 'location' => $p->location, 'price_text' => $p->price_text,
+                'category' => $p->category, 'location' => $p->location,
+                'school' => optional($p->school)->name ?: $p->institution,
+                'intake' => $p->intake_months,
+                'fee' => $this->programFeeNumeric($p),
+                'price_text' => $p->price_text,
             ])->values();
 
         return inertia($component, [
             'proposals' => $rows,
+            'counts' => $counts,
             'programs' => $catalogue,
-            // Where "Open lead" points for this viewer.
+            'schools' => \App\Models\School::orderBy('name')->pluck('name')->values(),
             'leadBase' => $isEducation ? '/portal/education' : '/admin',
         ]);
     }
 
+    // ── Write ─────────────────────────────────────────────────────────────────
+
     /**
-     * Dinah edits the shortlist — swap a program, change how many, or update
-     * reasons — while it's still in review. Keeps the current status (pending/
-     * verified) so it isn't accidentally re-submitted.
+     * Swap / add / remove programs on the shortlist and update reasons. Keeps
+     * the current review status so it isn't accidentally re-submitted.
      */
     public function updatePrograms(Request $request, Lead $lead)
     {
@@ -110,6 +185,10 @@ class ProgramVerificationController extends Controller
             }
         }
 
+        // Drop per-program meta for programs no longer shortlisted.
+        $meta = is_array($lead->proposed_program_meta) ? $lead->proposed_program_meta : [];
+        $meta = array_intersect_key($meta, array_flip(array_map('strval', $ids)));
+
         // Editing clears any client pick that's no longer in the shortlist.
         if ($lead->preferred_program_id && ! in_array((int) $lead->preferred_program_id, $ids, true)) {
             $lead->preferred_program_id = null;
@@ -118,9 +197,82 @@ class ProgramVerificationController extends Controller
 
         $lead->proposed_program_ids = $ids;
         $lead->proposed_program_reasons = $reasons ?: null;
+        $lead->proposed_program_meta = $meta ?: null;
         $lead->save();
 
         return back()->with('success', 'Programs updated.');
+    }
+
+    /**
+     * Per-program overrides — Edit fee, Reassign school, change intake, and the
+     * per-program Verify / Needs-check toggle. Accepts a partial `meta` map
+     * keyed by program id and merges it onto what's stored.
+     */
+    public function updateProgramMeta(Request $request, Lead $lead)
+    {
+        $review = is_array($lead->proposal_review) ? $lead->proposal_review : [];
+        abort_unless(in_array($review['status'] ?? null, ['pending', 'verified'], true), 422, 'This proposal is not under review.');
+
+        $validated = $request->validate([
+            'meta' => 'required|array',
+            'meta.*.fee' => 'nullable|numeric|min:0|max:100000000',
+            'meta.*.fee_confirmed' => 'nullable|boolean',
+            'meta.*.school' => 'nullable|string|max:255',
+            'meta.*.intake' => 'nullable|string|max:255',
+            'meta.*.status' => 'nullable|in:verified,needs_check',
+        ]);
+
+        $ids = array_map('strval', is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : []);
+        $meta = is_array($lead->proposed_program_meta) ? $lead->proposed_program_meta : [];
+
+        foreach ($validated['meta'] as $pid => $patch) {
+            $pid = (string) $pid;
+            if (! in_array($pid, $ids, true)) {
+                continue; // only programs on this shortlist
+            }
+            $current = is_array($meta[$pid] ?? null) ? $meta[$pid] : [];
+
+            // Any fee / school / intake change marks the row as staff-edited.
+            $touchedFields = array_intersect_key($patch, array_flip(['fee', 'school', 'intake']));
+            if (! empty($touchedFields)) {
+                $current['edited'] = true;
+            }
+            foreach (['fee', 'fee_confirmed', 'school', 'intake', 'status'] as $k) {
+                if (array_key_exists($k, $patch)) {
+                    $current[$k] = $patch[$k] === '' ? null : $patch[$k];
+                }
+            }
+            // Confirming a fee (or verifying the row) implies the fee is confirmed.
+            if (($patch['status'] ?? null) === 'verified') {
+                $current['fee_confirmed'] = true;
+            }
+            $meta[$pid] = $current;
+        }
+
+        $lead->proposed_program_meta = $meta ?: null;
+        $lead->save();
+
+        return back()->with('success', 'Updated.');
+    }
+
+    /** Bounce the proposal back to the submitting staff with a note. */
+    public function requestChanges(Request $request, Lead $lead)
+    {
+        $review = is_array($lead->proposal_review) ? $lead->proposal_review : [];
+        abort_unless(in_array($review['status'] ?? null, ['pending', 'verified'], true), 422, 'This proposal is not under review.');
+
+        $validated = $request->validate(['message' => 'nullable|string|max:2000']);
+
+        $review['status'] = 'pending'; // stays in the queue, flagged
+        $review['changes_requested'] = [
+            'message' => trim((string) ($validated['message'] ?? '')) ?: 'Please revise this proposal.',
+            'by' => $request->user()->id,
+            'at' => now()->toIso8601String(),
+        ];
+        $lead->proposal_review = $review;
+        $lead->save();
+
+        return back()->with('success', 'Changes requested — the submitter has been flagged.');
     }
 
     /** Step 1 — mark a pending proposal as verified (reviewed). */
@@ -132,31 +284,141 @@ class ProgramVerificationController extends Controller
         $review['status'] = 'verified';
         $review['verified_at'] = now()->toIso8601String();
         $review['verified_by'] = $request->user()->id;
+        unset($review['changes_requested']);
         $lead->proposal_review = $review;
         $lead->save();
 
         return back()->with('success', 'Proposal verified — approve it to send to the client.');
     }
 
-    /** Step 2 — approve: make it live on the tracker and email the client. */
+    /**
+     * Step 2 — approve: make it live on the tracker. Emails the client unless
+     * `send_email=0` (the "Approve without email" action). `verify_all=1`
+     * (from "Verify & approve all") first stamps verification + confirms every
+     * program in one go.
+     */
     public function approve(Request $request, Lead $lead)
     {
         $review = is_array($lead->proposal_review) ? $lead->proposal_review : [];
         abort_unless(in_array($review['status'] ?? null, ['pending', 'verified'], true), 422, 'This proposal cannot be approved.');
 
+        $sendEmail = $request->boolean('send_email', true);
+        $verifyAll = $request->boolean('verify_all', false);
+
+        if ($verifyAll) {
+            // Confirm every shortlisted program (fee + status) in one action.
+            $ids = array_map('strval', is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : []);
+            $meta = is_array($lead->proposed_program_meta) ? $lead->proposed_program_meta : [];
+            foreach ($ids as $pid) {
+                $meta[$pid] = array_merge(is_array($meta[$pid] ?? null) ? $meta[$pid] : [], [
+                    'status' => 'verified', 'fee_confirmed' => true,
+                ]);
+            }
+            $lead->proposed_program_meta = $meta ?: null;
+            if (($review['status'] ?? null) === 'pending') {
+                $review['verified_at'] = now()->toIso8601String();
+                $review['verified_by'] = $request->user()->id;
+            }
+        }
+
         $review['status'] = 'approved';
         $review['approved_at'] = now()->toIso8601String();
         $review['approved_by'] = $request->user()->id;
+        $review['emailed'] = $sendEmail;
+        unset($review['changes_requested']);
         $lead->proposal_review = $review;
         $lead->save();
 
-        // Now that it's live, email the client (best-effort — non-fatal).
-        try {
-            app(\App\Http\Controllers\LeadDocumentController::class)->sendProposalReadyEmail($lead->fresh());
-        } catch (\Throwable $e) {
-            Log::warning('Proposal approval email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        if ($sendEmail) {
+            try {
+                app(\App\Http\Controllers\LeadDocumentController::class)->sendProposalReadyEmail($lead->fresh());
+            } catch (\Throwable $e) {
+                Log::warning('Proposal approval email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+            }
         }
 
-        return back()->with('success', 'Proposal approved — the client can now see it on their tracker.');
+        return back()->with('success', $sendEmail
+            ? 'Proposal approved — the client can now see it and has been emailed.'
+            : 'Proposal approved — live on the tracker (no email sent).');
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Lowest structured/legacy tuition amount as a number, else null. */
+    private function programFeeNumeric(Program $p): ?float
+    {
+        $rows = is_array($p->tuition_fees) && count($p->tuition_fees) > 0
+            ? $p->tuition_fees
+            : ($p->tuition_fee ? [['amount' => $p->tuition_fee]] : []);
+
+        $amounts = collect($rows)
+            ->map(fn ($r) => (float) ($r['amount'] ?? 0))
+            ->filter(fn ($n) => $n > 0);
+
+        if ($amounts->isNotEmpty()) {
+            return (float) $amounts->min();
+        }
+
+        // Fall back to a bare number embedded in price_text ("$180,000" → 180000).
+        if ($p->price_text && preg_match('/[\d,]+(?:\.\d+)?/', str_replace(' ', '', $p->price_text), $m)) {
+            $n = (float) str_replace(',', '', $m[0]);
+
+            return $n > 0 ? $n : null;
+        }
+
+        return null;
+    }
+
+    /** The four pre-approval checks the panel renders. */
+    private function buildChecks(Lead $lead, $progRows): array
+    {
+        $total = $progRows->count();
+        $confirmed = $progRows->where('fee_confirmed', true)->count();
+
+        $intakesOpen = $total > 0 && $progRows->every(fn ($r) => ! empty($r['intake']));
+
+        $docKeys = $lead->documents->pluck('checklist_key')->filter()->map(fn ($k) => strtolower((string) $k));
+        $hasPassport = $docKeys->contains('passport');
+        $hasTranscript = $docKeys->intersect(self::TRANSCRIPT_KEYS)->isNotEmpty();
+
+        // Duplicate = the same program shortlisted twice (ids are de-duped, so
+        // this is Clear in practice, but the panel still reports it).
+        $titles = $progRows->pluck('title');
+        $noDuplicate = $titles->count() === $titles->unique()->count();
+
+        return [
+            'fees' => ['done' => $confirmed === $total && $total > 0, 'label' => "{$confirmed} of {$total}"],
+            'intakes' => ['done' => $intakesOpen, 'label' => $intakesOpen ? 'Yes' : 'Check'],
+            'documents' => ['done' => $hasPassport && $hasTranscript, 'label' => ($hasPassport && $hasTranscript) ? 'Complete' : 'Missing'],
+            'duplicate' => ['done' => $noDuplicate, 'label' => $noDuplicate ? 'Clear' : 'Found'],
+        ];
+    }
+
+    /** Short status note shown on the sidebar card, in priority order. */
+    private function sidebarNote(string $status, $progRows, array $checks): ?string
+    {
+        if ($status === 'verified') {
+            return 'Ready to approve';
+        }
+        if (! $checks['documents']['done']) {
+            return 'Missing transcript';
+        }
+        if (! $checks['duplicate']['done']) {
+            return 'Duplicate programme';
+        }
+        $edited = $progRows->where('edited', true)->count();
+        if ($edited > 0) {
+            return $edited.' fee edited';
+        }
+
+        return null;
+    }
+
+    private function initials(string $name): string
+    {
+        $parts = preg_split('/\s+/', trim($name)) ?: [];
+        $letters = collect($parts)->filter()->take(2)->map(fn ($w) => strtoupper($w[0] ?? ''));
+
+        return $letters->implode('') ?: '—';
     }
 }

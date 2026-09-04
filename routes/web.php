@@ -338,6 +338,11 @@ Route::middleware(['throttle:tracker', 'tracker.enabled'])->group(function () {
     // Lead picks (or clears) one program from their staff-suggested
     // shortlist. Server validates the id is actually in the shortlist.
     Route::post('/track/{code}/choose-program', [LeadTrackingController::class, 'chooseProgram'])->name('track.choose-program');
+    // JSON detail for the tracker's program modal. Scoped to programs staff
+    // shortlisted for THIS lead, and — unlike the public /program-details page
+    // — not gated on publication status: a draft program an adviser put in
+    // front of a client is still theirs to read.
+    Route::get('/track/{code}/programs/{program}', [LeadTrackingController::class, 'programDetails'])->name('track.program.details');
     Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
 
     // Build 11.D Phase 3 — Agreement signing. tracker_signing_token in the
@@ -530,6 +535,10 @@ Route::middleware(['auth'])->group(function () {
             ->name('program-verification.index');
         Route::post('/program-verification/{lead}/programs', [\App\Http\Controllers\ProgramVerificationController::class, 'updatePrograms'])
             ->name('program-verification.programs');
+        Route::post('/program-verification/{lead}/programs-meta', [\App\Http\Controllers\ProgramVerificationController::class, 'updateProgramMeta'])
+            ->name('program-verification.programs-meta');
+        Route::post('/program-verification/{lead}/request-changes', [\App\Http\Controllers\ProgramVerificationController::class, 'requestChanges'])
+            ->name('program-verification.request-changes');
         Route::post('/program-verification/{lead}/verify', [\App\Http\Controllers\ProgramVerificationController::class, 'verify'])
             ->name('program-verification.verify');
         Route::post('/program-verification/{lead}/approve', [\App\Http\Controllers\ProgramVerificationController::class, 'approve'])

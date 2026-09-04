@@ -1,0 +1,128 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Lead;
+use App\Models\Program;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
+use Tests\TestCase;
+
+/**
+ * Program Verification module — the enriched review queue + per-program
+ * verification actions (fee / school / status), verify and approve.
+ */
+class ProgramVerificationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function reviewer(): User
+    {
+        return User::factory()->create(['role' => 'super_admin']);
+    }
+
+    private function proposalLead(array $programIds): Lead
+    {
+        return Lead::create([
+            'first_name' => 'Emma', 'last_name' => 'Thompson',
+            'email' => 'emma@example.com',
+            'proposed_program_ids' => $programIds,
+            'proposal_review' => ['status' => 'pending', 'submitted_at' => now()->toIso8601String()],
+        ]);
+    }
+
+    public function test_index_returns_enriched_queue_with_counts_and_programs(): void
+    {
+        $prog = Program::create(['title' => 'Bachelor of Applied Management', 'level' => 7, 'category' => 'bachelors', 'status' => 'published', 'institution' => 'Wintec', 'intake_months' => 'Feb 2027', 'tuition_fee' => 24500]);
+        $this->proposalLead([$prog->id]);
+
+        $this->actingAs($this->reviewer())
+            ->get('/program-verification')
+            ->assertOk()
+            ->assertInertia(fn (Assert $p) => $p
+                ->component('admin/ProgramVerification')
+                ->where('counts.pending', 1)
+                ->has('proposals.0', fn (Assert $row) => $row
+                    ->where('name', 'Emma Thompson')
+                    ->where('initials', 'ET')
+                    ->where('programs_count', 1)
+                    ->has('checks')
+                    ->has('programs.0', fn (Assert $pr) => $pr
+                        ->where('school', 'Wintec')
+                        ->where('intake', 'Feb 2027')
+                        ->where('fee', 24500)
+                        ->where('p_status', 'needs_check')
+                        ->etc()
+                    )
+                    ->etc()
+                )
+                ->has('schools')
+            );
+    }
+
+    public function test_update_program_meta_sets_fee_school_and_marks_verified(): void
+    {
+        $prog = Program::create(['title' => 'Prog', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $lead = $this->proposalLead([$prog->id]);
+
+        $this->actingAs($this->reviewer())
+            ->post("/program-verification/{$lead->id}/programs-meta", [
+                'meta' => [(string) $prog->id => ['fee' => 26000, 'school' => 'AUT', 'status' => 'verified']],
+            ])->assertRedirect();
+
+        $meta = $lead->refresh()->proposed_program_meta[(string) $prog->id];
+        $this->assertSame(26000, (int) $meta['fee']);
+        $this->assertSame('AUT', $meta['school']);
+        $this->assertSame('verified', $meta['status']);
+        $this->assertTrue($meta['fee_confirmed']);
+        $this->assertTrue($meta['edited']); // fee/school change flags the row edited
+    }
+
+    public function test_verify_then_approve_without_email_makes_it_live(): void
+    {
+        $prog = Program::create(['title' => 'Prog', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $lead = $this->proposalLead([$prog->id]);
+        $reviewer = $this->reviewer();
+
+        $this->actingAs($reviewer)->post("/program-verification/{$lead->id}/verify")->assertRedirect();
+        $this->assertSame('verified', $lead->refresh()->proposal_review['status']);
+
+        $this->actingAs($reviewer)->post("/program-verification/{$lead->id}/approve", ['send_email' => 0])->assertRedirect();
+        $review = $lead->refresh()->proposal_review;
+        $this->assertSame('approved', $review['status']);
+        $this->assertFalse($review['emailed']);
+    }
+
+    public function test_verify_and_approve_all_confirms_every_program(): void
+    {
+        $a = Program::create(['title' => 'A', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $b = Program::create(['title' => 'B', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $lead = $this->proposalLead([$a->id, $b->id]);
+
+        $this->actingAs($this->reviewer())
+            ->post("/program-verification/{$lead->id}/approve", ['verify_all' => 1, 'send_email' => 0])
+            ->assertRedirect();
+
+        $lead->refresh();
+        $this->assertSame('approved', $lead->proposal_review['status']);
+        foreach ([$a->id, $b->id] as $id) {
+            $this->assertSame('verified', $lead->proposed_program_meta[(string) $id]['status']);
+            $this->assertTrue($lead->proposed_program_meta[(string) $id]['fee_confirmed']);
+        }
+    }
+
+    public function test_request_changes_flags_the_proposal(): void
+    {
+        $prog = Program::create(['title' => 'Prog', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $lead = $this->proposalLead([$prog->id]);
+
+        $this->actingAs($this->reviewer())
+            ->post("/program-verification/{$lead->id}/request-changes", ['message' => 'Fix the fee'])
+            ->assertRedirect();
+
+        $review = $lead->refresh()->proposal_review;
+        $this->assertSame('pending', $review['status']);
+        $this->assertSame('Fix the fee', $review['changes_requested']['message']);
+    }
+}

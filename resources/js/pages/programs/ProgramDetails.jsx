@@ -6,63 +6,14 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import QuickLeadForm from "@/components/ui/QuickLeadForm";
+// Shared with the tracker's program modal so both surfaces normalise the
+// legacy "sections" shapes the same way.
+import { renderSections } from "@/utils/programSections";
 
 // Assets (Using placeholders if exact ones not available, standardizing)
 import heroBg from "@assets/Services/education.png";
 import programImg from "@assets/Services/pathways.png"; // Changed from Testimonies/testi1.png to a more relevant education asset
 
-function renderSections(value, fallback) {
-    let sections = [];
-
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-        if ('paragraph' in value || 'sections' in value) {
-            const legacySections = Array.isArray(value.sections) ? value.sections : [];
-            const paragraph = typeof value.paragraph === 'string' ? value.paragraph.trim() : '';
-            sections = paragraph ? [{ intro: paragraph, bullets: [] }, ...legacySections] : legacySections;
-        } else if ('intro' in value || 'bullets' in value) {
-            sections = [value];
-        }
-    } else if (Array.isArray(value)) {
-        const first = value[0];
-        if (value.length > 0 && first && typeof first === 'object' && !Array.isArray(first) && ('intro' in first || 'bullets' in first)) {
-            sections = value;
-        } else {
-            const items = value.filter(b => b && String(b).trim());
-            if (items.length === 1) sections = [{ intro: items[0], bullets: [] }];
-            else if (items.length > 1) sections = [{ intro: '', bullets: items }];
-        }
-    } else if (typeof value === 'string' && value.trim()) {
-        sections = [{ intro: value, bullets: [] }];
-    }
-
-    sections = sections
-        .map(s => ({
-            intro: typeof s?.intro === 'string' ? s.intro.trim() : '',
-            bullets: Array.isArray(s?.bullets)
-                ? s.bullets.filter(b => b && String(b).trim())
-                : [],
-        }))
-        .filter(s => s.intro || s.bullets.length > 0);
-
-    if (sections.length === 0) {
-        return <p className="text-sm text-gray-500">{fallback}</p>;
-    }
-
-    return (
-        <div className="space-y-4">
-            {sections.map((section, idx) => (
-                <div key={idx}>
-                    {section.intro && <p>{section.intro}</p>}
-                    {section.bullets.length > 0 && (
-                        <ul className={`list-disc pl-5 space-y-1.5 marker:text-[#436235] ${section.intro ? 'mt-2' : ''}`}>
-                            {section.bullets.map((b, i) => <li key={i}>{b}</li>)}
-                        </ul>
-                    )}
-                </div>
-            ))}
-        </div>
-    );
-}
 
 export default function ProgramDetails({ program }) {
     const paragraphs = (program?.description || '').split(/\n\n+/).filter(Boolean);
