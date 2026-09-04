@@ -96,6 +96,8 @@ class ProgramVerificationController extends Controller
                         'fee_confirmed' => (bool) ($m['fee_confirmed'] ?? false),
                         'p_status' => $m['status'] ?? 'needs_check', // verified | needs_check
                         'edited' => (bool) ($m['edited'] ?? false),
+                        // Internal staff note (private) vs. the client-facing reason.
+                        'note' => trim((string) ($m['note'] ?? '')) ?: null,
                         'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null,
                         'is_first_choice' => (int) $l->preferred_program_id === (int) $p->id,
                     ];
@@ -220,6 +222,7 @@ class ProgramVerificationController extends Controller
             'meta.*.school' => 'nullable|string|max:255',
             'meta.*.intake' => 'nullable|string|max:255',
             'meta.*.status' => 'nullable|in:verified,needs_check',
+            'meta.*.note' => 'nullable|string|max:1000',
         ]);
 
         $ids = array_map('strval', is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : []);
@@ -237,7 +240,7 @@ class ProgramVerificationController extends Controller
             if (! empty($touchedFields)) {
                 $current['edited'] = true;
             }
-            foreach (['fee', 'fee_confirmed', 'school', 'intake', 'status'] as $k) {
+            foreach (['fee', 'fee_confirmed', 'school', 'intake', 'status', 'note'] as $k) {
                 if (array_key_exists($k, $patch)) {
                     $current[$k] = $patch[$k] === '' ? null : $patch[$k];
                 }
@@ -261,11 +264,23 @@ class ProgramVerificationController extends Controller
         $review = is_array($lead->proposal_review) ? $lead->proposal_review : [];
         abort_unless(in_array($review['status'] ?? null, ['pending', 'verified'], true), 422, 'This proposal is not under review.');
 
-        $validated = $request->validate(['message' => 'nullable|string|max:2000']);
+        $validated = $request->validate([
+            'message' => 'nullable|string|max:2000',
+            'program_ids' => 'nullable|array',
+            'program_ids.*' => 'integer',
+        ]);
+
+        // Keep only ids that are actually on this shortlist.
+        $shortlist = array_map('intval', is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : []);
+        $flagged = array_values(array_intersect(
+            array_map('intval', $validated['program_ids'] ?? []),
+            $shortlist
+        ));
 
         $review['status'] = 'pending'; // stays in the queue, flagged
         $review['changes_requested'] = [
             'message' => trim((string) ($validated['message'] ?? '')) ?: 'Please revise this proposal.',
+            'program_ids' => $flagged,
             'by' => $request->user()->id,
             'at' => now()->toIso8601String(),
         ];

@@ -163,11 +163,7 @@ function StatusPill({ status, small }) {
 function ProposalPanel({ p, catalogue, schools, leadBase }) {
     const [tab, setTab] = useState("programs");
     const [busy, setBusy] = useState(null);
-    const [selected, setSelected] = useState(() => new Set(p.programs.map((x) => x.id)));
     const [adding, setAdding] = useState(false);
-    const [bulkMode, setBulkMode] = useState(null); // 'fee' | 'school'
-    const [bulkFee, setBulkFee] = useState("");
-    const [bulkSchool, setBulkSchool] = useState("");
     const [requesting, setRequesting] = useState(false);
 
     const post = (url, data, opts = {}) => {
@@ -175,42 +171,22 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
         router.post(url, data, { preserveScroll: true, ...opts, onFinish: () => setBusy(null) });
     };
 
-    const toggleSel = (id) => setSelected((s) => {
-        const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n;
-    });
-    const allSelected = p.programs.length > 0 && selected.size === p.programs.length;
-    const toggleAll = () => setSelected(allSelected ? new Set() : new Set(p.programs.map((x) => x.id)));
-    const selIds = [...selected];
-
     // ── Actions ──────────────────────────────────────────────────────────
     const metaUpdate = (metaMap, key) => post(`/program-verification/${p.id}/programs-meta`, { meta: metaMap }, { key });
 
-    const verifySelected = () => {
-        if (!selIds.length) return;
-        metaUpdate(Object.fromEntries(selIds.map((id) => [id, { status: "verified" }])), "verify-sel");
-    };
     const toggleRowStatus = (row) => metaUpdate(
         { [row.id]: { status: row.p_status === "verified" ? "needs_check" : "verified" } }, `row-${row.id}`
     );
-    const removeSelected = () => {
-        const remaining = p.programs.filter((x) => !selected.has(x.id));
-        if (!remaining.length) { alert("Keep at least one program."); return; }
+
+    const removeRow = (id) => {
+        const remaining = p.programs.filter((x) => x.id !== id);
+        if (!remaining.length) return;
         post(`/program-verification/${p.id}/programs`, {
             program_ids: remaining.map((x) => x.id),
             reasons: Object.fromEntries(remaining.filter((x) => x.reason).map((x) => [x.id, x.reason])),
-        }, { key: "remove" });
+        }, { key: `row-${id}` });
     };
-    const applyBulkFee = () => {
-        const fee = Number(bulkFee);
-        if (!Number.isFinite(fee) || fee <= 0 || !selIds.length) return;
-        metaUpdate(Object.fromEntries(selIds.map((id) => [id, { fee, fee_confirmed: true }])), "bulk-fee");
-        setBulkMode(null); setBulkFee("");
-    };
-    const applyBulkSchool = () => {
-        if (!bulkSchool || !selIds.length) return;
-        metaUpdate(Object.fromEntries(selIds.map((id) => [id, { school: bulkSchool }])), "bulk-school");
-        setBulkMode(null); setBulkSchool("");
-    };
+
     const addPrograms = (ids) => {
         const merged = [...new Set([...p.programs.map((x) => x.id), ...ids])].slice(0, 5);
         post(`/program-verification/${p.id}/programs`, {
@@ -272,62 +248,29 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
 
             {tab === "programs" && (
                 <div className="p-6 space-y-5">
-                    {/* Bulk bar */}
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div className="flex items-center gap-3 flex-wrap text-[12px]">
-                            <label className="inline-flex items-center gap-2 font-semibold text-gray-700">
-                                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="w-4 h-4 rounded border-gray-300 text-gray-900" />
-                                {selected.size} programme{selected.size === 1 ? "" : "s"} selected
-                            </label>
-                            <span className="text-gray-200">|</span>
-                            <BulkLink onClick={verifySelected} busy={busy === "verify-sel"}>Verify</BulkLink>
-                            <BulkLink onClick={() => { setBulkMode(bulkMode === "fee" ? null : "fee"); setBulkSchool(""); }}>Edit fee</BulkLink>
-                            <BulkLink onClick={() => { setBulkMode(bulkMode === "school" ? null : "school"); setBulkFee(""); }}>Reassign school</BulkLink>
-                            <BulkLink onClick={removeSelected} busy={busy === "remove"} tone="danger">Remove</BulkLink>
-                        </div>
-                        <div className="text-[12px] text-gray-500">
-                            Total tuition <span className="font-bold text-gray-900">NZD {money(p.total_tuition)}</span>
-                        </div>
-                    </div>
-
-                    {/* Bulk inline editors */}
-                    {bulkMode === "fee" && (
-                        <InlineBulk label="Set annual fee (NZD) for selected" onCancel={() => setBulkMode(null)} onApply={applyBulkFee} busy={busy === "bulk-fee"}>
-                            <input type="number" value={bulkFee} onChange={(e) => setBulkFee(e.target.value)} placeholder="24500"
-                                className="w-40 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-gray-900" />
-                        </InlineBulk>
-                    )}
-                    {bulkMode === "school" && (
-                        <InlineBulk label="Reassign selected to school" onCancel={() => setBulkMode(null)} onApply={applyBulkSchool} busy={busy === "bulk-school"}>
-                            <select value={bulkSchool} onChange={(e) => setBulkSchool(e.target.value)}
-                                className="w-64 px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-gray-900">
-                                <option value="">Select school…</option>
-                                {schools.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </InlineBulk>
-                    )}
-
                     {/* Table */}
                     <div className="overflow-x-auto -mx-2">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                                    <th className="w-8 pl-2 py-2" />
-                                    <th className="py-2 pr-3">Programme</th>
+                                    <th className="py-2 pl-2 pr-3">Programme</th>
                                     <th className="py-2 px-3">School</th>
                                     <th className="py-2 px-3">Intake</th>
-                                    <th className="py-2 px-3 text-right">Annual fee</th>
+                                    <th className="py-2 px-3">Notes</th>
                                     <th className="py-2 px-3 text-right pr-2">Status</th>
+                                    <th className="w-8 py-2" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {p.programs.map((row) => (
                                     <ProgramRow
-                                        key={row.id} row={row} selected={selected.has(row.id)}
-                                        onToggle={() => toggleSel(row.id)}
+                                        key={row.id} row={row}
+                                        flaggedForChange={(p.changes_requested?.program_ids || []).includes(row.id)}
                                         onStatus={() => toggleRowStatus(row)}
-                                        onFee={(fee) => metaUpdate({ [row.id]: { fee, fee_confirmed: true } }, `row-${row.id}`)}
                                         onSchool={(school) => metaUpdate({ [row.id]: { school } }, `row-${row.id}`)}
+                                        onNote={(text) => metaUpdate({ [row.id]: { note: text } }, `row-${row.id}`)}
+                                        onRemove={() => removeRow(row.id)}
+                                        removable={p.programs.length > 1}
                                         schools={schools}
                                         busy={busy === `row-${row.id}`}
                                     />
@@ -343,12 +286,6 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
                         <span className="text-gray-400">
                             Staff proposed {p.staff_proposed_count} · you edited {p.edited_count}
                         </span>
-                    </div>
-
-                    {/* Checks + On approval */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
-                        <ChecksCard checks={p.checks} />
-                        <OnApprovalCard p={p} busy={busy} onApproveNoEmail={() => approve({ send_email: false })} />
                     </div>
                 </div>
             )}
@@ -368,8 +305,9 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
             )}
             {requesting && (
                 <RequestChangesModal
+                    programs={p.programs}
                     onClose={() => setRequesting(false)}
-                    onSend={(message) => post(`/program-verification/${p.id}/request-changes`, { message }, { key: "req", onSuccess: () => setRequesting(false) })}
+                    onSend={(message, programIds) => post(`/program-verification/${p.id}/request-changes`, { message, program_ids: programIds }, { key: "req", onSuccess: () => setRequesting(false) })}
                     busy={busy === "req"}
                 />
             )}
@@ -388,50 +326,28 @@ function Tab({ active, onClick, children }) {
     );
 }
 
-function BulkLink({ children, onClick, busy, tone }) {
-    return (
-        <button type="button" onClick={onClick} disabled={busy}
-            className={`inline-flex items-center gap-1 font-semibold hover:underline disabled:opacity-50 ${tone === "danger" ? "text-rose-600" : "text-gray-700"}`}>
-            {busy ? <Loader2 size={12} className="animate-spin" /> : null}{children}
-        </button>
-    );
-}
-
-function InlineBulk({ label, children, onApply, onCancel, busy }) {
-    return (
-        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-2.5 flex-wrap">
-            <span className="text-[12px] font-semibold text-gray-600">{label}</span>
-            {children}
-            <button type="button" onClick={onApply} disabled={busy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[12px] font-bold hover:bg-black disabled:opacity-50">
-                {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Apply
-            </button>
-            <button type="button" onClick={onCancel} className="text-[12px] font-semibold text-gray-500 hover:text-gray-800">Cancel</button>
-        </div>
-    );
-}
-
-function ProgramRow({ row, selected, onToggle, onStatus, onFee, onSchool, schools, busy }) {
-    const [editingFee, setEditingFee] = useState(false);
-    const [feeVal, setFeeVal] = useState(row.fee ?? "");
+function ProgramRow({ row, flaggedForChange, onStatus, onSchool, onNote, onRemove, removable, schools, busy }) {
     const [editingSchool, setEditingSchool] = useState(false);
+    const [editingNote, setEditingNote] = useState(false);
+    const [noteVal, setNoteVal] = useState(row.note ?? "");
     const verified = row.p_status === "verified";
 
+    const saveNote = () => { onNote(noteVal.trim()); setEditingNote(false); };
+
     return (
-        <tr className="align-top">
-            <td className="pl-2 py-3">
-                <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 rounded border-gray-300 text-gray-900 mt-0.5" />
-            </td>
-            <td className="py-3 pr-3">
+        <tr className="align-top group">
+            <td className="py-3 pl-2 pr-3">
                 <div className="flex items-center gap-2">
                     <span className="text-[13px] font-semibold text-gray-900">{row.title}</span>
                     {row.level != null && (
                         <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-gray-100 text-gray-600">L{row.level}</span>
                     )}
-                </div>
-                <div className="text-[11px] text-gray-400 mt-0.5">
-                    {row.is_first_choice && <span className="text-emerald-600 font-medium">Client's first choice — </span>}
-                    {row.reason || (row.is_first_choice ? "fee confirmed with school." : "No reason given by staff")}
+                    {row.is_first_choice && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">First choice</span>
+                    )}
+                    {flaggedForChange && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-rose-50 text-rose-600 border border-rose-200">Revise</span>
+                    )}
                 </div>
             </td>
             <td className="py-3 px-3 text-[12px] text-gray-700">
@@ -448,24 +364,25 @@ function ProgramRow({ row, selected, onToggle, onStatus, onFee, onSchool, school
                 )}
             </td>
             <td className="py-3 px-3 text-[12px] text-gray-700">{row.intake || <span className="text-gray-300">—</span>}</td>
-            <td className="py-3 px-3 text-right">
-                {editingFee ? (
-                    <span className="inline-flex items-center gap-1">
-                        <input type="number" autoFocus value={feeVal} onChange={(e) => setFeeVal(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") { onFee(Number(feeVal)); setEditingFee(false); } if (e.key === "Escape") setEditingFee(false); }}
-                            className="w-24 px-2 py-1 border border-gray-200 rounded-md text-[12px] text-right focus:outline-none focus:border-gray-900" />
-                        <button type="button" onClick={() => { onFee(Number(feeVal)); setEditingFee(false); }} className="text-emerald-600"><Check size={14} /></button>
-                    </span>
+            <td className="py-3 px-3 max-w-[280px]">
+                {editingNote ? (
+                    <div className="flex items-start gap-1">
+                        <textarea autoFocus rows={2} value={noteVal} onChange={(e) => setNoteVal(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Escape") setEditingNote(false); }}
+                            placeholder="Internal note — staff only"
+                            className="w-full px-2 py-1 border border-gray-200 rounded-md text-[12px] focus:outline-none focus:border-gray-900 resize-y" />
+                        <button type="button" onClick={saveNote} className="text-emerald-600 mt-1 shrink-0"><Check size={14} /></button>
+                    </div>
                 ) : (
-                    <button type="button" onClick={() => { setFeeVal(row.fee ?? ""); setEditingFee(true); }} className="group">
-                        <span className="text-[13px] font-semibold text-gray-900 tabular-nums">{money(row.fee)}</span>
-                        <span className={`block text-[10px] ${row.edited ? "text-indigo-500" : row.fee_confirmed ? "text-emerald-600" : "text-rose-500"}`}>
-                            {row.edited ? "edited by you" : row.fee_confirmed ? "confirmed" : "fee unconfirmed"}
-                        </span>
+                    <button type="button" onClick={() => { setNoteVal(row.note ?? ""); setEditingNote(true); }}
+                        className="text-left text-[12px] leading-snug hover:text-gray-900 w-full">
+                        {row.note
+                            ? <span className="text-gray-700">{row.note}</span>
+                            : <span className="text-gray-300 italic">Add note</span>}
                     </button>
                 )}
             </td>
-            <td className="py-3 px-3 pr-2 text-right">
+            <td className="py-3 px-3 text-right">
                 <button type="button" onClick={onStatus} disabled={busy}
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-50 ${
                         verified ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-600 border-rose-200"
@@ -474,54 +391,15 @@ function ProgramRow({ row, selected, onToggle, onStatus, onFee, onSchool, school
                     {verified ? "Verified" : "Needs check"}
                 </button>
             </td>
+            <td className="py-3 pr-2 text-right">
+                {removable && (
+                    <button type="button" onClick={onRemove} disabled={busy} title="Remove programme"
+                        className="text-gray-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50">
+                        <Trash2 size={13} />
+                    </button>
+                )}
+            </td>
         </tr>
-    );
-}
-
-function ChecksCard({ checks }) {
-    const items = [
-        ["All fees confirmed against school price list", checks.fees],
-        ["Intakes still open", checks.intakes],
-        ["Passport and transcript on file", checks.documents],
-        ["No duplicate proposal for this lead", checks.duplicate],
-    ];
-    return (
-        <div className="rounded-2xl border border-gray-100 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400 mb-3">Checks before approval</p>
-            <div className="space-y-2.5">
-                {items.map(([label, c]) => (
-                    <div key={label} className="flex items-center justify-between gap-3">
-                        <span className="inline-flex items-center gap-2 text-[12.5px] text-gray-700">
-                            {c.done
-                                ? <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
-                                : <AlertCircle size={15} className="text-amber-500 shrink-0" />}
-                            {label}
-                        </span>
-                        <span className={`text-[12px] font-semibold shrink-0 ${c.done ? "text-emerald-600" : "text-amber-600"}`}>{c.label}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function OnApprovalCard({ p, busy, onApproveNoEmail }) {
-    return (
-        <div className="rounded-2xl bg-gray-900 text-white p-4 flex flex-col">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40 mb-2">On approval</p>
-            <p className="text-[12.5px] text-gray-200 leading-relaxed flex-1">
-                {p.name.split(" ")[0]} sees these {p.programs_count} programme{p.programs_count === 1 ? "" : "s"} on their tracker and receives the confirmation email from <span className="font-semibold text-white">study@epathways.co.nz</span>.
-            </p>
-            <div className="flex items-center gap-2 mt-3">
-                <Link href={`/track`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-[12px] font-semibold">
-                    <Mail size={13} /> Preview email
-                </Link>
-                <button type="button" onClick={onApproveNoEmail} disabled={busy === "approve-noemail" || p.status === "approved"}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-gray-900 text-[12px] font-bold hover:bg-gray-100 disabled:opacity-40">
-                    {busy === "approve-noemail" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Approve without email
-                </button>
-            </div>
-        </div>
     );
 }
 
@@ -649,8 +527,12 @@ function AddProgramModal({ catalogue, existing, onClose, onAdd, busy }) {
     );
 }
 
-function RequestChangesModal({ onClose, onSend, busy }) {
+function RequestChangesModal({ programs = [], onClose, onSend, busy }) {
     const [msg, setMsg] = useState("");
+    const [flagged, setFlagged] = useState([]); // program ids that need changes
+
+    const toggle = (id) => setFlagged((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
     return (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -658,13 +540,42 @@ function RequestChangesModal({ onClose, onSend, busy }) {
                     <h3 className="text-[15px] font-bold text-gray-900">Request changes</h3>
                     <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center"><X size={18} /></button>
                 </div>
-                <div className="p-5">
-                    <textarea rows={4} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="What needs revising? (the submitter sees this)"
-                        className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-gray-900 resize-y" />
+                <div className="p-5 space-y-4">
+                    {/* Which proposed programs need changing */}
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400 mb-2">Programmes to revise</p>
+                        <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                            {programs.map((row) => {
+                                const on = flagged.includes(row.id);
+                                return (
+                                    <button key={row.id} type="button" onClick={() => toggle(row.id)}
+                                        className={`w-full text-left px-3 py-2 rounded-lg border transition-colors flex items-start gap-2.5 ${on ? "border-rose-300 bg-rose-50" : "border-gray-200 hover:border-gray-300"}`}>
+                                        <span className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0 border ${on ? "bg-rose-500 border-rose-500 text-white" : "border-gray-300"}`}>
+                                            {on && <Check size={11} strokeWidth={3} />}
+                                        </span>
+                                        <span className="min-w-0">
+                                            <span className="text-[13px] font-semibold text-gray-900">{row.title}</span>
+                                            {row.level != null && <span className="ml-1.5 text-[9px] font-bold uppercase text-gray-500">L{row.level}</span>}
+                                            <span className="block text-[11px] text-gray-500">{row.school || "—"} · {row.intake || "—"}</span>
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1.5">
+                            {flagged.length ? `${flagged.length} flagged for revision` : "Optional — tick the programmes that need changing."}
+                        </p>
+                    </div>
+
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400 mb-2">Message</p>
+                        <textarea rows={3} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="What needs revising? (the submitter sees this)"
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-gray-900 resize-y" />
+                    </div>
                 </div>
                 <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-3">
                     <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
-                    <button type="button" onClick={() => onSend(msg)} disabled={busy}
+                    <button type="button" onClick={() => onSend(msg, flagged)} disabled={busy}
                         className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-gray-900 text-white text-sm font-bold hover:bg-black disabled:opacity-50">
                         {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send
                     </button>

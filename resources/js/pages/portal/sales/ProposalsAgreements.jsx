@@ -3,7 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import {
     FileText, Plus, Search, Download, Eye, Loader, X, Check,
     ChevronRight, ChevronDown, Users, Lightbulb, FileSignature, Wand2,
-    Mail, Send, AlertCircle, MoreVertical, Pencil, Trash2,
+    Mail, Send, AlertCircle, MoreVertical, Pencil, Trash2, StickyNote,
 } from 'lucide-react';
 
 // Portal → URL prefix. Same shape as the other portal-scoped pages.
@@ -301,9 +301,9 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                 <thead>
                     <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                         <th className="px-4 py-3">Profile</th>
-                        <th className="px-3 py-3">Name</th>
-                        <th className="px-3 py-3">Contacts</th>
+                        <th className="px-3 py-3">Contact</th>
                         <th className="px-3 py-3">Programs</th>
+                        <th className="px-3 py-3">Notes</th>
                         <th className="px-3 py-3">Status</th>
                         <th className="px-3 py-3">Created</th>
                         <th className="px-3 py-3 text-right pr-4">Actions</th>
@@ -322,7 +322,7 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                                     </div>
                                 </Link>
                             </td>
-                            {/* ── NAME ────────────────────────────────── */}
+                            {/* ── CONTACT (name + id + email + phone) ─── */}
                             <td className="px-3 py-3">
                                 <Link
                                     href={`${portalBase}/leads/${r.id}`}
@@ -331,17 +331,11 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                                     {r.name}
                                 </Link>
                                 <div className="text-[10px] text-gray-400 font-mono mt-0.5">{r.lead_id}</div>
-                            </td>
-                            {/* ── CONTACTS ────────────────────────────── */}
-                            <td className="px-3 py-3">
                                 {r.email && (
-                                    <div className="text-[11px] text-gray-600 truncate max-w-[220px]">{r.email}</div>
+                                    <div className="text-[11px] text-gray-600 truncate max-w-[220px] mt-1">{r.email}</div>
                                 )}
                                 {r.phone && (
                                     <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{r.phone}</div>
-                                )}
-                                {! r.email && ! r.phone && (
-                                    <span className="text-[11px] text-gray-300">—</span>
                                 )}
                             </td>
                             {/* ── PROGRAMS ────────────────────────────── */}
@@ -353,30 +347,54 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                                     {r.programs.map((p) => {
                                         const chosen = !! r.preferred_program_id && p.id === r.preferred_program_id;
                                         const dimmed = !! r.preferred_program_id && ! chosen;
+                                        const flagged = (r.changes_requested?.program_ids || []).includes(p.id);
+                                        const details = [
+                                            p.school,
+                                            p.intake,
+                                            p.fee_confirmed && p.fee ? `NZD ${Number(p.fee).toLocaleString('en-NZ', { maximumFractionDigits: 0 })}` : null,
+                                        ].filter(Boolean);
                                         return (
                                             <div
                                                 key={p.id}
-                                                className={`flex items-center gap-2 rounded-md transition-colors ${
+                                                className={`rounded-md transition-colors ${
                                                     chosen ? 'bg-emerald-50 ring-1 ring-emerald-200 px-1.5 py-1 -mx-1.5' : ''
                                                 } ${dimmed ? 'opacity-40' : ''}`}
                                             >
-                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                                    chosen ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                                }`}>
-                                                    Level {p.level}
-                                                </span>
-                                                <span className={`text-[12px] truncate max-w-[280px] ${
-                                                    chosen ? 'font-bold text-emerald-900' : 'font-medium text-gray-800'
-                                                }`} title={p.title}>
-                                                    {p.title}
-                                                </span>
-                                                {p.location && (
-                                                    <span className="text-[10px] text-gray-400 whitespace-nowrap">· {p.location}</span>
-                                                )}
-                                                {chosen && (
-                                                    <span className="inline-flex items-center gap-1 ml-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-600 text-white shrink-0">
-                                                        <Check size={9} /> Selected
+                                                <div className="flex items-center gap-2 min-h-[22px]">
+                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                                        chosen ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                    }`}>
+                                                        Level {p.level}
                                                     </span>
+                                                    <span className={`text-[12px] truncate max-w-[280px] ${
+                                                        chosen ? 'font-bold text-emerald-900' : 'font-medium text-gray-800'
+                                                    }`} title={p.title}>
+                                                        {p.title}
+                                                    </span>
+                                                    {/* Per-program verification status from Program Verification. */}
+                                                    {p.verify_status === 'verified' && (
+                                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                                                            <Check size={8} /> Verified
+                                                        </span>
+                                                    )}
+                                                    {p.verify_status === 'needs_check' && (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                                                            Needs check
+                                                        </span>
+                                                    )}
+                                                    {flagged && (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
+                                                            Revise
+                                                        </span>
+                                                    )}
+                                                    {chosen && (
+                                                        <span className="inline-flex items-center gap-1 ml-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-600 text-white shrink-0">
+                                                            <Check size={9} /> Selected
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {details.length > 0 && (
+                                                    <div className="text-[10px] text-gray-400 mt-0.5 ml-0.5">{details.join(' · ')}</div>
                                                 )}
                                             </div>
                                         );
@@ -422,6 +440,10 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                                         </div>
                                     </details>
                                 )}
+                            </td>
+                            {/* ── NOTES (internal staff notes + change requests) ── */}
+                            <td className="px-3 py-3 align-top">
+                                <ProposalNotes r={r} />
                             </td>
                             {/* ── STATUS (verification) ────────────────── */}
                             <td className="px-3 py-3">
@@ -488,6 +510,50 @@ function ProposalStatusBadge({ status }) {
     );
 }
 
+// Internal staff notes column for the Proposals table — the reviewer's
+// per-program notes (from Program Verification) plus any "request changes"
+// message. Internal only; never shown to the client.
+// Notes column — mirrors the Programs column row-for-row (same order, same
+// per-row height incl. the "selected" padding and the details subline) so each
+// program's internal note lines up exactly with its programme. Blank rows keep
+// the alignment for programs without a note.
+function ProposalNotes({ r }) {
+    const programs = r.programs || [];
+    const changes = r.changes_requested?.message;
+    const anyNote = programs.some((p) => p.note);
+
+    if (! anyNote && ! changes) {
+        return <span className="text-[11px] text-gray-300">—</span>;
+    }
+
+    return (
+        <div className="flex flex-col gap-1.5 max-w-[240px]">
+            {programs.map((p) => {
+                const chosen = !! r.preferred_program_id && p.id === r.preferred_program_id;
+                const dimmed = !! r.preferred_program_id && ! chosen;
+                const hasDetails = [p.school, p.intake, p.fee_confirmed && p.fee].some(Boolean);
+                return (
+                    <div key={p.id} className={`rounded-md ${chosen ? 'px-1.5 py-1 -mx-1.5' : ''} ${dimmed ? 'opacity-40' : ''}`}>
+                        <div className="flex items-center min-h-[22px]">
+                            {p.note
+                                ? <span className="text-[11px] text-gray-600 italic leading-snug line-clamp-1" title={p.note}>{p.note}</span>
+                                : <span className="text-[11px] text-gray-200">—</span>}
+                        </div>
+                        {/* Spacer matching the Programs column's details subline. */}
+                        {hasDetails && <div className="text-[10px] mt-0.5">&nbsp;</div>}
+                    </div>
+                );
+            })}
+            {changes && (
+                <div className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 mt-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-rose-600 mb-0.5">Changes requested</p>
+                    <p className="text-[11px] text-rose-800 leading-snug">{changes}</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // Initials fallback for the profile avatar when there's no face image.
 const rowInitials = (name = '') =>
     (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join('') || '?';
@@ -503,8 +569,7 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
                 <thead>
                     <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                         <th className="px-4 py-3">Profile</th>
-                        <th className="px-3 py-3">Name</th>
-                        <th className="px-3 py-3">Contacts</th>
+                        <th className="px-3 py-3">Contact</th>
                         <th className="px-3 py-3">Document</th>
                         <th className="px-3 py-3">Status</th>
                         <th className="px-3 py-3">Created</th>
@@ -551,7 +616,7 @@ function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                 </Link>
             </td>
 
-            {/* ── NAME (clickable → lead details) ──────────────────── */}
+            {/* ── CONTACT (name + id + email + phone) ──────────────── */}
             <td className="px-3 py-3">
                 <Link
                     href={`${portalBase}/leads/${lead.id}`}
@@ -560,12 +625,8 @@ function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                     {lead.name}
                 </Link>
                 <div className="text-[10px] text-gray-400 font-mono mt-0.5">{lead.lead_id}</div>
-            </td>
-
-            {/* ── CONTACTS (email + phone) ─────────────────────────── */}
-            <td className="px-3 py-3">
                 {lead.email && (
-                    <div className="text-[11px] text-gray-600 truncate max-w-[220px]">{lead.email}</div>
+                    <div className="text-[11px] text-gray-600 truncate max-w-[220px] mt-1">{lead.email}</div>
                 )}
                 {lead.phone && (
                     <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{lead.phone}</div>

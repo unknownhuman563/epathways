@@ -691,10 +691,41 @@ class SalesController extends Controller
 
             $proposals = $proposalLeads
                 ->filter(fn (Lead $l) => is_array($l->proposed_program_ids) && count($l->proposed_program_ids) > 0)
-                ->map(function (Lead $l) use ($mapPrograms) {
+                ->map(function (Lead $l) use ($mapPrograms, $programMap) {
                     // Active shortlist = the lead's current proposed_program_ids;
-                    // its selection is the live preferred_program_id.
-                    $picks = $mapPrograms($l->proposed_program_ids);
+                    // its selection is the live preferred_program_id. Each pick
+                    // is merged with the Program Verification overrides (fee /
+                    // school / intake / per-program status), the internal staff
+                    // note, and the client-facing reason.
+                    $meta = is_array($l->proposed_program_meta) ? $l->proposed_program_meta : [];
+                    $reasons = is_array($l->proposed_program_reasons) ? $l->proposed_program_reasons : [];
+                    $picks = collect(is_array($l->proposed_program_ids) ? $l->proposed_program_ids : [])
+                        ->map(function ($pid) use ($programMap, $meta, $reasons) {
+                            $p = $programMap->get((int) $pid);
+                            if (! $p) {
+                                return null;
+                            }
+                            $m = is_array($meta[(string) $p->id] ?? null) ? $meta[(string) $p->id] : [];
+
+                            return [
+                                'id' => $p->id,
+                                'title' => $p->title,
+                                'level' => $p->level,
+                                'category' => $p->category,
+                                'price_text' => $p->price_text,
+                                'location' => $p->location,
+                                // Program Verification overrides + notes.
+                                'school' => $m['school'] ?? null,
+                                'intake' => $m['intake'] ?? null,
+                                'fee' => $m['fee'] ?? null,
+                                'fee_confirmed' => (bool) ($m['fee_confirmed'] ?? false),
+                                'verify_status' => $m['status'] ?? null, // verified | needs_check | null
+                                'note' => trim((string) ($m['note'] ?? '')) ?: null,   // internal (staff)
+                                'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null, // client-facing
+                            ];
+                        })
+                        ->filter()
+                        ->values();
 
                     // Previous versions = every saved proposal EXCEPT the newest
                     // (which is the active one shown above). Each keeps the
@@ -729,6 +760,19 @@ class SalesController extends Controller
                         // Verification status: pending | verified | approved.
                         // Null = legacy proposal (predates the workflow).
                         'proposal_status' => $l->proposalStatus(),
+                        // Reviewer's "request changes" note + the specific
+                        // programmes flagged for revision (from Program
+                        // Verification). Null when nothing was requested.
+                        'changes_requested' => (function () use ($l) {
+                            $r = is_array($l->proposal_review) ? $l->proposal_review : [];
+                            $cr = $r['changes_requested'] ?? null;
+
+                            return is_array($cr) ? [
+                                'message' => $cr['message'] ?? null,
+                                'program_ids' => array_map('intval', $cr['program_ids'] ?? []),
+                                'at' => $cr['at'] ?? null,
+                            ] : null;
+                        })(),
                         'updated_at' => optional($l->updated_at)->toIso8601String(),
                     ];
                 })
