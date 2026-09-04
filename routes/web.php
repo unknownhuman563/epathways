@@ -1482,19 +1482,23 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}/data', [ImmigrationController::class, 'intakeData'])
                 ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.data');
+            // Staff inline edit of an intake's form fields from the "Open" modal.
+            Route::patch('/intakes/{type}/{id}', [ImmigrationController::class, 'updateIntakeFields'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->name('intakes.update');
             // Free-assessment (FA-… Lead) submission JSON for the "Open" modal.
             Route::get('/assessments/free/{id}/data', [ImmigrationController::class, 'freeAssessmentData'])
                 ->where(['id' => '[0-9]+'])->name('assessments.free.data');
             // Visa Information Form export — A4 PDF download, an inline HTML
             // preview (for the download modal), and an editable Word (.doc).
             Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])
-                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family|free', 'id' => '[0-9]+'])
                 ->name('intakes.pdf');
             Route::get('/intakes/{type}/{id}/preview', [ImmigrationController::class, 'previewIntakePdf'])
-                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family|free', 'id' => '[0-9]+'])
                 ->name('intakes.preview');
             Route::get('/intakes/{type}/{id}/word', [ImmigrationController::class, 'downloadIntakeWord'])
-                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family|free', 'id' => '[0-9]+'])
                 ->name('intakes.word');
             // Convert a visa-interest submission to an immigration case.
             // The {id} route param is Assessment.id (post-Phase-B
