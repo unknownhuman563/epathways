@@ -25,6 +25,14 @@ class ImmigrationController extends Controller
 
     private const LEAD_STATUSES = Lead::STAGES;
 
+    /** Free-assessment Personal-detail fields that map 1:1 to Lead columns and
+     *  are therefore inline-editable from the assessment modal. */
+    private const FREE_EDITABLE_COLUMNS = [
+        'dob', 'gender', 'marital_status', 'other_names', 'country_of_birth',
+        'place_of_birth', 'citizenship', 'residence_city', 'residence_state',
+        'residence_country', 'has_passport', 'passport_number', 'passport_expiry',
+    ];
+
     /**
      * Immigration dashboard — adviser-focused. Top tiles show "what's on my
      * plate today", visa-case pipeline + INZ aging surface the active work,
@@ -2274,11 +2282,20 @@ class ImmigrationController extends Controller
         $l->loadMissing(['studyPlans', 'educationExps']);
 
         // One label/value field — blank shown as "—" so every form field appears.
-        $field = function (string $key, string $label, $val) {
+        // Personal-detail fields map 1:1 to Lead columns and are inline-editable;
+        // study-plan / education fields come from relations / JSON so stay read-only.
+        $editableCols = self::FREE_EDITABLE_COLUMNS;
+        $field = function (string $key, string $label, $val) use ($editableCols) {
             $v = $this->formatIntakeValue($val);
             $prov = ! ($v === null || $v === '');
 
-            return ['key' => $key, 'label' => $label, 'value' => $prov ? $v : '—', 'provided' => $prov];
+            return [
+                'key' => $key, 'label' => $label,
+                'value' => $prov ? $v : '—',
+                'raw' => $this->rawIntakeValue($val),
+                'editable' => in_array($key, $editableCols, true),
+                'provided' => $prov,
+            ];
         };
         // Normalise a stored value (array cast OR raw JSON string) to an array.
         $asArray = function ($v) {
@@ -2525,6 +2542,27 @@ class ImmigrationController extends Controller
      */
     public function updateIntakeFields(Request $request, string $type, int $id)
     {
+        $data = $request->validate(['fields' => 'required|array']);
+
+        // Free assessment — a Lead, not an intake. Its editable Personal-detail
+        // fields map 1:1 to Lead columns (whitelisted), so update those directly.
+        if ($type === 'free') {
+            $lead = Lead::findOrFail($id);
+            $changed = false;
+            foreach ((array) $data['fields'] as $key => $val) {
+                if (! in_array($key, self::FREE_EDITABLE_COLUMNS, true)) {
+                    continue;
+                }
+                $lead->{$key} = ($val === '' || $val === null) ? null : $val;
+                $changed = true;
+            }
+            if ($changed) {
+                $lead->save();
+            }
+
+            return $this->freeAssessmentData($id);
+        }
+
         $modelMap = [
             'resident' => \App\Models\ResidentIntake::class,
             'work' => \App\Models\WorkIntake::class,
@@ -2535,8 +2573,6 @@ class ImmigrationController extends Controller
         abort_unless(isset($modelMap[$type]), 404, 'Unknown intake type.');
 
         $intake = $modelMap[$type]::findOrFail($id);
-
-        $data = $request->validate(['fields' => 'required|array']);
 
         // Whitelist: only the real form fields for this visa type may be written.
         $allowed = collect($this->intakeSectionSchema($type))->flatten()->filter()->all();
