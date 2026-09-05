@@ -22,9 +22,10 @@ class SchoolProfileTest extends TestCase
             'city' => 'Auckland',
             'website' => 'https://www.ais.ac.nz',
             'status' => 'active',
-            'contact_person_name' => 'Nicci Bernelle Aguilar',
-            'contact_email' => 'nicci@ais.ac.nz',
-            'contact_number' => '+639603180698',
+            'contacts' => [
+                ['name' => 'Nicci Bernelle Aguilar', 'role' => 'Regional Recruitment Manager', 'email' => 'nicci@ais.ac.nz', 'phone' => '+639603180698'],
+                ['name' => 'Riza Ambadar', 'role' => 'International Manager', 'email' => 'riza@ais.ac.nz', 'phone' => '+64 21 184 3880'],
+            ],
             'portal_username' => 'dev@epathways.co.nz',
             'portal_password' => 'UP.ep2024',
             'portal_link' => 'https://enroller.app/new-zealand',
@@ -41,11 +42,28 @@ class SchoolProfileTest extends TestCase
         ]))->assertRedirect();
 
         $school = School::first();
-        $this->assertSame('Nicci Bernelle Aguilar', $school->contact_person_name);
+        $this->assertCount(2, $school->contacts);
+        $this->assertSame('Nicci Bernelle Aguilar', $school->contacts[0]['name']);
+        $this->assertSame('International Manager', $school->contacts[1]['role']);
         $this->assertSame('UP.ep2024', $school->portal_password);
         $this->assertNotNull($school->agreement_path);
         $this->assertSame('agreement.pdf', $school->agreement_name);
         Storage::disk('local')->assertExists($school->agreement_path);
+    }
+
+    public function test_empty_contact_rows_are_dropped(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->post('/admin/schools', $this->payload([
+            'contacts' => [
+                ['name' => 'Real Person', 'role' => '', 'email' => 'real@x.com', 'phone' => ''],
+                ['name' => '', 'role' => '', 'email' => '', 'phone' => ''], // blank → dropped
+            ],
+        ]))->assertRedirect();
+
+        $school = School::first();
+        $this->assertCount(1, $school->contacts);
+        $this->assertSame('Real Person', $school->contacts[0]['name']);
     }
 
     public function test_profile_shows_all_data_and_admin_can_download_agreement(): void

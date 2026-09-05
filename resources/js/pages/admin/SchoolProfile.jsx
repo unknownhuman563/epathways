@@ -48,11 +48,26 @@ export default function SchoolProfile({ school = {}, portalBase = "/admin", hasA
                 </div>
             </div>
 
-            {/* Contact */}
-            <Card icon={User} title="Contact">
-                <Row icon={User} label="Contact person" value={school.contact_person_name} />
-                <Row icon={Mail} label="Email" value={school.contact_email} copyable />
-                <Row icon={Phone} label="Contact number" value={school.contact_number} copyable />
+            {/* Contacts */}
+            <Card icon={User} title={`Contacts${(school.contacts?.length) ? ` · ${school.contacts.length}` : ""}`}>
+                {(!school.contacts || school.contacts.length === 0) ? (
+                    <p className="text-sm text-gray-400">No contacts yet.</p>
+                ) : (
+                    <div className="divide-y divide-gray-100">
+                        {school.contacts.map((c, i) => (
+                            <div key={i} className="py-3 first:pt-0 last:pb-0">
+                                <div className="flex items-baseline gap-2 flex-wrap">
+                                    <span className="text-sm font-semibold text-gray-900">{c.name || <span className="text-gray-400 font-normal">Unnamed contact</span>}</span>
+                                    {c.role && <span className="text-[11px] text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5 font-medium">{c.role}</span>}
+                                </div>
+                                <div className="mt-1.5 space-y-1.5">
+                                    {c.email && <Row icon={Mail} label="Email" value={c.email} copyable dense />}
+                                    {c.phone && <Row icon={Phone} label="Phone" value={c.phone} copyable dense />}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </Card>
 
             {/* Portal */}
@@ -114,8 +129,21 @@ function CopyButton({ value }) {
     );
 }
 
-function Row({ icon: Icon, label, value, isLink, copyable }) {
+function Row({ icon: Icon, label, value, isLink, copyable, dense }) {
     const has = value != null && String(value).trim() !== "";
+
+    // Dense: a compact icon + value line (used inside a contact block, where the
+    // name/role already provide the heading).
+    if (dense) {
+        return (
+            <div className="flex items-center gap-2">
+                {Icon && <Icon size={13} className="text-gray-400 flex-shrink-0" />}
+                <span className="text-[13px] text-gray-700 break-all min-w-0">{value}</span>
+                {has && copyable && <CopyButton value={value} />}
+            </div>
+        );
+    }
+
     return (
         <div className="flex items-start gap-3">
             {Icon && <Icon size={15} className="text-gray-400 mt-0.5 flex-shrink-0" />}

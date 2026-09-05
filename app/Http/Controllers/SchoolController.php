@@ -72,6 +72,7 @@ class SchoolController extends Controller
     {
         $data = $this->validatePayload($request);
         try {
+            $data['contacts'] = $this->cleanContacts($data['contacts'] ?? []);
             $data = $this->applyAgreementUpload($request, $data);
             School::create($data);
 
@@ -88,6 +89,7 @@ class SchoolController extends Controller
         $school = School::findOrFail($id);
         $data = $this->validatePayload($request, $school->id);
         try {
+            $data['contacts'] = $this->cleanContacts($data['contacts'] ?? []);
             $data = $this->applyAgreementUpload($request, $data, $school);
             $school->update($data);
 
@@ -142,6 +144,26 @@ class SchoolController extends Controller
         return $data;
     }
 
+    /**
+     * Keep only contact rows that carry at least one filled field, and trim
+     * each to the four known keys. Returns a clean re-indexed list.
+     *
+     * @return array<int, array{name:?string, role:?string, email:?string, phone:?string}>
+     */
+    private function cleanContacts(array $contacts): array
+    {
+        return collect($contacts)
+            ->map(fn ($c) => [
+                'name' => trim((string) ($c['name'] ?? '')) ?: null,
+                'role' => trim((string) ($c['role'] ?? '')) ?: null,
+                'email' => trim((string) ($c['email'] ?? '')) ?: null,
+                'phone' => trim((string) ($c['phone'] ?? '')) ?: null,
+            ])
+            ->filter(fn ($c) => $c['name'] || $c['role'] || $c['email'] || $c['phone'])
+            ->values()
+            ->all();
+    }
+
     private function validatePayload(Request $request, ?int $ignoreId = null): array
     {
         return $request->validate([
@@ -151,10 +173,12 @@ class SchoolController extends Controller
             'website' => 'nullable|url|max:512',
             'description' => 'nullable|string|max:5000',
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
-            // Contact
-            'contact_person_name' => 'nullable|string|max:191',
-            'contact_email' => 'nullable|string|max:191',
-            'contact_number' => 'nullable|string|max:60',
+            // Contacts — a school can have several people (marketing, admissions…)
+            'contacts' => 'nullable|array|max:50',
+            'contacts.*.name' => 'nullable|string|max:191',
+            'contacts.*.role' => 'nullable|string|max:191',
+            'contacts.*.email' => 'nullable|string|max:191',
+            'contacts.*.phone' => 'nullable|string|max:60',
             // Portal (enrolment portal login the team shares)
             'portal_username' => 'nullable|string|max:191',
             'portal_password' => 'nullable|string|max:191',

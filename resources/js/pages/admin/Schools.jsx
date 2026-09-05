@@ -178,18 +178,24 @@ export function SchoolFormModal({ initial, onClose }) {
         website:             initial?.website             ?? "",
         description:         initial?.description         ?? "",
         status:              initial?.status              ?? "active",
-        contact_person_name: initial?.contact_person_name ?? "",
-        contact_email:       initial?.contact_email       ?? "",
-        contact_number:      initial?.contact_number      ?? "",
         portal_username:     initial?.portal_username     ?? "",
         portal_password:     initial?.portal_password     ?? "",
         portal_link:         initial?.portal_link         ?? "",
     });
+    const emptyContact = () => ({ name: "", role: "", email: "", phone: "" });
+    const [contacts, setContacts] = useState(
+        (initial?.contacts?.length
+            ? initial.contacts.map((c) => ({ name: c.name || "", role: c.role || "", email: c.email || "", phone: c.phone || "" }))
+            : [emptyContact()]),
+    );
     const [agreementFile, setAgreementFile] = useState(null);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
 
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+    const setContact = (i, k) => (e) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: e.target.value } : c)));
+    const addContact = () => setContacts((cs) => [...cs, emptyContact()]);
+    const removeContact = (i) => setContacts((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
 
     const submit = (e) => {
         e.preventDefault();
@@ -197,7 +203,7 @@ export function SchoolFormModal({ initial, onClose }) {
         setErrors({});
         const url = initial ? `/admin/schools/${initial.id}` : "/admin/schools";
         // forceFormData so the (optional) agreement file uploads as multipart.
-        router.post(url, { ...form, agreement_file: agreementFile }, {
+        router.post(url, { ...form, contacts, agreement_file: agreementFile }, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => onClose?.(),
@@ -244,18 +250,30 @@ export function SchoolFormModal({ initial, onClose }) {
                         <textarea value={form.description} onChange={set("description")} rows={3} maxLength={5000} className={`${inputClass} resize-y`} placeholder="Short note on the institution…" />
                     </ModalField>
 
-                    {/* Contact */}
-                    <SectionHeading icon={User}>Contact</SectionHeading>
-                    <ModalField label="Contact person name" error={errors.contact_person_name}>
-                        <input type="text" value={form.contact_person_name} onChange={set("contact_person_name")} maxLength={191} className={inputClass} placeholder="e.g. Nicci Bernelle Aguilar" />
-                    </ModalField>
-                    <div className="grid grid-cols-2 gap-3">
-                        <ModalField label="Email" error={errors.contact_email}>
-                            <input type="text" value={form.contact_email} onChange={set("contact_email")} maxLength={191} className={inputClass} placeholder="name@school.edu" />
-                        </ModalField>
-                        <ModalField label="Contact number" error={errors.contact_number}>
-                            <input type="text" value={form.contact_number} onChange={set("contact_number")} maxLength={60} className={inputClass} placeholder="+63…" />
-                        </ModalField>
+                    {/* Contacts — one or more people */}
+                    <SectionHeading icon={User}>Contacts</SectionHeading>
+                    <div className="space-y-3">
+                        {contacts.map((c, i) => (
+                            <div key={i} className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50/40">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Contact {i + 1}</span>
+                                    {contacts.length > 1 && (
+                                        <button type="button" onClick={() => removeContact(i)} className="p-1 rounded text-gray-300 hover:text-red-600 hover:bg-red-50" title="Remove contact">
+                                            <X size={13} />
+                                        </button>
+                                    )}
+                                </div>
+                                <input type="text" value={c.name} onChange={setContact(i, "name")} maxLength={191} className={inputClass} placeholder="Contact person name" />
+                                <input type="text" value={c.role} onChange={setContact(i, "role")} maxLength={191} className={inputClass} placeholder="Role / region (e.g. International Manager)" />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input type="text" value={c.email} onChange={setContact(i, "email")} maxLength={191} className={inputClass} placeholder="Email" />
+                                    <input type="text" value={c.phone} onChange={setContact(i, "phone")} maxLength={60} className={inputClass} placeholder="Phone" />
+                                </div>
+                            </div>
+                        ))}
+                        <button type="button" onClick={addContact} className="inline-flex items-center gap-1.5 text-[12px] font-bold text-indigo-600 hover:text-indigo-800">
+                            <Plus size={13} /> Add contact
+                        </button>
                     </div>
 
                     {/* Portal */}

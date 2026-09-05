@@ -10,9 +10,13 @@ class School extends Model
 {
     protected $fillable = [
         'name', 'slug', 'country', 'city', 'website', 'description', 'status',
-        'contact_person_name', 'contact_email', 'contact_number',
+        'contacts',
         'portal_username', 'portal_password', 'portal_link',
         'agreement_path', 'agreement_name',
+    ];
+
+    protected $casts = [
+        'contacts' => 'array',
     ];
 
     // Never leak the raw file path or portal password by default — the profile
