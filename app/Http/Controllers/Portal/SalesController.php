@@ -792,7 +792,7 @@ class SalesController extends Controller
                         // Reviewer's "request changes" note + the specific
                         // programmes flagged for revision (from Program
                         // Verification). Null when nothing was requested.
-                        'changes_requested' => (function () use ($l) {
+                        'changes_requested' => (function () use ($l, $ownerNames) {
                             $r = is_array($l->proposal_review) ? $l->proposal_review : [];
                             $cr = $r['changes_requested'] ?? null;
 
@@ -800,6 +800,7 @@ class SalesController extends Controller
                                 'message' => $cr['message'] ?? null,
                                 'program_ids' => array_map('intval', $cr['program_ids'] ?? []),
                                 'at' => $cr['at'] ?? null,
+                                'by' => isset($cr['by']) ? ($ownerNames[$cr['by']] ?? null) : null,
                             ] : null;
                         })(),
                         // Review-inbox grouping: action sits with staff (needs_you)

@@ -418,6 +418,22 @@ function ProposalReviewRow({ r, portalBase, fmtDate, onNotify }) {
                     })}
                 </div>
 
+                {/* Reviewer's overall "request changes" note (proposal-level). */}
+                {r.changes_requested?.message && (
+                    <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                        <div className="flex items-start gap-1.5">
+                            <AlertCircle size={13} className="mt-0.5 shrink-0 text-rose-500" />
+                            <div className="min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Changes requested</div>
+                                <p className="text-[12px] text-gray-800 leading-snug mt-0.5 [overflow-wrap:anywhere] whitespace-pre-wrap">{r.changes_requested.message}</p>
+                                <div className="text-[10px] text-rose-700/80 mt-1">
+                                    {r.changes_requested.by ? `${r.changes_requested.by} · ` : ''}{fmtNoteTime(r.changes_requested.at)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Previous proposals (version history) */}
                 {Array.isArray(r.previous) && r.previous.length > 0 && (
                     <details className="mt-3 group/hist">
@@ -469,6 +485,10 @@ function fmtNoteTime(iso) {
 // Threaded notes for one programme — display + Add note / Reply / Mark actioned.
 function ProgramNoteThread({ leadId, program }) {
     const notes = program.notes || [];
+    // The single free-text staff note captured on the Program Verification
+    // screen (leads.proposed_program_meta[<program>].note). Shown here so the
+    // reviewer's verification note surfaces in the Proposals inbox.
+    const vnote = (program.note || '').trim();
     // Row shows only the latest note; the rest expand on demand (like the
     // document notes on the Case Profile).
     const ordered = [...notes].reverse(); // newest first
@@ -485,16 +505,34 @@ function ProgramNoteThread({ leadId, program }) {
     const reply = (id) => { if (! replyBody.trim()) return; send(`${base}/${id}/reply`, { body: replyBody }, () => { setReplyBody(''); setReplyTo(null); }); };
     const toggle = (id) => send(`${base}/${id}/actioned`, {});
 
+    // Verification note card — always visible when the reviewer left one.
+    const verificationCard = vnote ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <div className="flex items-start gap-1.5">
+                <Flag size={12} className="mt-0.5 shrink-0 text-amber-500" />
+                <span className="text-[12px] font-medium leading-snug text-gray-800 [overflow-wrap:anywhere] whitespace-pre-wrap">{vnote}</span>
+            </div>
+            <div className="text-[10px] mt-1 ml-[18px] text-amber-700/80">From program verification</div>
+        </div>
+    ) : null;
+
     if (notes.length === 0) {
         return (
-            <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
-                {adding ? (
-                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
-                ) : (
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-gray-400 italic">No note on this program</span>
-                        <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+            <div className="space-y-2">
+                {verificationCard}
+                {! verificationCard && ! adding && (
+                    <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-gray-400 italic">No note on this program</span>
+                            <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                        </div>
                     </div>
+                )}
+                {verificationCard && ! adding && (
+                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                )}
+                {adding && (
+                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
                 )}
             </div>
         );
@@ -502,6 +540,7 @@ function ProgramNoteThread({ leadId, program }) {
 
     return (
         <div className="space-y-2">
+            {verificationCard}
             {! expanded ? (
                 /* Collapsed row — latest note as a compact coloured card. */
                 (() => {
