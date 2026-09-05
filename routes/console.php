@@ -67,3 +67,13 @@ Schedule::command('email:automation-sweep')
     ->timezone('Pacific/Auckland')
     ->name('email-automation-sweep')
     ->withoutOverlapping();
+
+// Pull Google Business Profile reviews into the moderation queue (source=google,
+// unpublished until a teammate approves). Reviews change slowly, so once daily is
+// plenty; the upsert is idempotent by external_id. No-ops safely when the
+// GOOGLE_BUSINESS_* env vars aren't set.
+Schedule::command('google:sync-reviews')
+    ->dailyAt('05:00')
+    ->timezone('Pacific/Auckland')
+    ->name('google-sync-reviews')
+    ->withoutOverlapping();

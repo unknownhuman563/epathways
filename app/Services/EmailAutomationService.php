@@ -87,7 +87,7 @@ class EmailAutomationService
         $template = MessageTemplate::active()
             ->where('key', $msg->template_key)
             ->orderByRaw("CASE WHEN department = '' OR department IS NULL THEN 1 ELSE 0 END")
-            ->orderByRaw("CASE WHEN department = ? THEN 0 ELSE 1 END", [$department])
+            ->orderByRaw('CASE WHEN department = ? THEN 0 ELSE 1 END', [$department])
             ->first();
 
         if (! $template) {
@@ -97,9 +97,21 @@ class EmailAutomationService
         $subject = $this->comms->render($lead, (string) ($template->email_subject ?? ''), $context);
         $body = $this->comms->render($lead, (string) ($template->email_body ?? ''), $context);
 
-        foreach (array_unique($emails) as $email) {
-            $this->comms->sendComposedEmail($email, $subject !== '' ? $subject : 'Case update', $body, [], true, $lead->id);
-        }
+        // The recipient role only picks the BASE addresses; the template's own
+        // "To — also send to" / Cc / Bcc add the rest, so a staff notice reaches
+        // exactly the recipients configured on the template (e.g. "Case team"
+        // resolves the adviser + manager, and the template Cc's the wider team).
+        $this->comms->sendComposedEmail(
+            array_values(array_unique($emails)),
+            $subject !== '' ? $subject : 'Case update',
+            $body,
+            [],
+            true,
+            $lead->id,
+            $template->to_extra,
+            $template->cc,
+            $template->bcc,
+        );
 
         return false; // staff notice — not a client send
     }
@@ -113,8 +125,8 @@ class EmailAutomationService
         return match ($role) {
             'adviser' => array_filter([$adviser?->email]),
             'manager' => array_filter([$manager?->email]),
-            'team'    => array_filter([$adviser?->email, $manager?->email]),
-            default   => [],
+            'team' => array_filter([$adviser?->email, $manager?->email]),
+            default => [],
         };
     }
 
