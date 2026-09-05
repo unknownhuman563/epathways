@@ -690,9 +690,17 @@ class SalesController extends Controller
                 ->orderByDesc('updated_at')
                 ->get();
 
+            // Resolve reviewer / submitter names once for the "owner" line.
+            $ownerIds = $proposalLeads->flatMap(function (Lead $l) {
+                $r = is_array($l->proposal_review) ? $l->proposal_review : [];
+
+                return [$r['verified_by'] ?? null, $r['submitted_by'] ?? null, $r['changes_requested']['by'] ?? null];
+            })->filter()->unique()->values();
+            $ownerNames = \App\Models\User::whereIn('id', $ownerIds)->pluck('name', 'id');
+
             $proposals = $proposalLeads
                 ->filter(fn (Lead $l) => is_array($l->proposed_program_ids) && count($l->proposed_program_ids) > 0)
-                ->map(function (Lead $l) use ($mapPrograms, $programMap) {
+                ->map(function (Lead $l) use ($mapPrograms, $programMap, $ownerNames) {
                     // Active shortlist = the lead's current proposed_program_ids;
                     // its selection is the live preferred_program_id. Each pick
                     // is merged with the Program Verification overrides (fee /
@@ -723,6 +731,26 @@ class SalesController extends Controller
                                 'verify_status' => $m['status'] ?? null, // verified | needs_check | null
                                 'note' => trim((string) ($m['note'] ?? '')) ?: null,   // internal (staff)
                                 'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null, // client-facing
+                                // Threaded review notes for this programme (Proposals inbox).
+                                'notes' => collect(is_array($m['notes'] ?? null) ? $m['notes'] : [])
+                                    ->map(fn ($n) => [
+                                        'id' => $n['id'] ?? null,
+                                        'tag' => $n['tag'] ?? 'note',
+                                        'body' => $n['body'] ?? '',
+                                        'author' => $n['author'] ?? 'Staff',
+                                        'role' => $n['role'] ?? null,
+                                        'created_at' => $n['created_at'] ?? null,
+                                        'actioned_at' => $n['actioned_at'] ?? null,
+                                        'actioned_by' => $n['actioned_by'] ?? null,
+                                        'replies' => collect(is_array($n['replies'] ?? null) ? $n['replies'] : [])
+                                            ->map(fn ($rp) => [
+                                                'id' => $rp['id'] ?? null,
+                                                'body' => $rp['body'] ?? '',
+                                                'author' => $rp['author'] ?? 'Staff',
+                                                'role' => $rp['role'] ?? null,
+                                                'created_at' => $rp['created_at'] ?? null,
+                                            ])->values(),
+                                    ])->values(),
                             ];
                         })
                         ->filter()
@@ -774,6 +802,17 @@ class SalesController extends Controller
                                 'at' => $cr['at'] ?? null,
                             ] : null;
                         })(),
+                        // Review-inbox grouping: action sits with staff (needs_you)
+                        // until the client has chosen / the proposal is approved,
+                        // when it's waiting on the client (with_client).
+                        'group' => ($l->preferred_program_id || $l->proposalStatus() === 'approved') ? 'with_client' : 'needs_you',
+                        'owner_name' => (function () use ($l, $ownerNames) {
+                            $r = is_array($l->proposal_review) ? $l->proposal_review : [];
+                            $id = $r['verified_by'] ?? ($r['changes_requested']['by'] ?? ($r['submitted_by'] ?? null));
+
+                            return $id ? ($ownerNames[$id] ?? null) : null;
+                        })(),
+                        'created_by_label' => $l->preferred_program_id ? 'client selected' : 'created by staff',
                         'updated_at' => optional($l->updated_at)->toIso8601String(),
                     ];
                 })
