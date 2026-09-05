@@ -28,7 +28,8 @@ class ProgramController extends Controller
             'duration_months' => 'nullable|integer|min:0',
             'credits' => 'nullable|integer|min:0',
             'residency_points' => 'nullable|integer|min:0',
-            'hours_per_week' => 'nullable|integer|min:0',
+            // Free text so it can hold a number (e.g. "25") or a word (e.g. "Unlimited").
+            'hours_per_week' => 'nullable|string|max:50',
             'entry_requirements' => 'nullable|array',
             'entry_requirements.*' => 'nullable|array',
             'entry_requirements.*.intro' => 'nullable|string',
@@ -80,7 +81,7 @@ class ProgramController extends Controller
 
         return inertia('admin/Programs', [
             'programs' => $programs,
-            'schools'  => $schools,
+            'schools' => $schools,
         ]);
     }
 

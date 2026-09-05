@@ -1116,6 +1116,8 @@ Route::middleware(['auth'])->group(function () {
         // Schools catalog — education team uses this from their Setup
         // sidebar to add institutions students get placed into.
         Route::get('/admin/schools', [\App\Http\Controllers\SchoolController::class, 'index'])->name('admin.schools');
+        Route::get('/admin/schools/{id}/profile', [\App\Http\Controllers\SchoolController::class, 'show'])->name('admin.schools.show');
+        Route::get('/admin/schools/{id}/agreement', [\App\Http\Controllers\SchoolController::class, 'downloadAgreement'])->name('admin.schools.agreement');
         Route::post('/admin/schools', [\App\Http\Controllers\SchoolController::class, 'store']);
         Route::post('/admin/schools/{id}', [\App\Http\Controllers\SchoolController::class, 'update']);
         Route::delete('/admin/schools/{id}', [\App\Http\Controllers\SchoolController::class, 'destroy']);
@@ -1339,6 +1341,7 @@ Route::middleware(['auth'])->group(function () {
             // but routed under the education prefix so the page wraps in
             // EducationLayout instead of AdminLayout.
             Route::get('/schools', [\App\Http\Controllers\SchoolController::class, 'index'])->name('schools');
+            Route::get('/schools/{id}/profile', [\App\Http\Controllers\SchoolController::class, 'show'])->name('schools.show');
             Route::get('/documents', [EducationController::class, 'documents'])->name('documents');
             // Public assessment submissions (free-assessment + education-enrolment).
             Route::get('/assessments', [EducationController::class, 'assessments'])->name('assessments');

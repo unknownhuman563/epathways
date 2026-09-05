@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, Link, router } from "@inertiajs/react";
 import {
     School as SchoolIcon, Plus, Pencil, Trash2, Globe, MapPin, Search, X, Check,
+    User, Mail, Phone, KeyRound, Link2, FileText, Upload,
 } from "lucide-react";
 
 // Schools catalog — admin CRUD. Mirrors the Programs page in shape:
 // header tile + searchable list + a single Add/Edit modal.
 
-export default function SchoolsPage({ schools = [] }) {
+export default function SchoolsPage({ schools = [], portalBase = "/admin" }) {
     const [q, setQ]               = useState("");
     const [editing, setEditing]   = useState(null); // null = closed; {} = new; object = edit
 
@@ -95,7 +96,13 @@ export default function SchoolsPage({ schools = [] }) {
                                             <SchoolIcon size={13} />
                                         </span>
                                         <div className="min-w-0">
-                                            <div className="font-semibold text-gray-900 truncate">{s.name}</div>
+                                            <Link
+                                                href={`${portalBase}/schools/${s.id}/profile`}
+                                                className="font-semibold text-gray-900 truncate hover:text-indigo-700 hover:underline block"
+                                                title="View school profile"
+                                            >
+                                                {s.name}
+                                            </Link>
                                             {s.description && (
                                                 <div className="text-[11px] text-gray-500 truncate max-w-[280px]">{s.description}</div>
                                             )}
@@ -163,26 +170,41 @@ export default function SchoolsPage({ schools = [] }) {
     );
 }
 
-function SchoolFormModal({ initial, onClose }) {
+export function SchoolFormModal({ initial, onClose }) {
     const [form, setForm] = useState({
-        name:        initial?.name        ?? "",
-        country:     initial?.country     ?? "",
-        city:        initial?.city        ?? "",
-        website:     initial?.website     ?? "",
-        description: initial?.description ?? "",
-        status:      initial?.status      ?? "active",
+        name:                initial?.name                ?? "",
+        country:             initial?.country             ?? "",
+        city:                initial?.city                ?? "",
+        website:             initial?.website             ?? "",
+        description:         initial?.description         ?? "",
+        status:              initial?.status              ?? "active",
+        portal_username:     initial?.portal_username     ?? "",
+        portal_password:     initial?.portal_password     ?? "",
+        portal_link:         initial?.portal_link         ?? "",
     });
+    const emptyContact = () => ({ name: "", role: "", email: "", phone: "" });
+    const [contacts, setContacts] = useState(
+        (initial?.contacts?.length
+            ? initial.contacts.map((c) => ({ name: c.name || "", role: c.role || "", email: c.email || "", phone: c.phone || "" }))
+            : [emptyContact()]),
+    );
+    const [agreementFile, setAgreementFile] = useState(null);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
 
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+    const setContact = (i, k) => (e) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: e.target.value } : c)));
+    const addContact = () => setContacts((cs) => [...cs, emptyContact()]);
+    const removeContact = (i) => setContacts((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
 
     const submit = (e) => {
         e.preventDefault();
         setSaving(true);
         setErrors({});
         const url = initial ? `/admin/schools/${initial.id}` : "/admin/schools";
-        router.post(url, form, {
+        // forceFormData so the (optional) agreement file uploads as multipart.
+        router.post(url, { ...form, contacts, agreement_file: agreementFile }, {
+            forceFormData: true,
             preserveScroll: true,
             onSuccess: () => onClose?.(),
             onError: (errs) => setErrors(errs || {}),
@@ -228,6 +250,66 @@ function SchoolFormModal({ initial, onClose }) {
                         <textarea value={form.description} onChange={set("description")} rows={3} maxLength={5000} className={`${inputClass} resize-y`} placeholder="Short note on the institution…" />
                     </ModalField>
 
+                    {/* Contacts — one or more people */}
+                    <SectionHeading icon={User}>Contacts</SectionHeading>
+                    <div className="space-y-3">
+                        {contacts.map((c, i) => (
+                            <div key={i} className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50/40">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Contact {i + 1}</span>
+                                    {contacts.length > 1 && (
+                                        <button type="button" onClick={() => removeContact(i)} className="p-1 rounded text-gray-300 hover:text-red-600 hover:bg-red-50" title="Remove contact">
+                                            <X size={13} />
+                                        </button>
+                                    )}
+                                </div>
+                                <input type="text" value={c.name} onChange={setContact(i, "name")} maxLength={191} className={inputClass} placeholder="Contact person name" />
+                                <input type="text" value={c.role} onChange={setContact(i, "role")} maxLength={191} className={inputClass} placeholder="Role / region (e.g. International Manager)" />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input type="text" value={c.email} onChange={setContact(i, "email")} maxLength={191} className={inputClass} placeholder="Email" />
+                                    <input type="text" value={c.phone} onChange={setContact(i, "phone")} maxLength={60} className={inputClass} placeholder="Phone" />
+                                </div>
+                            </div>
+                        ))}
+                        <button type="button" onClick={addContact} className="inline-flex items-center gap-1.5 text-[12px] font-bold text-indigo-600 hover:text-indigo-800">
+                            <Plus size={13} /> Add contact
+                        </button>
+                    </div>
+
+                    {/* Portal */}
+                    <SectionHeading icon={KeyRound}>Portal</SectionHeading>
+                    <div className="grid grid-cols-2 gap-3">
+                        <ModalField label="Email / Username" error={errors.portal_username}>
+                            <input type="text" value={form.portal_username} onChange={set("portal_username")} maxLength={191} className={inputClass} placeholder="login@epathways.co.nz" />
+                        </ModalField>
+                        <ModalField label="Password" error={errors.portal_password}>
+                            <input type="text" value={form.portal_password} onChange={set("portal_password")} maxLength={191} className={inputClass} placeholder="Portal password" />
+                        </ModalField>
+                    </div>
+                    <ModalField label="Portal link" error={errors.portal_link}>
+                        <textarea value={form.portal_link} onChange={set("portal_link")} rows={2} maxLength={2000} className={`${inputClass} resize-y`} placeholder="https://enroller.app/…" />
+                    </ModalField>
+
+                    {/* Agreement */}
+                    <SectionHeading icon={FileText}>Agreement <span className="normal-case tracking-normal text-gray-400 font-medium">· admin access only</span></SectionHeading>
+                    <div>
+                        {initial?.agreement_name && (
+                            <p className="text-[11px] text-gray-500 mb-1.5 inline-flex items-center gap-1">
+                                <FileText size={12} className="text-gray-400" /> Current: {initial.agreement_name}
+                            </p>
+                        )}
+                        <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-sm text-gray-600 cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+                            <Upload size={14} className="text-gray-400" />
+                            <span className="truncate">{agreementFile ? agreementFile.name : (initial?.agreement_name ? "Replace agreement file…" : "Attach agreement file…")}</span>
+                            <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" onChange={(e) => setAgreementFile(e.target.files?.[0] || null)} />
+                        </label>
+                        {agreementFile && (
+                            <button type="button" onClick={() => setAgreementFile(null)} className="mt-1 text-[10.5px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-600">Clear selection</button>
+                        )}
+                        {errors.agreement_file && <p className="mt-1 text-[10.5px] text-red-600">{errors.agreement_file}</p>}
+                        <p className="mt-1 text-[10.5px] text-gray-400">PDF, DOC, or image · up to 10 MB. Only admins can download it.</p>
+                    </div>
+
                     <ModalField label="Status">
                         <div className="inline-flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-200 p-0.5">
                             {[["active", "Active"], ["inactive", "Inactive"]].map(([v, l]) => (
@@ -261,6 +343,15 @@ function SchoolFormModal({ initial, onClose }) {
 }
 
 const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:border-gray-400 outline-none transition-colors";
+
+function SectionHeading({ icon: Icon, children }) {
+    return (
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+            {Icon && <Icon size={13} className="text-gray-400" />}
+            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{children}</span>
+        </div>
+    );
+}
 
 function ModalField({ label, required, error, children }) {
     return (
