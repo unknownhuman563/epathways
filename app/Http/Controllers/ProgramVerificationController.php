@@ -285,6 +285,35 @@ class ProgramVerificationController extends Controller
             'at' => now()->toIso8601String(),
         ];
         $lead->proposal_review = $review;
+
+        // Also drop a first-class "change requested" note on each flagged
+        // programme so it shows in that programme's note thread on the
+        // Proposals review inbox (with reply / mark-actioned support).
+        if (! empty($flagged)) {
+            $u = $request->user();
+            $meta = is_array($lead->proposed_program_meta) ? $lead->proposed_program_meta : [];
+            foreach ($flagged as $pid) {
+                $key = (string) $pid;
+                $entry = is_array($meta[$key] ?? null) ? $meta[$key] : [];
+                $notes = is_array($entry['notes'] ?? null) ? $entry['notes'] : [];
+                $notes[] = [
+                    'id' => (string) \Illuminate\Support\Str::uuid(),
+                    'tag' => 'change_requested',
+                    'body' => $review['changes_requested']['message'],
+                    'author' => $u->name,
+                    'author_id' => $u->id,
+                    'role' => $u->role,
+                    'created_at' => now()->toIso8601String(),
+                    'actioned_at' => null,
+                    'actioned_by' => null,
+                    'replies' => [],
+                ];
+                $entry['notes'] = $notes;
+                $meta[$key] = $entry;
+            }
+            $lead->proposed_program_meta = $meta;
+        }
+
         $lead->save();
 
         return back()->with('success', 'Changes requested — the submitter has been flagged.');

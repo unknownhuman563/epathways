@@ -821,6 +821,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/priority', [LeadController::class, 'updatePriority'])->name('admin.leads.priority');
         // JSON payload for the Leads-table "Edit lead" modal.
         Route::get('/admin/leads/{id}/edit-data', [LeadController::class, 'editData'])->name('admin.leads.edit-data');
+        // Re-send a proposal for verification (Proposals inbox ⋮ action).
+        Route::post('/admin/leads/{id}/proposal/resubmit', [LeadController::class, 'resubmitProposal'])->name('admin.leads.proposal.resubmit');
+        // Threaded per-programme notes for the Proposals review inbox.
+        Route::post('/admin/leads/{lead}/program-notes/{program}', [\App\Http\Controllers\ProposalNoteController::class, 'store'])->name('admin.leads.program-notes.store');
+        Route::post('/admin/leads/{lead}/program-notes/{program}/{note}/reply', [\App\Http\Controllers\ProposalNoteController::class, 'reply'])->name('admin.leads.program-notes.reply');
+        Route::post('/admin/leads/{lead}/program-notes/{program}/{note}/actioned', [\App\Http\Controllers\ProposalNoteController::class, 'toggleActioned'])->name('admin.leads.program-notes.actioned');
+        Route::delete('/admin/leads/{lead}/program-notes/{program}/{note}', [\App\Http\Controllers\ProposalNoteController::class, 'destroy'])->name('admin.leads.program-notes.destroy');
         Route::post('/admin/leads/{id}/personal', [LeadController::class, 'updatePersonal'])->name('admin.leads.personal');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
         Route::post('/admin/leads/{id}/convert-to-student', [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
