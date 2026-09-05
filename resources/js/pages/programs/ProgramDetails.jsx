@@ -134,7 +134,10 @@ export default function ProgramDetails({ program }) {
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2 col-span-2 sm:col-span-1">
-                                    <span className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2 tabular-nums">{program?.hours_per_week ?? '—'}</span>
+                                    {/* Numbers show at the big stat size; a word like "Unlimited" steps down so it fits the cell. */}
+                                    {/^\d{1,3}$/.test(String(program?.hours_per_week ?? ''))
+                                        ? <span className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2 tabular-nums">{program?.hours_per_week ?? '—'}</span>
+                                        : <span className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-center break-words max-w-full">{program?.hours_per_week ?? '—'}</span>}
                                     <div className="text-sm sm:text-base text-gray-300 font-semibold uppercase tracking-[0.15em] text-center leading-relaxed">
                                         Hours per Week<br />(Works Right)
                                     </div>
