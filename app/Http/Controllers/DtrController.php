@@ -341,7 +341,248 @@ class DtrController extends Controller
             'staffCount' => $staffCount,
             'dayCounts' => $dayCounts,
             'roster' => $roster,
+            // Default the weekly-report picker to the week containing this date.
+            'weekStart' => Carbon::parse($date)->startOfWeek(Carbon::MONDAY)->toDateString(),
         ]);
+    }
+
+    /**
+     * Build the weekly-report payload: every (non-archived) staffer's daily
+     * time + attendance for the Mon–Sun week containing $anyDate, grouped by
+     * team. Shared by the download preview and the email sender so both render
+     * the exact same PDF. $teamFilter is 'all' | 'nz' | 'ph'.
+     */
+    private function buildWeeklyPayload(string $anyDate, string $teamFilter): array
+    {
+        $monday = Carbon::parse($anyDate)->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $sunday = $monday->copy()->endOfWeek(Carbon::SUNDAY);
+
+        // The seven calendar days of the week, as [date, 'Mon', 'Aug 18'].
+        $days = [];
+        for ($d = $monday->copy(); $d->lte($sunday); $d->addDay()) {
+            $days[] = [
+                'date' => $d->toDateString(),
+                'dow' => $d->format('D'),
+                'label' => $d->format('M j'),
+            ];
+        }
+
+        $settings = DtrSetting::with('user:id,name')
+            ->whereNull('archived_at')
+            ->where('is_complete', true)
+            ->get()
+            ->filter(fn (DtrSetting $s) => $teamFilter === 'all' || $this->teamKey($s->team) === $teamFilter)
+            ->values();
+
+        $userIds = $settings->pluck('user_id');
+        $entries = DtrEntry::whereIn('user_id', $userIds)
+            ->whereBetween('work_date', [$monday->toDateString(), $sunday->toDateString()])
+            ->get()->groupBy('user_id');
+        $leaves = DtrLeave::where('status', 'approved')
+            ->whereDate('start_date', '<=', $sunday->toDateString())
+            ->whereDate('end_date', '>=', $monday->toDateString())
+            ->get()->groupBy('user_id');
+
+        $fmt = fn ($hhmm) => $hhmm ? Carbon::createFromFormat('H:i', $hhmm)->format('g:i A') : '—';
+
+        // One block per staff member: a row per day of the week.
+        $staffBlocks = $settings->map(function (DtrSetting $s) use ($days, $entries, $leaves, $fmt) {
+            $byDate = $entries->get($s->user_id, collect())->keyBy(fn (DtrEntry $e) => $e->work_date->toDateString());
+            $staffLeaves = $leaves->get($s->user_id, collect());
+
+            $totalHrs = 0.0;
+            $daysWorked = 0;
+            $rows = [];
+            foreach ($days as $day) {
+                $onLeave = $staffLeaves->first(fn (DtrLeave $l) => $day['date'] >= optional($l->start_date)->toDateString()
+                    && $day['date'] <= optional($l->end_date)->toDateString());
+                $e = $byDate->get($day['date']);
+                $row = $e ? $this->computeRow($e, $s) : [];
+                $sched = $s->scheduleForDate($day['date']);
+
+                if (isset($row['net_hrs']) && $row['net_hrs'] !== null) {
+                    $totalHrs += (float) $row['net_hrs'];
+                    $daysWorked++;
+                }
+
+                $rows[] = [
+                    'dow' => $day['dow'],
+                    'label' => $day['label'],
+                    'off' => ! ($sched['working'] ?? true),
+                    'on_leave' => $onLeave?->type,
+                    'time_in' => $fmt($row['time_in'] ?? null),
+                    'time_out' => $fmt($row['time_out'] ?? null),
+                    'net_hrs' => isset($row['net_hrs']) && $row['net_hrs'] !== null ? number_format($row['net_hrs'], 2) : '—',
+                    'attendance' => $row['attendance'] ?? null,
+                    // Completed tasks for the day, main tasks each followed by
+                    // their side tasks (indented in the PDF).
+                    'tasks' => $this->dayTaskList($row['tasks'] ?? []),
+                ];
+            }
+
+            return [
+                'name' => $s->user?->name ?: ($s->label ?: 'Staff'),
+                'position' => $s->position,
+                'team' => $this->teamLabel($s->team),
+                'timezone' => $s->timezone,
+                'rows' => $rows,
+                'total_hrs' => number_format($totalHrs, 2),
+                'days_worked' => $daysWorked,
+            ];
+        });
+
+        // Group the staff blocks by team for the PDF sections.
+        $teams = $staffBlocks->groupBy('team')
+            ->map(fn ($blocks, $team) => ['team' => $team, 'staff' => $blocks->values()])
+            ->sortBy('team')->values();
+
+        return [
+            'logo_data' => $this->brandLogoData(),
+            'teams' => $teams->all(),
+            'staffCount' => $staffBlocks->count(),
+            'days' => $days,
+            'weekStart' => $monday->toDateString(),
+            'weekEnd' => $sunday->toDateString(),
+            'rangeLabel' => $monday->format('F j').' – '.$sunday->format('F j, Y'),
+            'teamLabel' => $this->teamFilterLabel($teamFilter),
+            'generatedAt' => now(config('app.timezone', 'UTC'))->format('M j, Y g:i A'),
+        ];
+    }
+
+    /**
+     * Ordered list of a day's completed tasks for the weekly report — each main
+     * task followed by its own side tasks (matched by parent tid), then any
+     * orphan side tasks. To-do rows (never completed) are excluded. Returns
+     * [['text' => ..., 'side' => bool], ...].
+     */
+    private function dayTaskList(array $tasks): array
+    {
+        $done = collect($tasks)
+            ->filter(fn ($t) => ($t['status'] ?? '') !== 'todo' && trim((string) ($t['task'] ?? '')) !== '')
+            ->values();
+
+        $mains = $done->filter(fn ($t) => ($t['kind'] ?? 'main') !== 'side')->values();
+        $sides = $done->filter(fn ($t) => ($t['kind'] ?? 'main') === 'side')->values();
+
+        $list = [];
+        foreach ($mains as $m) {
+            $list[] = ['text' => trim((string) $m['task']), 'side' => false];
+            foreach ($sides as $s) {
+                if (! empty($s['parent']) && ($m['tid'] ?? null) === $s['parent']) {
+                    $list[] = ['text' => trim((string) $s['task']), 'side' => true];
+                }
+            }
+        }
+        // Side tasks whose parent isn't in the completed set still get listed.
+        foreach ($sides as $s) {
+            $matched = $mains->contains(fn ($m) => ($m['tid'] ?? null) !== null && ($m['tid'] ?? null) === ($s['parent'] ?? null));
+            if (! $matched) {
+                $list[] = ['text' => trim((string) $s['task']), 'side' => true];
+            }
+        }
+
+        return $list;
+    }
+
+    /** 'nz' | 'ph' | 'other' from a free-text team name. */
+    private function teamKey(?string $team): string
+    {
+        $t = strtolower((string) $team);
+        if (str_contains($t, 'zealand') || str_contains($t, 'nz')) {
+            return 'nz';
+        }
+        if (str_contains($t, 'philippin') || str_contains($t, 'ph')) {
+            return 'ph';
+        }
+
+        return 'other';
+    }
+
+    /** Normalised display label for a staffer's team. */
+    private function teamLabel(?string $team): string
+    {
+        return match ($this->teamKey($team)) {
+            'nz' => 'New Zealand',
+            'ph' => 'Philippines',
+            default => $team ?: 'Unassigned',
+        };
+    }
+
+    /** The "(… Team)" label used in the email body for a team filter. */
+    private function teamFilterLabel(string $filter): string
+    {
+        return match ($filter) {
+            'nz' => 'New Zealand Team',
+            'ph' => 'Philippine Team',
+            default => 'New Zealand / Philippine Team',
+        };
+    }
+
+    /**
+     * Download the weekly DTR as a PDF — the same document the emailer attaches,
+     * so admin can preview before sending. Admin/super (or Team Daily Reports).
+     */
+    public function weeklyReport(Request $request)
+    {
+        abort_unless(auth()->user()->canSeeModule('dtr.reports'), 403);
+
+        $data = $request->validate([
+            'week' => 'required|date',
+            'team' => 'nullable|in:all,nz,ph',
+            'inline' => 'nullable|boolean',
+        ]);
+
+        $payload = $this->buildWeeklyPayload($data['week'], $data['team'] ?? 'all');
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('dtr.weekly-report', $payload)->setPaper('a4');
+        $filename = 'DTR_Weekly_'.$payload['weekStart'].'_to_'.$payload['weekEnd'].'.pdf';
+
+        // Inline (Content-Disposition: inline) so the preview modal's iframe
+        // renders it in place; otherwise a normal download.
+        return $request->boolean('inline') ? $pdf->stream($filename) : $pdf->download($filename);
+    }
+
+    /**
+     * Generate the weekly DTR PDF and email it to the selected recipients with
+     * the standard cover message. Admin/super (or Team Daily Reports).
+     */
+    public function sendWeeklyReport(Request $request)
+    {
+        abort_unless(auth()->user()->canSeeModule('dtr.reports'), 403);
+
+        $data = $request->validate([
+            'week' => 'required|date',
+            'team' => 'nullable|in:all,nz,ph',
+            'recipients' => 'required|array|min:1',
+            'recipients.*' => 'email',
+            'greeting' => 'nullable|string|max:200',
+            'note' => 'nullable|string|max:2000',
+        ]);
+
+        $team = $data['team'] ?? 'all';
+        $payload = $this->buildWeeklyPayload($data['week'], $team);
+
+        if ($payload['staffCount'] === 0) {
+            return back()->with('error', 'No staff match that team for the selected week — nothing to send.');
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('dtr.weekly-report', $payload)->setPaper('a4');
+        $pdfBytes = $pdf->output();
+        $filename = 'DTR_Weekly_'.$payload['weekStart'].'_to_'.$payload['weekEnd'].'.pdf';
+
+        $recipients = array_values(array_unique($data['recipients']));
+
+        \Illuminate\Support\Facades\Mail::to($recipients)->send(new \App\Mail\DtrWeeklyReport(
+            greeting: trim((string) ($data['greeting'] ?? '')) ?: 'Team',
+            teamLabel: $payload['teamLabel'],
+            rangeLabel: $payload['rangeLabel'],
+            note: trim((string) ($data['note'] ?? '')) ?: null,
+            pdfBytes: $pdfBytes,
+            pdfName: $filename,
+        ));
+
+        $n = count($recipients);
+
+        return back()->with('success', "Weekly DTR emailed to {$n} recipient".($n === 1 ? '' : 's').'.');
     }
 
     /**

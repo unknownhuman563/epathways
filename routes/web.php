@@ -144,6 +144,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/admin/dtr/archive', [\App\Http\Controllers\DtrController::class, 'archiveStaff'])->name('admin.dtr.archive');
     Route::get('/admin/dtr/history/{user}', [\App\Http\Controllers\DtrController::class, 'settingHistory'])->name('admin.dtr.history');
     Route::get('/admin/dtr/reports', [\App\Http\Controllers\DtrController::class, 'reports'])->name('admin.dtr.reports');
+    Route::get('/admin/dtr/weekly-report', [\App\Http\Controllers\DtrController::class, 'weeklyReport'])->name('admin.dtr.weekly');
+    Route::post('/admin/dtr/weekly-report', [\App\Http\Controllers\DtrController::class, 'sendWeeklyReport'])->name('admin.dtr.weekly.send');
     Route::post('/admin/dtr/entry', [\App\Http\Controllers\DtrController::class, 'adminUpdateEntry'])->name('admin.dtr.entry.update');
     Route::delete('/admin/dtr/entry', [\App\Http\Controllers\DtrController::class, 'adminDeleteEntry'])->name('admin.dtr.entry.delete');
     Route::get('/admin/dtr/summary', [\App\Http\Controllers\DtrController::class, 'summary'])->name('admin.dtr.summary');
