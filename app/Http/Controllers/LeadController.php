@@ -2332,6 +2332,37 @@ class LeadController extends Controller
         }
     }
 
+    /**
+     * Re-send a proposal for verification from the Proposals inbox — sets the
+     * review back to "pending" (so it re-enters the Program Verification queue)
+     * and clears any outstanding change request.
+     */
+    public function resubmitProposal(Request $request, $id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            abort_unless(
+                is_array($lead->proposed_program_ids) && count($lead->proposed_program_ids) > 0,
+                422,
+                'This lead has no proposal to verify.'
+            );
+
+            $review = is_array($lead->proposal_review) ? $lead->proposal_review : [];
+            $review['status'] = 'pending';
+            $review['submitted_at'] = now()->toIso8601String();
+            $review['submitted_by'] = $request->user()->id;
+            unset($review['changes_requested']);
+            $lead->proposal_review = $review;
+            $lead->save();
+
+            return back()->with('success', 'Proposal sent for verification again.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Proposal resubmit failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not send this proposal for verification.');
+        }
+    }
+
     /** Restore a previously archived (soft-deleted) lead. */
     public function restore($id)
     {

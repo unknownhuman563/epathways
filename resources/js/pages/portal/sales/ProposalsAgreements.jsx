@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import {
     FileText, Plus, Search, Download, Eye, Loader, X, Check,
     ChevronRight, ChevronDown, Users, Lightbulb, FileSignature, Wand2,
-    Mail, Send, AlertCircle, MoreVertical, Pencil, Trash2, StickyNote,
+    Mail, Send, AlertCircle, MoreVertical, Pencil, Trash2, StickyNote, ShieldCheck, Flag,
 } from 'lucide-react';
 
 // Portal → URL prefix. Same shape as the other portal-scoped pages.
@@ -295,179 +295,314 @@ function SuggestionsTable({ rows, portalBase, onGenerate }) {
 //    lists the picked programs as badges; the tab is intentionally
 //    read-only from here (staff manage picks via the New modal). ──
 function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
-    return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-                <thead>
-                    <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                        <th className="px-4 py-3">Profile</th>
-                        <th className="px-3 py-3">Contact</th>
-                        <th className="px-3 py-3">Programs</th>
-                        <th className="px-3 py-3">Notes</th>
-                        <th className="px-3 py-3">Status</th>
-                        <th className="px-3 py-3">Created</th>
-                        <th className="px-3 py-3 text-right pr-4">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                    {rows.map((r) => (
-                        <tr key={r.id} className="hover:bg-gray-50/60 transition-colors align-top">
-                            {/* ── PROFILE ─────────────────────────────── */}
-                            <td className="px-4 py-3">
-                                <Link href={`${portalBase}/leads/${r.id}`} className="inline-block">
-                                    <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200">
-                                        {r.avatar_url
-                                            ? <img src={r.avatar_url} alt={r.name} className="w-full h-full object-cover" />
-                                            : rowInitials(r.name)}
-                                    </div>
-                                </Link>
-                            </td>
-                            {/* ── CONTACT (name + id + email + phone) ─── */}
-                            <td className="px-3 py-3">
-                                <Link
-                                    href={`${portalBase}/leads/${r.id}`}
-                                    className="font-semibold text-gray-900 hover:text-emerald-700 hover:underline underline-offset-2 decoration-emerald-400"
-                                >
-                                    {r.name}
-                                </Link>
-                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">{r.lead_id}</div>
-                                {r.email && (
-                                    <div className="text-[11px] text-gray-600 truncate max-w-[220px] mt-1">{r.email}</div>
-                                )}
-                                {r.phone && (
-                                    <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{r.phone}</div>
-                                )}
-                            </td>
-                            {/* ── PROGRAMS ────────────────────────────── */}
-                            {/* Once the lead has settled on a program, that
-                                pick is highlighted and the rest are dimmed so
-                                staff can see the choice at a glance. */}
-                            <td className="px-3 py-3">
-                                <div className="flex flex-col gap-1.5">
-                                    {r.programs.map((p) => {
-                                        const chosen = !! r.preferred_program_id && p.id === r.preferred_program_id;
-                                        const dimmed = !! r.preferred_program_id && ! chosen;
-                                        const flagged = (r.changes_requested?.program_ids || []).includes(p.id);
-                                        const details = [
-                                            p.school,
-                                            p.intake,
-                                            p.fee_confirmed && p.fee ? `NZD ${Number(p.fee).toLocaleString('en-NZ', { maximumFractionDigits: 0 })}` : null,
-                                        ].filter(Boolean);
-                                        return (
-                                            <div
-                                                key={p.id}
-                                                className={`rounded-md transition-colors ${
-                                                    chosen ? 'bg-emerald-50 ring-1 ring-emerald-200 px-1.5 py-1 -mx-1.5' : ''
-                                                } ${dimmed ? 'opacity-40' : ''}`}
-                                            >
-                                                <div className="flex items-center gap-2 min-h-[22px]">
-                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                                        chosen ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                                    }`}>
-                                                        Level {p.level}
-                                                    </span>
-                                                    <span className={`text-[12px] truncate max-w-[280px] ${
-                                                        chosen ? 'font-bold text-emerald-900' : 'font-medium text-gray-800'
-                                                    }`} title={p.title}>
-                                                        {p.title}
-                                                    </span>
-                                                    {/* Per-program verification status from Program Verification. */}
-                                                    {p.verify_status === 'verified' && (
-                                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                                                            <Check size={8} /> Verified
-                                                        </span>
-                                                    )}
-                                                    {p.verify_status === 'needs_check' && (
-                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-                                                            Needs check
-                                                        </span>
-                                                    )}
-                                                    {flagged && (
-                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
-                                                            Revise
-                                                        </span>
-                                                    )}
-                                                    {chosen && (
-                                                        <span className="inline-flex items-center gap-1 ml-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-600 text-white shrink-0">
-                                                            <Check size={9} /> Selected
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {details.length > 0 && (
-                                                    <div className="text-[10px] text-gray-400 mt-0.5 ml-0.5">{details.join(' · ')}</div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+    const [sort, setSort] = useState('needs'); // 'needs' | 'newest'
 
-                                {/* ── PREVIOUS PROPOSALS (version history) ──
-                                    Every earlier proposal is kept, each with the
-                                    program the client had selected at the time. */}
-                                {Array.isArray(r.previous) && r.previous.length > 0 && (
-                                    <details className="mt-2 group/hist">
-                                        <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-[10px] font-semibold text-gray-400 hover:text-gray-600 select-none">
-                                            <ChevronRight size={10} className="transition-transform group-open/hist:rotate-90" />
-                                            {r.previous.length} previous proposal{r.previous.length === 1 ? '' : 's'}
-                                        </summary>
-                                        <div className="mt-2 space-y-2.5 border-l-2 border-gray-100 pl-3">
-                                            {r.previous.map((v) => (
-                                                <div key={v.id} className="space-y-1">
-                                                    <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
-                                                        {fmtDate(v.created_at)}{v.created_by ? ` · ${v.created_by}` : ''}
-                                                    </div>
-                                                    {v.programs.map((p) => {
-                                                        const wasChosen = !! v.selected_program_id && p.id === v.selected_program_id;
-                                                        return (
-                                                            <div key={p.id} className={`flex items-center gap-2 rounded ${wasChosen ? 'bg-emerald-50/70 ring-1 ring-emerald-200 px-1.5 py-0.5 -mx-1.5' : ''}`}>
-                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${wasChosen ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
-                                                                    Level {p.level}
-                                                                </span>
-                                                                <span className={`text-[11px] truncate max-w-[260px] ${wasChosen ? 'font-bold text-emerald-900' : 'text-gray-600'}`} title={p.title}>{p.title}</span>
-                                                                {p.location && (
-                                                                    <span className="text-[10px] text-gray-400 whitespace-nowrap">· {p.location}</span>
-                                                                )}
-                                                                {wasChosen && (
-                                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-600 text-white shrink-0">
-                                                                        <Check size={8} /> Was selected
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </details>
-                                )}
-                            </td>
-                            {/* ── NOTES (internal staff notes + change requests) ── */}
-                            <td className="px-3 py-3 align-top">
-                                <ProposalNotes r={r} />
-                            </td>
-                            {/* ── STATUS (verification) ────────────────── */}
-                            <td className="px-3 py-3">
-                                <ProposalStatusBadge status={r.proposal_status} />
-                            </td>
-                            {/* ── CREATED ─────────────────────────────── */}
-                            <td className="px-3 py-3 whitespace-nowrap text-gray-600">
-                                {fmtDate(r.updated_at)}
-                            </td>
-                            <td className="px-3 py-3 text-right pr-4">
-                                <div className="inline-flex items-center gap-1">
-                                    <NotifyButton row={r} onNotify={onNotify} />
-                                    <Link
-                                        href={`${portalBase}/leads/${r.id}`}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-                                    >
-                                        Open lead <ChevronRight size={12} />
-                                    </Link>
-                                </div>
-                            </td>
-                        </tr>
+    const byNewest = (a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0);
+    const groups = useMemo(() => {
+        if (sort === 'newest') {
+            return [{ key: 'all', rows: [...rows].sort(byNewest) }];
+        }
+        const needs = rows.filter((r) => r.group === 'needs_you').sort(byNewest);
+        const client = rows.filter((r) => r.group !== 'needs_you').sort(byNewest);
+
+        return [
+            { key: 'needs_you', label: 'Needs you', sub: 'action sits with ePathways', tone: 'amber', rows: needs },
+            { key: 'with_client', label: 'With the client', sub: 'waiting on the lead', tone: 'gray', rows: client },
+        ];
+    }, [rows, sort]);
+
+    return (
+        <div className="text-xs">
+            {/* Toolbar */}
+            <div className="flex items-center justify-end gap-4 px-4 py-2 border-b border-gray-100">
+                <button
+                    type="button"
+                    onClick={() => setSort((s) => (s === 'needs' ? 'newest' : 'needs'))}
+                    className="text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+                >
+                    Sort: {sort === 'needs' ? 'needs me first' : 'newest'}
+                </button>
+            </div>
+
+            {/* Column header (desktop) */}
+            <div className="hidden md:flex items-center gap-4 px-4 py-2.5 bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                <div className="w-[210px] shrink-0">Profile</div>
+                <div className="flex-1 grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] gap-x-6">
+                    <span>Programs</span>
+                    <span>Notes</span>
+                </div>
+                <div className="w-[140px] shrink-0">Status &amp; created</div>
+                <div className="w-[32px] shrink-0 text-right">Actions</div>
+            </div>
+
+            {groups.map((g) => (g.rows.length === 0 ? null : (
+                <div key={g.key}>
+                    {g.label && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100">
+                            <span className={`w-1.5 h-1.5 rounded-full ${g.tone === 'amber' ? 'bg-amber-500' : 'bg-gray-400'}`} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">{g.label}</span>
+                            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">{g.rows.length}</span>
+                            <span className="text-[11px] text-gray-400">· {g.sub}</span>
+                        </div>
+                    )}
+                    {g.rows.map((r) => (
+                        <ProposalReviewRow key={r.id} r={r} portalBase={portalBase} fmtDate={fmtDate} onNotify={onNotify} />
                     ))}
-                </tbody>
-            </table>
+                </div>
+            )))}
+
+            {rows.length === 0 && (
+                <div className="p-12 text-center text-gray-400 text-sm">No proposals yet.</div>
+            )}
+        </div>
+    );
+}
+
+// One lead in the Proposals review inbox: profile + aligned programme/note grid.
+function ProposalReviewRow({ r, portalBase, fmtDate, onNotify }) {
+    return (
+        <div className="flex flex-col md:flex-row md:items-stretch gap-4 px-4 py-4 border-b border-gray-100 hover:bg-gray-50/40 transition-colors">
+            {/* Profile */}
+            <div className="md:w-[210px] shrink-0 flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200 shrink-0">
+                    {r.avatar_url
+                        ? <img src={r.avatar_url} alt={r.name} className="w-full h-full object-cover" />
+                        : rowInitials(r.name)}
+                </div>
+                <div className="min-w-0">
+                    <Link href={`${portalBase}/leads/${r.id}`} className="font-semibold text-gray-900 hover:text-emerald-700 hover:underline">{r.name}</Link>
+                    <div className="text-[10px] text-gray-400 font-mono">{r.lead_id}</div>
+                    {r.email && <div className="text-[11px] text-gray-600 truncate max-w-[190px] mt-1">{r.email}</div>}
+                    {r.phone && <div className="text-[11px] text-gray-500 truncate max-w-[190px]">{r.phone}</div>}
+                </div>
+            </div>
+
+            {/* Programs + Notes (aligned per programme) */}
+            <div className="flex-1 min-w-0">
+                <div className="grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] max-md:grid-cols-1 gap-x-6 gap-y-5 items-start">
+                    {r.programs.map((p) => {
+                        const chosen = !! r.preferred_program_id && p.id === r.preferred_program_id;
+                        const dimmed = !! r.preferred_program_id && ! chosen;
+                        const flagged = (r.changes_requested?.program_ids || []).includes(p.id);
+                        return (
+                            <Fragment key={p.id}>
+                                {/* Programme */}
+                                <div className={`${dimmed ? 'opacity-40' : ''}`}>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`text-[13px] ${chosen ? 'font-bold text-emerald-900' : 'font-semibold text-gray-900'}`} title={p.title}>{p.title}</span>
+                                        {p.verify_status === 'verified' && (
+                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0"><Check size={8} /> Verified</span>
+                                        )}
+                                        {p.verify_status === 'needs_check' && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 shrink-0">Needs check</span>
+                                        )}
+                                        {flagged && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 shrink-0">Change requested</span>
+                                        )}
+                                        {chosen && (
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-600 text-white shrink-0"><Check size={8} /> Chosen</span>
+                                        )}
+                                    </div>
+                                    <div className="text-[11px] text-gray-400 mt-0.5">
+                                        <span className="font-medium text-gray-500">Level {p.level}</span>
+                                        {p.school ? <span> · {p.school}</span> : null}
+                                        {p.intake ? <span> · {p.intake}</span> : null}
+                                    </div>
+                                </div>
+                                {/* Note thread */}
+                                <div className={dimmed ? 'opacity-40' : ''}>
+                                    <ProgramNoteThread leadId={r.id} program={p} />
+                                </div>
+                            </Fragment>
+                        );
+                    })}
+                </div>
+
+                {/* Previous proposals (version history) */}
+                {Array.isArray(r.previous) && r.previous.length > 0 && (
+                    <details className="mt-3 group/hist">
+                        <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-[10px] font-semibold text-gray-400 hover:text-gray-600 select-none">
+                            <ChevronRight size={10} className="transition-transform group-open/hist:rotate-90" />
+                            {r.previous.length} previous proposal{r.previous.length === 1 ? '' : 's'}
+                        </summary>
+                        <div className="mt-2 space-y-2 border-l-2 border-gray-100 pl-3">
+                            {r.previous.map((v) => (
+                                <div key={v.id}>
+                                    <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">{fmtDate(v.created_at)}{v.created_by ? ` · ${v.created_by}` : ''}</div>
+                                    {v.programs.map((p) => (
+                                        <div key={p.id} className="text-[11px] text-gray-600">L{p.level} · {p.title}</div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </details>
+                )}
+            </div>
+
+            {/* Status & created */}
+            <div className="md:w-[140px] shrink-0 whitespace-nowrap">
+                <ProposalStatusBadge status={r.proposal_status} />
+                <div className="text-[11px] text-gray-500 mt-1.5">{fmtDate(r.updated_at)}</div>
+                <div className="text-[10px] text-gray-400 mt-0.5">{r.created_by_label}</div>
+            </div>
+
+            {/* Actions */}
+            <div className="md:w-[32px] shrink-0 md:text-right">
+                <ProposalRowActions row={r} portalBase={portalBase} onNotify={onNotify} />
+            </div>
+        </div>
+    );
+}
+
+// Format a note timestamp as "Today, 12:40 pm" / "Yesterday, …" / "05 Sept, …".
+function fmtNoteTime(iso) {
+    if (! iso) return '';
+    const d = new Date(iso);
+    const now = new Date();
+    const t = d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === now.toDateString()) return `Today, ${t}`;
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return `Yesterday, ${t}`;
+    return `${d.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short' })}, ${t}`;
+}
+
+// Threaded notes for one programme — display + Add note / Reply / Mark actioned.
+function ProgramNoteThread({ leadId, program }) {
+    const notes = program.notes || [];
+    // Row shows only the latest note; the rest expand on demand (like the
+    // document notes on the Case Profile).
+    const ordered = [...notes].reverse(); // newest first
+    const [expanded, setExpanded] = useState(false);
+    const visible = expanded ? ordered : ordered.slice(0, 1);
+    const [adding, setAdding] = useState(false);
+    const [body, setBody] = useState('');
+    const [replyTo, setReplyTo] = useState(null);
+    const [replyBody, setReplyBody] = useState('');
+    const base = `/admin/leads/${leadId}/program-notes/${program.id}`;
+    const send = (url, data, done) => router.post(url, data, { preserveScroll: true, onSuccess: done });
+
+    const addNote = () => { if (! body.trim()) return; send(base, { body, tag: 'note' }, () => { setBody(''); setAdding(false); }); };
+    const reply = (id) => { if (! replyBody.trim()) return; send(`${base}/${id}/reply`, { body: replyBody }, () => { setReplyBody(''); setReplyTo(null); }); };
+    const toggle = (id) => send(`${base}/${id}/actioned`, {});
+
+    if (notes.length === 0) {
+        return (
+            <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
+                {adding ? (
+                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
+                ) : (
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-gray-400 italic">No note on this program</span>
+                        <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-2">
+            {! expanded ? (
+                /* Collapsed row — latest note as a compact coloured card. */
+                (() => {
+                    const n = ordered[0];
+                    const done = !! n.actioned_at;
+                    const cr = n.tag === 'change_requested';
+                    return (
+                        <div className={`rounded-lg border px-3 py-2 ${cr ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
+                            <div className="flex items-start gap-1.5">
+                                <Flag size={12} className={`mt-0.5 shrink-0 ${cr ? 'text-rose-500' : 'text-amber-500'}`} />
+                                <span className={`text-[12px] font-medium leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : 'text-gray-800'}`}>{n.body}</span>
+                            </div>
+                            <div className={`text-[10px] mt-1 ml-[18px] ${cr ? 'text-rose-700/80' : 'text-amber-700/80'}`}>
+                                {n.author} · {fmtNoteTime(n.created_at)}
+                                {n.replies.length ? <span className="text-gray-400"> · {n.replies.length} repl{n.replies.length === 1 ? 'y' : 'ies'}</span> : null}
+                            </div>
+                        </div>
+                    );
+                })()
+            ) : (
+                /* Expanded — plain thread, no card colour. */
+                ordered.map((n) => {
+                    const done = !! n.actioned_at;
+                    const cr = n.tag === 'change_requested';
+                    return (
+                        <div key={n.id} className="text-[11px]">
+                            <div className="flex items-center gap-1.5">
+                                <NoteTag tag={n.tag} />
+                                <span className="font-bold text-gray-800 truncate">{n.author}</span>
+                                <span className="text-gray-400 whitespace-nowrap">{fmtNoteTime(n.created_at)}</span>
+                            </div>
+                            <p className={`mt-1 text-gray-700 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : ''}`}>{n.body}</p>
+                            {n.replies.map((rp) => (
+                                <div key={rp.id} className="mt-1.5 ml-3 border-l-2 border-gray-100 pl-2.5">
+                                    <span className="font-semibold text-gray-700">{rp.author}</span>
+                                    <span className="text-gray-400"> · {fmtNoteTime(rp.created_at)}</span>
+                                    <p className="text-gray-600 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap">{rp.body}</p>
+                                </div>
+                            ))}
+                            <div className="mt-1.5 flex items-center gap-3 font-semibold">
+                                <button type="button" onClick={() => toggle(n.id)} className={done ? 'text-gray-400 hover:text-gray-600' : 'text-emerald-700 hover:text-emerald-900'}>
+                                    {done ? 'Actioned ✓' : (cr ? 'Mark as actioned' : 'Acknowledge')}
+                                </button>
+                                <button type="button" onClick={() => { setReplyTo(replyTo === n.id ? null : n.id); setReplyBody(''); }} className="text-gray-500 hover:text-gray-800">Reply</button>
+                            </div>
+                            {replyTo === n.id && (
+                                <div className="mt-1.5">
+                                    <NoteComposer value={replyBody} onChange={setReplyBody} onSubmit={() => reply(n.id)} onCancel={() => { setReplyBody(''); setReplyTo(null); }} placeholder="Write a reply…" small />
+                                </div>
+                            )}
+                        </div>
+                    );
+                })
+            )}
+
+            {/* "N notes ›" collapse toggle + Add note */}
+            <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    onClick={() => setExpanded((v) => ! v)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-800"
+                >
+                    {expanded ? 'Show less' : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
+                    <ChevronRight size={12} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                </button>
+                {! adding && (
+                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                )}
+            </div>
+
+            {adding && (
+                <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
+            )}
+        </div>
+    );
+}
+
+function NoteTag({ tag }) {
+    if (tag === 'change_requested') {
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 shrink-0">Change requested</span>;
+    }
+    return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 shrink-0">Note</span>;
+}
+
+function NoteComposer({ value, onChange, onSubmit, onCancel, placeholder, small }) {
+    return (
+        <div>
+            <textarea
+                autoFocus
+                rows={small ? 2 : 2}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:border-gray-900 resize-y"
+            />
+            <div className="flex items-center gap-2 mt-1">
+                <button type="button" onClick={onSubmit} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-900 text-white text-[11px] font-bold hover:bg-black">
+                    <Send size={11} /> Post
+                </button>
+                <button type="button" onClick={onCancel} className="text-[11px] font-semibold text-gray-500 hover:text-gray-800">Cancel</button>
+            </div>
         </div>
     );
 }
@@ -511,50 +646,6 @@ function ProposalStatusBadge({ status }) {
     );
 }
 
-// Internal staff notes column for the Proposals table — the reviewer's
-// per-program notes (from Program Verification) plus any "request changes"
-// message. Internal only; never shown to the client.
-// Notes column — mirrors the Programs column row-for-row (same order, same
-// per-row height incl. the "selected" padding and the details subline) so each
-// program's internal note lines up exactly with its programme. Blank rows keep
-// the alignment for programs without a note.
-function ProposalNotes({ r }) {
-    const programs = r.programs || [];
-    const changes = r.changes_requested?.message;
-    const anyNote = programs.some((p) => p.note);
-
-    if (! anyNote && ! changes) {
-        return <span className="text-[11px] text-gray-300">—</span>;
-    }
-
-    return (
-        <div className="flex flex-col gap-1.5 max-w-[240px]">
-            {programs.map((p) => {
-                const chosen = !! r.preferred_program_id && p.id === r.preferred_program_id;
-                const dimmed = !! r.preferred_program_id && ! chosen;
-                const hasDetails = [p.school, p.intake, p.fee_confirmed && p.fee].some(Boolean);
-                return (
-                    <div key={p.id} className={`rounded-md ${chosen ? 'px-1.5 py-1 -mx-1.5' : ''} ${dimmed ? 'opacity-40' : ''}`}>
-                        <div className="flex items-center min-h-[22px]">
-                            {p.note
-                                ? <span className="text-[11px] text-gray-600 italic leading-snug line-clamp-1" title={p.note}>{p.note}</span>
-                                : <span className="text-[11px] text-gray-200">—</span>}
-                        </div>
-                        {/* Spacer matching the Programs column's details subline. */}
-                        {hasDetails && <div className="text-[10px] mt-0.5">&nbsp;</div>}
-                    </div>
-                );
-            })}
-            {changes && (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 mt-1">
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-rose-600 mb-0.5">Changes requested</p>
-                    <p className="text-[11px] text-rose-800 leading-snug">{changes}</p>
-                </div>
-            )}
-        </div>
-    );
-}
-
 // Initials fallback for the profile avatar when there's no face image.
 const rowInitials = (name = '') =>
     (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join('') || '?';
@@ -565,19 +656,17 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
     const flat = useMemo(() => rows.flatMap((r) => r.documents.map((d) => ({ ...d, lead: r }))), [rows]);
 
     return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-                <thead>
+        <div className="md:overflow-x-auto">
+            <table className="w-full text-left text-xs max-md:block">
+                <thead className="max-md:hidden">
                     <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                         <th className="px-4 py-3">Profile</th>
-                        <th className="px-3 py-3">Contact</th>
                         <th className="px-3 py-3">Document</th>
-                        <th className="px-3 py-3">Status</th>
-                        <th className="px-3 py-3">Created</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Status &amp; created</th>
                         <th className="px-3 py-3 text-right pr-4">Actions</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 max-md:block max-md:divide-y-0">
                     {flat.map((d) => (
                         <DocumentRow
                             key={d.id}
@@ -605,27 +694,15 @@ function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
       : lead.status === 'Consultancy Agreement Sent'   ? { label: 'Sent',      cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
       :                                                   { label: 'Generated', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
     return (
-        <tr className="hover:bg-gray-50/60 transition-colors align-top">
-            {/* ── PROFILE (face image / initials) ──────────────────── */}
-            <td className="px-4 py-3">
-                <Link href={`${portalBase}/leads/${lead.id}`} className="inline-block">
-                    <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200">
-                        {lead.avatar_url
-                            ? <img src={lead.avatar_url} alt={lead.name} className="w-full h-full object-cover" />
-                            : rowInitials(lead.name)}
-                    </div>
-                </Link>
-            </td>
-
+        <tr className="hover:bg-gray-50/60 transition-colors align-top max-md:flex max-md:flex-col max-md:gap-1 max-md:border max-md:border-gray-100 max-md:rounded-xl max-md:mb-3 max-md:shadow-sm">
             {/* ── CONTACT (name + id + email + phone) ──────────────── */}
-            <td className="px-3 py-3">
+            <td className="px-4 py-3">
                 <Link
                     href={`${portalBase}/leads/${lead.id}`}
                     className="font-semibold text-gray-900 hover:text-emerald-700 hover:underline underline-offset-2 decoration-emerald-400"
                 >
                     {lead.name}
                 </Link>
-                <div className="text-[10px] text-gray-400 font-mono mt-0.5">{lead.lead_id}</div>
                 {lead.email && (
                     <div className="text-[11px] text-gray-600 truncate max-w-[220px] mt-1">{lead.email}</div>
                 )}
@@ -655,18 +732,14 @@ function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                 <div className="text-[10px] text-gray-400 mt-1 ml-[21px]">{fmtSize(doc.size)}</div>
             </td>
 
-            {/* ── STATUS (Generated / Sent / Signed) ───────────────── */}
-            <td className="px-3 py-3">
+            {/* ── STATUS & CREATED (merged) ────────────────────────── */}
+            <td className="px-3 py-3 whitespace-nowrap">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${agreeStatus.cls}`}>
                     {agreeStatus.label}
                 </span>
-            </td>
-
-            {/* ── CREATED (date + staff who generated) ─────────────── */}
-            <td className="px-3 py-3 whitespace-nowrap">
-                <div className="text-[12px] text-gray-700 font-medium">{fmtDate(doc.created_at)}</div>
+                <div className="text-[11px] text-gray-600 mt-1.5">{fmtDate(doc.created_at)}</div>
                 {doc.uploader?.name && (
-                    <div className="text-[11px] text-gray-500 mt-0.5">
+                    <div className="text-[10px] text-gray-500">
                         by <span className="font-medium text-gray-600">{doc.uploader.name}</span>
                     </div>
                 )}
@@ -1049,6 +1122,76 @@ function documentCategory(type) {
         dot: 'bg-[#436235]',
         border: 'border-emerald-200',
     };
+}
+
+// ── 3-dot actions menu for a Proposals row — Notify + Open lead.
+//    Mirrors the Agreements row menu; closes on outside click / Esc. ──
+function ProposalRowActions({ row, portalBase, onNotify }) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef(null);
+    const hasEmail = !! row.email;
+
+    const resubmit = () => {
+        setOpen(false);
+        router.post(`/admin/leads/${row.id}/proposal/resubmit`, {}, { preserveScroll: true });
+    };
+
+    useEffect(() => {
+        if (! open) return;
+        const onClick = (e) => { if (wrapRef.current && ! wrapRef.current.contains(e.target)) setOpen(false); };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onClick);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onClick);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    return (
+        <div ref={wrapRef} className="relative inline-block">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => ! v)}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                    open ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+                aria-label="Row actions"
+                aria-expanded={open}
+            >
+                <MoreVertical size={15} />
+            </button>
+
+            {open && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl ring-1 ring-black/5 py-1.5 z-30 text-[12px]">
+                    <button
+                        type="button"
+                        disabled={! hasEmail}
+                        onClick={() => { setOpen(false); onNotify && onNotify(row); }}
+                        title={hasEmail ? `Email ${row.name} about their tracker` : 'Lead has no email on file'}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 hover:text-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    >
+                        <Mail size={13} className="text-gray-400" /> Notify
+                    </button>
+                    <button
+                        type="button"
+                        onClick={resubmit}
+                        title="Send this proposal back to the Program Verification queue"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 hover:text-amber-700 transition-colors"
+                    >
+                        <ShieldCheck size={13} className="text-gray-400" /> Send for verification
+                    </button>
+                    <Link
+                        href={`${portalBase}/leads/${row.id}`}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                    >
+                        <ChevronRight size={13} className="text-gray-400" /> Open lead
+                    </Link>
+                </div>
+            )}
+        </div>
+    );
 }
 
 // ── Notify button — small pill on each Proposals / Agreements row.

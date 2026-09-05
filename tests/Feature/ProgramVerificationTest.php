@@ -145,6 +145,24 @@ class ProgramVerificationTest extends TestCase
             );
     }
 
+    public function test_resubmit_sends_the_proposal_back_to_pending_and_clears_changes(): void
+    {
+        $prog = Program::create(['title' => 'Prog', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
+        $lead = Lead::create([
+            'first_name' => 'Sofia', 'last_name' => 'Rossi',
+            'proposed_program_ids' => [$prog->id],
+            'proposal_review' => ['status' => 'verified', 'changes_requested' => ['message' => 'old']],
+        ]);
+
+        $this->actingAs($this->reviewer())
+            ->post("/admin/leads/{$lead->id}/proposal/resubmit")
+            ->assertRedirect();
+
+        $review = $lead->refresh()->proposal_review;
+        $this->assertSame('pending', $review['status']);
+        $this->assertArrayNotHasKey('changes_requested', $review);
+    }
+
     public function test_request_changes_flags_the_proposal_and_specific_programs(): void
     {
         $a = Program::create(['title' => 'A', 'level' => 7, 'category' => 'bachelors', 'status' => 'published']);
