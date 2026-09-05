@@ -10,6 +10,16 @@ class School extends Model
 {
     protected $fillable = [
         'name', 'slug', 'country', 'city', 'website', 'description', 'status',
+        'contact_person_name', 'contact_email', 'contact_number',
+        'portal_username', 'portal_password', 'portal_link',
+        'agreement_path', 'agreement_name',
+    ];
+
+    // Never leak the raw file path or portal password by default — the profile
+    // page surfaces the password explicitly and the agreement only via a
+    // gated download route.
+    protected $hidden = [
+        'agreement_path',
     ];
 
     public function getRouteKeyName(): string
@@ -35,8 +45,9 @@ class School extends Model
             ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
             ->exists()
         ) {
-            $slug = "{$base}-" . ++$i;
+            $slug = "{$base}-".++$i;
         }
+
         return $slug;
     }
 

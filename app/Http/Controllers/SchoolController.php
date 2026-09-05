@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\School;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -16,22 +17,68 @@ class SchoolController extends Controller
 {
     public function index(Request $request)
     {
+        // Full rows so the inline Edit modal can prefill every field. The model
+        // hides agreement_path; the agreement file itself only reaches admins
+        // through the gated download route.
         $schools = School::orderBy('name')->get();
         // Pick the Inertia page name by URL prefix so the education
         // portal gets EducationLayout chrome while admins still get
         // AdminLayout — same controller, same data, two wrappers.
-        $page = $request->is('portal/education/*') ? 'portal/education/Schools' : 'admin/Schools';
-        return inertia($page, ['schools' => $schools]);
+        $isEducation = $request->is('portal/education/*');
+        $page = $isEducation ? 'portal/education/Schools' : 'admin/Schools';
+
+        return inertia($page, [
+            'schools' => $schools,
+            // Base URL so the list can deep-link to each school's profile
+            // under the right prefix (admin vs education portal).
+            'portalBase' => $isEducation ? '/portal/education' : '/admin',
+        ]);
+    }
+
+    /**
+     * School profile — the full record (contact + portal details) on its own
+     * page. The agreement file is admin-only: staff see the profile, but the
+     * download link only appears (and only works) for admins.
+     */
+    public function show(Request $request, $id)
+    {
+        $school = School::findOrFail($id);
+        $isEducation = $request->is('portal/education/*');
+        $page = $isEducation ? 'portal/education/SchoolProfile' : 'admin/SchoolProfile';
+        $canViewAgreement = (bool) optional($request->user())->isAtLeast('admin');
+
+        return inertia($page, [
+            'school' => $school->makeVisible('portal_password'),
+            'portalBase' => $isEducation ? '/portal/education' : '/admin',
+            'hasAgreement' => (bool) $school->agreement_path,
+            'canViewAgreement' => $canViewAgreement,
+            // Agreement always downloads through the admin route (admin-gated).
+            'agreementUrl' => $school->agreement_path ? "/admin/schools/{$school->id}/agreement" : null,
+        ]);
+    }
+
+    /** Stream the agreement file — admin/super-admin only. */
+    public function downloadAgreement(Request $request, $id)
+    {
+        abort_unless(optional($request->user())->isAtLeast('admin'), 403);
+
+        $school = School::findOrFail($id);
+        abort_if(! $school->agreement_path || ! Storage::disk('local')->exists($school->agreement_path), 404, 'No agreement on file.');
+
+        return Storage::disk('local')->download($school->agreement_path, $school->agreement_name ?: 'agreement');
     }
 
     public function store(Request $request)
     {
         $data = $this->validatePayload($request);
         try {
+            $data = $this->applyAgreementUpload($request, $data);
             School::create($data);
+
             return back()->with('success', 'School added.');
         } catch (\Throwable $e) {
             Log::error('School store failed', ['error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not add school.');
         }
     }
@@ -41,10 +88,13 @@ class SchoolController extends Controller
         $school = School::findOrFail($id);
         $data = $this->validatePayload($request, $school->id);
         try {
+            $data = $this->applyAgreementUpload($request, $data, $school);
             $school->update($data);
+
             return back()->with('success', 'School updated.');
         } catch (\Throwable $e) {
             Log::error('School update failed', ['error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update school.');
         }
     }
@@ -53,23 +103,64 @@ class SchoolController extends Controller
     {
         $school = School::findOrFail($id);
         try {
+            if ($school->agreement_path) {
+                Storage::disk('local')->delete($school->agreement_path);
+            }
             $school->delete();
+
             return back()->with('success', 'School removed.');
         } catch (\Throwable $e) {
             Log::error('School delete failed', ['error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not remove school.');
         }
+    }
+
+    /**
+     * Store a newly uploaded agreement (private disk, admin-only download) and
+     * fold its path/name into the write payload. When no file is sent, the
+     * existing agreement is left untouched.
+     */
+    private function applyAgreementUpload(Request $request, array $data, ?School $school = null): array
+    {
+        // 'agreement_file' is the upload input, not a column — never persist it.
+        unset($data['agreement_file']);
+
+        if (! $request->hasFile('agreement_file')) {
+            return $data;
+        }
+
+        // Replace any prior file so we don't orphan it on the disk.
+        if ($school && $school->agreement_path) {
+            Storage::disk('local')->delete($school->agreement_path);
+        }
+
+        $file = $request->file('agreement_file');
+        $data['agreement_path'] = $file->store('school-agreements', 'local');
+        $data['agreement_name'] = $file->getClientOriginalName();
+
+        return $data;
     }
 
     private function validatePayload(Request $request, ?int $ignoreId = null): array
     {
         return $request->validate([
-            'name'        => 'required|string|max:191',
-            'country'     => 'nullable|string|max:120',
-            'city'        => 'nullable|string|max:120',
-            'website'     => 'nullable|url|max:512',
+            'name' => 'required|string|max:191',
+            'country' => 'nullable|string|max:120',
+            'city' => 'nullable|string|max:120',
+            'website' => 'nullable|url|max:512',
             'description' => 'nullable|string|max:5000',
-            'status'      => ['nullable', Rule::in(['active', 'inactive'])],
+            'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            // Contact
+            'contact_person_name' => 'nullable|string|max:191',
+            'contact_email' => 'nullable|string|max:191',
+            'contact_number' => 'nullable|string|max:60',
+            // Portal (enrolment portal login the team shares)
+            'portal_username' => 'nullable|string|max:191',
+            'portal_password' => 'nullable|string|max:191',
+            'portal_link' => 'nullable|string|max:2000',
+            // Agreement — an uploaded file, admin-access only
+            'agreement_file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:10240',
         ]);
     }
 }
