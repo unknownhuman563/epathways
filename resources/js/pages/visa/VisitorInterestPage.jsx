@@ -37,7 +37,7 @@ const FIELD_TO_STEP = {
     multi_entry_plans: 6, has_leave_permit: 6,
     travel_funds_description: 7, can_provide_statements: 7,
     has_other_assets: 7, other_assets_details: 7,
-    declaration_accepted: 8, signature_name: 8, signature_date: 8,
+    declaration_accepted: 10, signature_name: 10, signature_date: 10,
 };
 
 const FIELD_LABELS = {
@@ -171,7 +171,7 @@ export default function VisitorInterestPage() {
                 if (!data.travel_funds_description?.trim()) errs.travel_funds_description = 'Funds description is required';
                 if (!data.can_provide_statements) errs.can_provide_statements = 'Please answer';
                 break;
-            case 8:
+            case 10:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }

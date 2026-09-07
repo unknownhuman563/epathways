@@ -2204,11 +2204,18 @@ class ImmigrationController extends Controller
             // Free-assessment submissions live on the Lead (FA-…) with the whole
             // immigration questionnaire stored as JSON columns — surface them here
             // too so an adviser reviews them alongside the visa intakes.
+            // Ordered by LAST SAVE, not creation. A returning applicant keeps
+            // their original lead row, so a draft filled in today can carry a
+            // months-old created_at — ordering by that pushed live drafts to the
+            // bottom and, past 200 rows, out of the list entirely.
             $free = Lead::whereIn('source', ['free-assessment', 'education-enrolment'])
-                ->latest()->limit(200)->get();
+                ->latest('updated_at')->limit(200)->get();
             $rows = $rows->concat($free->map(fn ($l) => $this->freeAssessmentRow($l)));
 
-            $intakes = $rows->sortByDesc('created_at')->values();
+            // Sort on last activity where we have it (free assessments), falling
+            // back to arrival time for the visa intakes, whose updated_at moves
+            // whenever staff triage them and would reshuffle the queue.
+            $intakes = $rows->sortByDesc(fn ($r) => $r['saved_at'] ?? $r['created_at'])->values();
 
             return ['intakes' => $intakes];
         } catch (\Throwable $e) {
@@ -2251,6 +2258,15 @@ class ImmigrationController extends Controller
             'phone' => $l->phone,
             'status' => $l->status,
             'created_at' => $l->created_at,
+            // Drafts only. A draft is rewritten on every autosave, so this —
+            // not created_at — is what "Saved 4 Sep" means, and it is what the
+            // list sorts on so a form someone is filling in today surfaces.
+            //
+            // Deliberately null once submitted: updated_at then moves on every
+            // staff edit, which would creep an old submission forward to
+            // "just now". Submitted rows keep sorting and displaying by
+            // created_at, which in practice is within minutes of the submit.
+            'saved_at' => $isDraft ? $l->updated_at : null,
             'readiness' => $tier,
             'readiness_pct' => $pct,
             'readiness_reviewed' => false,

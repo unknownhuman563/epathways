@@ -136,7 +136,8 @@ export default function ImmigrationAssessments({ intakes = [] }) {
             const ra = READINESS[a.readiness]?.rank ?? 0;
             const rb = READINESS[b.readiness]?.rank ?? 0;
             if (rb !== ra) return rb - ra;
-            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+            // Last activity where we have it (drafts autosave), else arrival.
+            return new Date(b.saved_at || b.created_at || 0) - new Date(a.saved_at || a.created_at || 0);
         });
     }, [intakes, activeVisa, statusFilter, readinessFilter, search]);
 
@@ -460,7 +461,7 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                                 {fresh && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500 text-white">New</span>}
                             </span>
                             <span className="text-[10.5px] text-gray-500 tabular-nums">
-                                {stage === "draft" ? `Saved ${timeAgo(i.created_at)}` : timeAgo(i.created_at)}
+                                {stage === "draft" ? `Saved ${timeAgo(i.saved_at || i.created_at)}` : timeAgo(i.created_at)}
                             </span>
                         </div>
                     );

@@ -35,7 +35,7 @@ const FIELD_TO_STEP = {
     current_employer_phone: 6, current_employer_email: 6,
     military_compulsory: 7, military_undertaken: 7, military_details: 7,
     travelled_internationally: 7,
-    declaration_accepted: 8, signature_name: 8, signature_date: 8,
+    declaration_accepted: 10, signature_name: 10, signature_date: 10,
 };
 
 const FIELD_LABELS = {
@@ -217,7 +217,7 @@ export default function WorkInterestPage() {
                 if (!data.military_undertaken) errs.military_undertaken = 'Please answer';
                 if (!data.travelled_internationally) errs.travelled_internationally = 'Please answer';
                 break;
-            case 8:
+            case 10:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }

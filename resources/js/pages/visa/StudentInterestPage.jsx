@@ -44,7 +44,7 @@ const FIELD_TO_STEP = {
     has_sponsor: 7, sponsor_relationship: 7, sponsor_income_source: 7,
     can_provide_statements: 7, has_other_assets: 7, other_assets_details: 7,
     // Step 8 — Declaration
-    declaration_accepted: 8, signature_name: 8, signature_date: 8,
+    declaration_accepted: 10, signature_name: 10, signature_date: 10,
 };
 
 const FIELD_LABELS = {
@@ -170,7 +170,7 @@ export default function StudentInterestPage() {
                 if (!data.has_enough_funds) errs.has_enough_funds = 'Please answer';
                 if (data.tuition_fee_nzd === '' || data.tuition_fee_nzd === null) errs.tuition_fee_nzd = 'Tuition fee is required';
                 break;
-            case 8:
+            case 10:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }

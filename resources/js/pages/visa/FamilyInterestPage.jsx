@@ -33,7 +33,7 @@ const FIELD_TO_STEP = {
     currently_working: 6, current_employer_name: 6, current_employer_address: 6,
     current_employer_phone: 6, current_employer_email: 6, current_occupation: 6,
     current_start: 6, current_end: 6,
-    nz_contacts: 7, declaration_accepted: 7, signature_name: 7, signature_date: 7,
+    nz_contacts: 8, declaration_accepted: 8, signature_name: 8, signature_date: 8,
 };
 
 const FIELD_LABELS = {
@@ -109,7 +109,7 @@ export default function FamilyInterestPage() {
                 else if (!EMAIL_RE.test(data.email)) errs.email = 'Enter a valid email address';
                 if (!data.phone?.trim()) errs.phone = 'Contact number is required';
                 break;
-            case 7:
+            case 8:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
             default:
