@@ -11,11 +11,12 @@ use Illuminate\Database\Eloquent\Model;
 class EmailAutomationMessage extends Model
 {
     protected $fillable = [
-        'event_key', 'recipient', 'template_key', 'channel', 'delay_minutes', 'enabled', 'sort_order',
+        'event_key', 'recipient', 'template_key', 'channel', 'delay_minutes', 'enabled', 'cc_agent', 'sort_order',
     ];
 
     protected $casts = [
         'enabled'       => 'boolean',
+        'cc_agent'      => 'boolean',
         'delay_minutes' => 'integer',
         'sort_order'    => 'integer',
     ];

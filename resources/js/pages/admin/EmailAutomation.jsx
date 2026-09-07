@@ -67,6 +67,7 @@ export default function EmailAutomation({
         Object.entries(config).forEach(([event_key, arr]) => (arr || []).forEach((m) => flat.push({
             event_key, recipient: m.recipient, template_key: m.template_key || null,
             channel: m.channel || "email", delay_minutes: m.delay_minutes || 0, enabled: !!m.enabled,
+            cc_agent: !!m.cc_agent,
         })));
         router.post("/admin/email-automation", { messages: flat }, {
             preserveScroll: true,
@@ -245,6 +246,12 @@ function EventCard({ ev, msgs, setMsgs, on, status, isOpen, onOpen, recipients, 
                                             <button key={v} type="button" onClick={() => patch(i, { channel: v })}
                                                 className={`text-[11.5px] font-semibold px-2.5 py-1.5 ${x ? "border-l border-gray-200" : ""} ${(m.channel || "email") === v ? "bg-violet-50 text-violet-800" : "text-gray-500 hover:text-gray-800"}`}>{t}</button>
                                         ))}
+                                    </div>
+                                </Field>
+                                <Field label="CC agent">
+                                    <div className="inline-flex items-center gap-1.5 h-[34px]" title="Also CC this client's own recruiting agent (leads.agent_id)">
+                                        <Switch size="sm" on={!!m.cc_agent} onChange={(v) => patch(i, { cc_agent: v })} label="CC the client's agent" />
+                                        <span className="text-[11.5px] text-gray-500">Client's agent</span>
                                     </div>
                                 </Field>
                                 <button type="button" onClick={() => onTest(m.template_key)} disabled={!m.template_key} title="Send a test to yourself"

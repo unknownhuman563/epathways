@@ -65,11 +65,15 @@ class EmailAutomationService
      *  built-in client email and avoid double-sending). Staff notices return false. */
     private function deliver(EmailAutomationMessage $msg, Lead $lead, array $context, string $department): bool
     {
+        // When configured, keep the lead's own recruiting agent in the loop by
+        // CC-ing them — resolved per-lead, so each client's agent is used.
+        $agentCc = ($msg->cc_agent && ! empty($lead->agent?->email)) ? $lead->agent->email : null;
+
         if ($msg->recipient === 'client') {
             // The client is the lead — CommunicationService handles email/SMS
             // routing and message logging for us.
             if (! empty($lead->email) || ! empty($lead->phone)) {
-                $this->comms->sendTemplated($msg->template_key, $lead, $context, $department);
+                $this->comms->sendTemplated($msg->template_key, $lead, $context, $department, $agentCc);
 
                 return true;
             }
@@ -109,7 +113,7 @@ class EmailAutomationService
             true,
             $lead->id,
             $template->to_extra,
-            $template->cc,
+            $this->comms->mergeAddressList($template->cc, $agentCc),
             $template->bcc,
         );
 
