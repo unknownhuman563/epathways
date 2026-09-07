@@ -1609,6 +1609,17 @@ class LeadDocumentController extends Controller
             }
 
             $count = count($ids);
+
+            // Notify via the Education "Proposal submitted for verification"
+            // automation (a no-op unless an admin has enabled a message for it).
+            if ($count > 0) {
+                $titles = \App\Models\Program::whereIn('id', $ids)->orderBy('title')->pluck('title')->all();
+                app(\App\Services\EmailAutomationService::class)->fire('education.proposal.submitted', $lead->fresh(), [
+                    'program_list' => implode(', ', $titles),
+                    'program_count' => $count,
+                ]);
+            }
+
             $msg = $count === 0
                 ? "Proposal cleared for {$lead->first_name} {$lead->last_name}."
                 : "Submitted {$count} program".($count === 1 ? '' : 's').' for verification — the client sees them once approved.';

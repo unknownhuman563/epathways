@@ -27,6 +27,7 @@ class EmailAutomationController extends Controller
                 'channel'       => $m->channel,
                 'delay_minutes' => $m->delay_minutes,
                 'enabled'       => $m->enabled,
+                'cc_agent'      => $m->cc_agent,
             ])->values());
 
         // Distinct active template keys for the pickers.
@@ -59,6 +60,7 @@ class EmailAutomationController extends Controller
             'messages.*.channel'        => 'nullable|string|in:email,sms,both',
             'messages.*.delay_minutes'  => 'nullable|integer|min:0|max:10080',
             'messages.*.enabled'        => 'nullable|boolean',
+            'messages.*.cc_agent'       => 'nullable|boolean',
         ]);
 
         DB::transaction(function () use ($data) {
@@ -72,6 +74,7 @@ class EmailAutomationController extends Controller
                     'channel'       => $m['channel'] ?? 'email',
                     'delay_minutes' => $m['delay_minutes'] ?? 0,
                     'enabled'       => (bool) ($m['enabled'] ?? false),
+                    'cc_agent'      => (bool) ($m['cc_agent'] ?? false),
                     'sort_order'    => $sort++,
                 ]);
             }
