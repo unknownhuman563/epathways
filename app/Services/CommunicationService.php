@@ -34,7 +34,7 @@ class CommunicationService
      *
      * @return array{email: ?MessageLog, sms: ?MessageLog}
      */
-    public function sendTemplated(string $key, Lead $lead, array $extraContext = [], ?string $department = null): array
+    public function sendTemplated(string $key, Lead $lead, array $extraContext = [], ?string $department = null, ?string $extraCc = null): array
     {
         $template = MessageTemplate::resolve($key, $department);
         if (! $template) {
@@ -45,7 +45,7 @@ class CommunicationService
             return ['email' => null, 'sms' => null];
         }
 
-        return $this->dispatch($template, $lead, $extraContext);
+        return $this->dispatch($template, $lead, $extraContext, [], $extraCc);
     }
 
     /**
@@ -68,7 +68,7 @@ class CommunicationService
      * @param  list<array{path: string, name: string}>  $attachments
      * @return array{email: ?MessageLog, sms: ?MessageLog}
      */
-    private function dispatch(MessageTemplate $template, Lead $lead, array $extraContext, array $attachments = []): array
+    private function dispatch(MessageTemplate $template, Lead $lead, array $extraContext, array $attachments = [], ?string $extraCc = null): array
     {
         $result = ['email' => null, 'sms' => null];
 
@@ -84,13 +84,16 @@ class CommunicationService
         if (in_array('email', $channels, true) && ! empty($lead->email)) {
             $subject = $this->substitute((string) $template->email_subject, $context, false);
             $body = $this->substitute((string) $template->email_body, $context, true);
+            // Merge any per-send extra CC (e.g. the lead's own agent) with the
+            // template's static CC list, deduped.
+            $cc = $this->mergeAddressList($template->cc, $extraCc);
             $result['email'] = $this->sendEmail(
                 $lead, $subject, $body, $template->key, $attachments, null,
                 $template->banner_image,
                 $template->footer_image,
                 $template->from_email,
                 $template->from_name,
-                $template->cc,
+                $cc,
                 $template->bcc,
                 $template->branding,
                 $template->to_extra,
@@ -351,6 +354,20 @@ class CommunicationService
         }
 
         return $log;
+    }
+
+    /**
+     * Combine one or more comma/semicolon-separated address strings into a
+     * single deduped comma-separated list (blank when none are valid).
+     */
+    public function mergeAddressList(?string ...$lists): ?string
+    {
+        $all = collect($lists)
+            ->flatMap(fn ($l) => $this->parseAddresses($l))
+            ->map(fn ($e) => strtolower(trim($e)))
+            ->filter()->unique()->values();
+
+        return $all->isNotEmpty() ? $all->implode(', ') : null;
     }
 
     /** Split a comma/semicolon-separated address string into valid emails. */
