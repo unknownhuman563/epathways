@@ -1336,8 +1336,15 @@ class LeadController extends Controller
         // layout (because app.jsx picks the layout from the page-name prefix).
         $path = request()->path(); // e.g. "portal/sales/leads/23"
         $page = 'admin/LeadDetails';
-        foreach (['sales', 'education', 'english', 'immigration', 'immigration-adviser', 'accommodation'] as $role) {
-            str_starts_with($path, "portal/{$role}/") ? $page = "portal/{$role}/LeadDetails" : null;
+        $portalBase = '/admin';
+        foreach (['sales', 'education', 'english', 'immigration', 'immigration-adviser', 'accommodation', 'agent', 'sub-agent'] as $role) {
+            if (str_starts_with($path, "portal/{$role}/")) {
+                $page = "portal/{$role}/LeadDetails";
+                // Every write and link inside the profile hangs off this base,
+                // so a click never navigates out of the portal it was opened
+                // from — which would swap the sidebar to another role's chrome.
+                $portalBase = "/portal/{$role}";
+            }
         }
 
         // Internal staff notes — pinned first, then newest.
@@ -1616,7 +1623,23 @@ class LeadController extends Controller
             ])
             ->all();
 
+        // Where the profile's ~30 write endpoints live for THIS caller.
+        //
+        // The recruiting portals mirror the whole set under their own prefix
+        // (see the $leadProfileRoutes group in routes/web.php), fronted by
+        // `lead.scope` so an agent can only act on their own referrals. Every
+        // other portal — sales, education, immigration … — keeps posting to
+        // /admin, because those groups already grant them access and no portal
+        // route exists there. Getting this wrong in either direction is a 403
+        // or a silent widening of access, so it is decided server-side.
+        $writeBase = in_array($portalBase, ['/portal/agent', '/portal/sub-agent'], true)
+            ? $portalBase
+            : '/admin';
+
         return inertia($page, [
+            'portalBase' => $portalBase,
+            'writeBase' => $writeBase,
+            'overview' => $this->buildOverview($lead, $proposal, $notes),
             'lead' => $lead,
             'proposal' => $proposal,
             'activity' => $activity,
@@ -1657,6 +1680,175 @@ class LeadController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * The fields "record readiness" measures, and which of them block an
+     * assessment from running at all.
+     *
+     * Named explicitly rather than counted off the schema: `leads` has 200+
+     * columns, most irrelevant to a given lead, so "% of columns filled" would
+     * be a meaningless number. This is the set staff actually chase.
+     */
+    private const READINESS_FIELDS = [
+        // [column, label, blocks assessment]
+        ['first_name', 'First name', true],
+        ['last_name', 'Last name', true],
+        ['email', 'Email', false],
+        ['phone', 'Phone', true],
+        ['dob', 'Date of birth', true],
+        ['gender', 'Gender', false],
+        ['marital_status', 'Marital status', false],
+        ['citizenship', 'Nationality', true],
+        ['country_of_birth', 'Country of birth', false],
+        ['place_of_birth', 'Place of birth', false],
+        ['residence_city', 'City', false],
+        ['residence_country', 'Country of residence', true],
+        ['residence_address_line_1', 'Address', false],
+        ['residence_address_postcode', 'Postcode', false],
+        ['whatsapp', 'WhatsApp', false],
+        ['passport_number', 'Passport number', false],
+        ['passport_expiry', 'Passport expiry', false],
+        ['passport_issuing_country', 'Passport country', false],
+        ['highest_qualification', 'Highest qualification', true],
+        ['highest_qualification_field', 'Field of study', false],
+        ['highest_qualification_country', 'Where studied', false],
+        ['highest_qualification_year_completed', 'Year completed', false],
+        ['english_test_type', 'English test', false],
+        ['english_test_overall_score', 'English score', false],
+        ['english_test_date', 'English test date', false],
+        ['preferred_course', 'Preferred course', false],
+        ['preferred_qualification_level', 'Preferred level', false],
+        ['preferred_city_of_study', 'Preferred city', false],
+        ['preferred_intake', 'Preferred intake', false],
+        ['funding_source', 'Funding source', false],
+        ['available_funds_nzd', 'Available funds', false],
+        ['employment_type', 'Employment type', false],
+        ['current_position_title', 'Current role', false],
+        ['has_been_declined_visa', 'Visa history declared', false],
+    ];
+
+    /**
+     * Everything the profile's Overview tab states as fact: where the lead is,
+     * who owns it, how complete the record is, what has been proposed and when
+     * they were last contacted — plus the six-step progress strip.
+     *
+     * Every figure here is counted from live data. Anything unknown comes back
+     * null so the UI can say so rather than show a plausible-looking number.
+     */
+    private function buildOverview(Lead $lead, $proposal, $notes): array
+    {
+        $filled = [];
+        $missingBlocking = [];
+        foreach (self::READINESS_FIELDS as [$col, $label, $blocks]) {
+            $value = $lead->{$col} ?? null;
+            $isSet = ! ($value === null || $value === '' || $value === []);
+            if ($isSet) {
+                $filled[] = $col;
+            } elseif ($blocks) {
+                $missingBlocking[] = $label;
+            }
+        }
+        $total = count(self::READINESS_FIELDS);
+
+        // Documents actually received against the checklist.
+        $docsReceived = $lead->relationLoaded('documents')
+            ? $lead->documents->whereNotNull('checklist_key')->pluck('checklist_key')->unique()->count()
+            : \App\Models\LeadDocument::where('lead_id', $lead->id)->whereNotNull('checklist_key')->distinct()->count('checklist_key');
+        $docsRequested = \App\Models\LeadDocumentRequest::where('lead_id', $lead->id)->count();
+
+        // Last outbound message, and whether the lead has replied since.
+        $lastMessage = \App\Models\MessageLog::where('recipient_type', Lead::class)
+            ->where('recipient_id', $lead->id)
+            ->latest('created_at')
+            ->first();
+        $repliedSince = $lastMessage && \Illuminate\Support\Facades\Schema::hasTable('email_replies')
+            ? \App\Models\EmailReply::where('lead_id', $lead->id)
+                ->where('created_at', '>=', $lastMessage->created_at)->exists()
+            : false;
+
+        $owner = $lead->assigned_to ? User::find($lead->assigned_to) : null;
+        $stageSince = $lead->stage_updated_at ?: $lead->created_at;
+        $programCount = is_array($lead->proposed_program_ids) ? count($lead->proposed_program_ids) : 0;
+
+        return [
+            'stage' => [
+                'label' => $lead->status ?: 'New',
+                'since' => optional($stageSince)->toIso8601String(),
+                'day' => $lead->created_at ? (int) $lead->created_at->diffInDays(now()) : null,
+            ],
+            'owner' => [
+                'name' => $owner?->name,
+                'assigned_at' => optional($lead->owner_since)->toIso8601String(),
+            ],
+            'readiness' => [
+                'filled' => count($filled),
+                'total' => $total,
+                'percent' => $total > 0 ? (int) round(count($filled) / $total * 100) : 0,
+                'blocking' => $missingBlocking,
+            ],
+            'programs' => [
+                'count' => $programCount,
+                'titles' => $proposal['programs'] ?? [],
+                // "Sent" means the client has actually been shown the shortlist.
+                'sent' => (bool) $lead->preferred_program_chosen_at || $lead->portal_invitation_status === 'accepted',
+                'chosen_id' => $lead->preferred_program_id,
+            ],
+            'last_contact' => $lastMessage ? [
+                'label' => $lead->last_seen_at && $lastMessage->created_at && $lead->last_seen_at->gte($lastMessage->created_at)
+                    ? 'Opened '.($lastMessage->channel ?: 'message')
+                    : ucfirst((string) ($lastMessage->channel ?: 'message')).' sent',
+                'at' => optional($lastMessage->created_at)->toIso8601String(),
+                'replied' => $repliedSince,
+            ] : null,
+            // The six steps the Overview strip walks through. `state` is one of
+            // done / active / blocked / todo; `caption` is what actually happened.
+            'steps' => [
+                [
+                    'key' => 'created', 'label' => 'Lead created', 'state' => 'done',
+                    'caption' => trim(($lead->source ?: 'manually').', '.optional($lead->created_at)->format('j M')),
+                ],
+                [
+                    'key' => 'details', 'label' => 'Details',
+                    'state' => $missingBlocking ? 'blocked' : 'done',
+                    'caption' => $missingBlocking
+                        ? count($missingBlocking).' field'.(count($missingBlocking) === 1 ? '' : 's').' missing'
+                        : 'all required fields in',
+                ],
+                [
+                    'key' => 'documents', 'label' => 'Documents',
+                    'state' => $docsRequested > 0 && $docsReceived >= $docsRequested ? 'done' : ($docsReceived > 0 ? 'active' : 'todo'),
+                    'caption' => $docsRequested > 0
+                        ? "{$docsReceived} of {$docsRequested} received"
+                        : ($docsReceived > 0 ? "{$docsReceived} received" : 'none requested yet'),
+                ],
+                [
+                    'key' => 'assessment', 'label' => 'AI assessment',
+                    'state' => $lead->ai_analysis_status === 'completed' ? 'done'
+                        : ($lead->ai_analysis_status === 'processing' ? 'active' : 'todo'),
+                    'caption' => match ($lead->ai_analysis_status) {
+                        'completed' => 'score '.(data_get($lead->ai_analysis, 'overall_score') ?? '—').'/100',
+                        'processing' => 'running',
+                        'failed' => 'failed — retry',
+                        default => 'not started',
+                    },
+                ],
+                [
+                    'key' => 'proposal', 'label' => 'Proposal',
+                    'state' => $lead->preferred_program_id ? 'done' : ($programCount > 0 ? 'active' : 'todo'),
+                    'caption' => $lead->preferred_program_id ? 'client chose one'
+                        : ($programCount > 0 ? "{$programCount} shortlisted, not sent" : 'not sent'),
+                ],
+                [
+                    'key' => 'agreement', 'label' => 'Agreement',
+                    'state' => $lead->services_agreement_signed_at ? 'done'
+                        : ($lead->engagement_sent_at ? 'active' : 'todo'),
+                    'caption' => $lead->services_agreement_signed_at
+                        ? 'signed '.optional($lead->services_agreement_signed_at)->format('j M')
+                        : ($lead->engagement_sent_at ? 'sent, awaiting signature' : '—'),
+                ],
+            ],
+        ];
+    }
+
     private function buildStageTimeline(Lead $lead, $history): array
     {
         $iso = fn ($t) => $t ? \Illuminate\Support\Carbon::parse($t)->toIso8601String() : null;

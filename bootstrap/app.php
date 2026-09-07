@@ -27,6 +27,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'portal' => \App\Http\Middleware\EnsurePortalAccess::class,
             'tracker.enabled' => \App\Http\Middleware\EnsureTrackerEnabled::class,
             'module' => \App\Http\Middleware\EnsureModuleAccess::class,
+            // Row-level scoping for the lead-profile routes mirrored under the
+            // recruiting portals — `portal:` alone is role-level only.
+            'lead.scope' => \App\Http\Middleware\EnsureLeadInPortalScope::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
