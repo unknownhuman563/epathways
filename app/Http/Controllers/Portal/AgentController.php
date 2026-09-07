@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\LeadController;
 use App\Models\AgentAgreement;
 use App\Models\Lead;
 use App\Models\Program;
@@ -224,7 +225,18 @@ class AgentController extends Controller
         return Storage::disk('local')->download($agreement->file_path, $agreement->original_name);
     }
 
-    /** The agent's own leads list (add + edit-info only). */
+    /**
+     * The agent's own leads — rendered with the SHARED sales Leads screen so
+     * the table looks and behaves the same everywhere (same re-export pattern
+     * as admin / education / immigration).
+     *
+     * Two things make that safe. The query is scoped to `agent_id = me`, so an
+     * agent only ever sees leads they recruited. And `portal => 'agent'` makes
+     * the shared component drop every pipeline write — stage, visa, notes,
+     * import, kanban, bulk assign/delete — none of which the agent portal
+     * exposes an endpoint for. Add Lead and the Edit modal stay live, pointed
+     * at this portal's own routes.
+     */
     public function leads()
     {
         try {
@@ -242,18 +254,94 @@ class AgentController extends Controller
 
             return inertia('portal/agent/Leads', [
                 'portal' => 'agent',
-                'statuses' => self::LEAD_STATUSES,
+                'portalBase' => '/portal/agent',
+                // The rows carry the SALES status vocabulary (sales works them
+                // after hand-off), so the filter list has to be that one — the
+                // Add-Lead form's shorter list would not match a single row.
+                'statuses' => SalesController::LEAD_STATUSES,
                 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
                 'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
+                'visaOptions' => $this->visaOptions(),
+                // Tab counts scoped to this agent — the shared trait's version
+                // counts every lead in the system and would leak other agents'
+                // volumes through the badge.
+                'tabCounts' => $this->ownTabCounts(),
+                // Deliberately empty: staff assignment, the agent roster, the
+                // events desk and the internal tag dictionary are all sales-side
+                // surfaces. Passing them would light up controls that 403.
+                'staffOptions' => [],
+                'agents' => [],
+                'events' => [],
+                'allTagNames' => [],
             ]);
         } catch (\Throwable $e) {
             Log::error('Agent leads list failed', ['error' => $e->getMessage()]);
 
             return inertia('portal/agent/Leads', [
-                'portal' => 'agent', 'statuses' => self::LEAD_STATUSES,
-                'programs' => collect(), 'leads' => collect(),
+                'portal' => 'agent',
+                'portalBase' => '/portal/agent',
+                'statuses' => SalesController::LEAD_STATUSES,
+                'programs' => collect(),
+                'leads' => collect(),
             ]);
         }
+    }
+
+    /** Registration / events tab counts, over this agent's leads only. */
+    private function ownTabCounts(): array
+    {
+        $since = now()->subDays(7);
+
+        return [
+            'registration' => (clone $this->ownLeadsQuery())
+                ->where('source', 'registration')->where('created_at', '>=', $since)->count(),
+            'events' => (clone $this->ownLeadsQuery())
+                ->whereNotNull('event_id')->where('created_at', '>=', $since)->count(),
+        ];
+    }
+
+    /**
+     * Full lead profile, inside the Agent portal chrome.
+     *
+     * Row-scoped before anything is read: an agent may only open a lead they
+     * recruited. `portal:agent` is role-level only and would happily let one
+     * agent read another's lead by guessing an id, so the ownership check has
+     * to live here.
+     *
+     * The payload is built by the shared LeadController::show(), which picks
+     * the page component and the portal base off the request path — so the
+     * profile renders under AgentLayout and every link inside it stays on
+     * /portal/agent/*, leaving the sidebar untouched.
+     */
+    public function showLead($id)
+    {
+        $this->ownLeadsQuery()->where('id', $id)->firstOrFail();
+
+        return app(LeadController::class)->show($id);
+    }
+
+    /**
+     * The Edit modal's two endpoints, mirrored under /portal/agent so an agent
+     * can correct their own referral's details without reaching into /admin.
+     *
+     * Both are ownership-checked first, then handed to the shared LeadController
+     * handlers. `updatePersonal` is safe to expose here because it only accepts
+     * personal FACTS — name, contact, identity, address. Stage, priority,
+     * ownership and every conversion flag live on other endpoints the agent
+     * portal deliberately does not route.
+     */
+    public function leadEditData($id)
+    {
+        $this->ownLeadsQuery()->where('id', $id)->firstOrFail();
+
+        return app(LeadController::class)->editData($id);
+    }
+
+    public function updateLeadPersonal(Request $request, $id)
+    {
+        $this->ownLeadsQuery()->where('id', $id)->firstOrFail();
+
+        return app(LeadController::class)->updatePersonal($request, $id);
     }
 
     /** Add a new lead — agent_id is auto-stamped by CreatesDashboardLead. */
