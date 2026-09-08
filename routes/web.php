@@ -822,6 +822,9 @@ Route::middleware(['auth'])->group(function () {
         // "bulk-*" segments aren't captured as an {id}.
         Route::post('/admin/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('admin.leads.bulk-agent');
         Route::post('/admin/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('admin.leads.bulk-delete');
+        // Assign / clear the recruiting agent on a single lead from the Edit
+        // Lead modal (declared before /admin/leads/{id} so "{id}/agent" resolves).
+        Route::post('/admin/leads/{id}/agent', [SalesController::class, 'updateLeadAgent'])->name('admin.leads.agent');
 
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');

@@ -1727,7 +1727,7 @@ class LeadDocumentController extends Controller
      * to "Proposal Sent". Shared by the Notify button and the Program
      * Verification approval step. Safe no-op when the lead has no email.
      */
-    public function sendProposalReadyEmail(Lead $lead): bool
+    public function sendProposalReadyEmail(Lead $lead, bool $sendMail = true): bool
     {
         if (empty($lead->email)) {
             return false;
@@ -1739,6 +1739,13 @@ class LeadDocumentController extends Controller
         if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
             $lead->status = 'Proposal Sent';
             $lead->save();
+        }
+
+        // A configured client automation may already own the "proposal ready"
+        // email — in that case advance the pipeline but skip the built-in send
+        // so the client isn't emailed twice.
+        if (! $sendMail) {
+            return true;
         }
 
         $res = app(\App\Services\CommunicationService::class)

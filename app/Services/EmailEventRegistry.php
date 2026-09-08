@@ -135,6 +135,7 @@ class EmailEventRegistry
         return [
             ['group' => 'Proposals', 'events' => [
                 ['key' => 'education.proposal.submitted', 'label' => 'Proposal submitted for verification', 'when' => 'When staff submit a study proposal for verification', 'vars' => ['first_name', 'program_list', 'program_count', 'tracker_url']],
+                ['key' => 'education.proposal.approved', 'label' => 'Proposal verified & approved', 'when' => 'When staff verify & approve all programmes in Program Verification', 'vars' => ['first_name', 'program_list', 'program_count', 'tracker_url']],
             ]],
             ['group' => 'Students', 'events' => [
                 ['key' => 'education.student.converted', 'label' => 'Converted to student', 'when' => 'When a lead becomes a student', 'vars' => ['first_name']],

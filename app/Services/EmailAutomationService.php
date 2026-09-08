@@ -83,7 +83,7 @@ class EmailAutomationService
 
         // Staff recipient — render the template with the case's context and send
         // to each resolved staff email as an internal notice.
-        $emails = $this->staffEmails($msg->recipient, $lead);
+        $emails = $this->staffEmails($msg->recipient, $lead, $department);
         if (empty($emails)) {
             return false;
         }
@@ -121,8 +121,14 @@ class EmailAutomationService
     }
 
     /** Resolve staff recipient role → email addresses for this case. */
-    private function staffEmails(string $role, Lead $lead): array
+    private function staffEmails(string $role, Lead $lead, string $department = 'immigration'): array
     {
+        // Outside immigration, "team" means the department's own staff (role ==
+        // department, e.g. "education"), plus the lead's assigned staff member.
+        if ($role === 'team' && $department !== 'immigration') {
+            return $this->departmentTeamEmails($department, $lead);
+        }
+
         $adviser = $this->adviserFor($lead);
         $manager = $this->managerFor($lead);
 
@@ -132,6 +138,20 @@ class EmailAutomationService
             'team' => array_filter([$adviser?->email, $manager?->email]),
             default => [],
         };
+    }
+
+    /** A department's team: everyone whose role is that department, plus the
+     *  lead's own assigned staff member (deduped). */
+    private function departmentTeamEmails(string $department, Lead $lead): array
+    {
+        $emails = User::where('role', $department)
+            ->whereNotNull('email')->pluck('email')->all();
+
+        if (! empty($lead->assignee?->email)) {
+            $emails[] = $lead->assignee->email;
+        }
+
+        return array_values(array_unique(array_filter($emails)));
     }
 
     /** The licensed adviser on the case: the engagement signer, else the named

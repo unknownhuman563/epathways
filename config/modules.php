@@ -33,6 +33,9 @@ return [
         'program_verification' => [
             'label' => 'Program Verification',
             'description' => 'Verify and approve study proposals before they reach the client.',
+            // Admins + super admins always see it (in the admin panel); still
+            // grantable to department staff (e.g. Education) via Module Management.
+            'admin_default' => true,
         ],
         'dtr' => [
             'label' => 'DTR',

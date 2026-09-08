@@ -25,6 +25,11 @@ export default function EmailAutomation({
     });
 
     const recipientsFor = (d) => recipients[d] || recipients.default || ["client", "team"];
+    // "team" reads as the department's own team everywhere except immigration,
+    // which keeps its adviser/manager/"Case team" vocabulary.
+    const recipientLabelsFor = (d) => (d === "immigration"
+        ? recipientLabels
+        : { ...recipientLabels, team: `${departments[d] || "Department"} team` });
     const msgsOf = (key) => config[key] || [];
     const setMsgs = (key, arr) => { setConfig((p) => ({ ...p, [key]: arr })); setDirty(true); };
     const eventOn = (key) => msgsOf(key).some((m) => m.enabled);
@@ -159,7 +164,7 @@ export default function EmailAutomation({
                                         {g.events.map((ev) => (
                                             <EventCard key={ev.key} ev={ev} msgs={msgsOf(ev.key)} setMsgs={(a) => setMsgs(ev.key, a)}
                                                 on={eventOn(ev.key)} status={status(ev.key)} isOpen={open.has(ev.key)} onOpen={() => toggleOpen(ev.key)}
-                                                recipients={recipientsFor(dept)} recipientLabels={recipientLabels} templates={templates}
+                                                recipients={recipientsFor(dept)} recipientLabels={recipientLabelsFor(dept)} templates={templates}
                                                 onTest={sendTest} />
                                         ))}
                                     </div>
