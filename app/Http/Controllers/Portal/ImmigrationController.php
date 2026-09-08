@@ -2212,6 +2212,25 @@ class ImmigrationController extends Controller
                 ->latest('updated_at')->limit(200)->get();
             $rows = $rows->concat($free->map(fn ($l) => $this->freeAssessmentRow($l)));
 
+            // In-progress visa intakes. The five public forms auto-save here as
+            // Draft leads (see SavesIntakeDraft) — they have no row in the
+            // intake tables yet, so they would otherwise be invisible until the
+            // applicant submits. Dropped once they do submit, because the real
+            // intake row then represents them under the same visa tab.
+            $submittedEmails = $rows->pluck('email')->filter()
+                ->map(fn ($e) => mb_strtolower(trim((string) $e)))->flip();
+
+            $drafts = Lead::whereIn('source', array_values(\App\Support\VisaIntakeDraft::SOURCES))
+                ->where('status', 'Draft')
+                ->latest('updated_at')->limit(200)->get();
+
+            $rows = $rows->concat(
+                $drafts
+                    ->reject(fn (Lead $l) => isset($submittedEmails[mb_strtolower(trim((string) $l->email))]))
+                    ->map(fn (Lead $l) => $this->visaDraftRow($l))
+                    ->filter()
+            );
+
             // Sort on last activity where we have it (free assessments), falling
             // back to arrival time for the visa intakes, whose updated_at moves
             // whenever staff triage them and would reshuffle the queue.
@@ -2233,6 +2252,56 @@ class ImmigrationController extends Controller
      * every visa type. The frontend reads the intake row + its paired
      * Assessment + Booking and renders a clean property-row layout.
      */
+    /**
+     * Assessments-list row for an in-progress visa intake (a Draft lead saved
+     * by one of the five public forms). Shaped exactly like a real intake row
+     * so it sorts and filters alongside them, but with no assessment, no
+     * convert action and no detail page — there is no intake record yet.
+     */
+    private function visaDraftRow(Lead $l): ?array
+    {
+        $visaType = \App\Support\VisaIntakeDraft::visaTypeForSource($l->source);
+        if (! $visaType) {
+            return null;
+        }
+
+        [$filled, $total, $pct] = \App\Support\VisaIntakeDraft::readiness(
+            is_array($l->ai_analysis) ? $l->ai_analysis : []
+        );
+        $tier = $pct >= 80 ? 'ready' : ($pct >= 55 ? 'minor' : 'needs_info');
+
+        return [
+            'id' => $l->id,
+            'assessment_id' => null,
+            'intake_id' => $l->lead_id,
+            'visa_type' => $visaType,
+            'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+            'email' => $l->email,
+            'phone' => $l->phone,
+            'status' => 'Draft',
+            'created_at' => $l->created_at,
+            // Last autosave — what "Saved 4 Sep" means on a draft, and what the
+            // list sorts on so a form being filled in right now surfaces.
+            'saved_at' => $l->updated_at,
+            'readiness' => $tier,
+            'readiness_pct' => $pct,
+            'readiness_reviewed' => false,
+            'extra' => "{$filled} of {$total} answers so far",
+            // Nothing to convert or open yet: the applicant has not submitted,
+            // so no intake row exists. The lead record is all there is.
+            'can_convert' => false,
+            'detail_url' => "/admin/leads/{$l->id}",
+            'data_url' => null,
+            'journey' => [
+                'submitted' => false,
+                'submitted_at' => null,
+                'triaged' => false,
+                'converted' => false,
+                'assessment_status' => null,
+            ],
+        ];
+    }
+
     /** Assessments-list row for a free-assessment Lead (visa_type "free"). */
     private function freeAssessmentRow(Lead $l): array
     {

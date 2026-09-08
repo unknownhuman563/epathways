@@ -21,7 +21,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Every step in the form. The submit sweep and the error-clearing effect
 // both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
 // silently never run.
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 9;
 
 const FIELD_TO_STEP = {
     // Step 1 — Privacy & Terms
@@ -49,7 +49,7 @@ const FIELD_TO_STEP = {
     has_sponsor: 7, sponsor_relationship: 7, sponsor_income_source: 7,
     can_provide_statements: 7, has_other_assets: 7, other_assets_details: 7,
     // Step 8 — Declaration
-    declaration_accepted: 10, signature_name: 10, signature_date: 10,
+    declaration_accepted: 9, signature_name: 9, signature_date: 9,
 };
 
 const FIELD_LABELS = {
@@ -175,7 +175,7 @@ export default function StudentInterestPage() {
                 if (!data.has_enough_funds) errs.has_enough_funds = 'Please answer';
                 if (data.tuition_fee_nzd === '' || data.tuition_fee_nzd === null) errs.tuition_fee_nzd = 'Tuition fee is required';
                 break;
-            case 10:
+            case 9:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }
@@ -461,6 +461,7 @@ export default function StudentInterestPage() {
                 submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
+                draftEndpoint="/visa-interest/student/draft"
                 step={step}
                 setStep={setStep}
                 visitedSteps={visitedSteps}

@@ -345,6 +345,7 @@ export default function FamilyInterestPage() {
                 submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
+                draftEndpoint="/visa-interest/family/draft"
                 step={step}
                 setStep={setStep}
                 visitedSteps={visitedSteps}

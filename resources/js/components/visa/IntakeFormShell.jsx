@@ -6,6 +6,27 @@ import { toast } from 'sonner';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
+// Gate for the server draft — the endpoint needs a usable email before it will
+// create a lead, so don't bother it with a half-typed one.
+const DRAFT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Drop File/FileList values so autosaves never re-upload attachments. */
+function stripFiles(value) {
+    if (value === null || value === undefined) return value;
+    if (typeof File !== 'undefined' && value instanceof File) return undefined;
+    if (typeof FileList !== 'undefined' && value instanceof FileList) return undefined;
+    if (Array.isArray(value)) return value.map(stripFiles).filter((v) => v !== undefined);
+    if (typeof value === 'object') {
+        const out = {};
+        for (const [k, v] of Object.entries(value)) {
+            const cleaned = stripFiles(v);
+            if (cleaned !== undefined) out[k] = cleaned;
+        }
+        return out;
+    }
+    return value;
+}
+
 /**
  * Shared shell for the Work / Student / Visitor visa intake forms. Owns the
  * stepper, step navigation, submit, and draft auto-save. Each visa-specific
@@ -38,6 +59,9 @@ export default function IntakeFormShell({
     submitLabel = 'Submit',
     data,
     draftKey,
+    // When set, the form also auto-saves to the server so staff can see
+    // an in-progress assessment. Local-only when omitted.
+    draftEndpoint,
     step: stepProp,
     setStep: setStepProp,
     visitedSteps,
@@ -88,6 +112,58 @@ export default function IntakeFormShell({
         }, 800);
         return () => clearTimeout(t);
     }, [data, draftKey]);
+
+    // ── Silent server-side auto-save ───────────────────────────────────────
+    // The localStorage copy above only ever lived in the applicant's browser,
+    // so a half-filled visa assessment was invisible to staff until submit.
+    // When the page supplies `draftEndpoint`, the same data is also POSTed
+    // there, creating a Draft lead that shows up in Visa Assessment.
+    //
+    // Gated on a first name + valid email: that is the minimum the endpoint
+    // needs to identify and de-duplicate the row. Below it, the draft stays
+    // local exactly as before.
+    const serverSave = useRef({ inFlight: false, lastHash: '' });
+    useEffect(() => {
+        if (!draftEndpoint || !data) return;
+        const okName = String(data.first_name ?? '').trim();
+        const okEmail = DRAFT_EMAIL_RE.test(String(data.email ?? '').trim());
+        if (!okName || !okEmail) return;
+
+        // Files are only persisted on final submit, so re-uploading them every
+        // few seconds would burn the applicant's bandwidth for nothing.
+        const payload = stripFiles(data);
+        const hash = (() => {
+            try { return JSON.stringify(payload); } catch { return Math.random().toString(); }
+        })();
+        if (hash === serverSave.current.lastHash) return;
+
+        const t = setTimeout(async () => {
+            if (serverSave.current.inFlight) return;
+            serverSave.current.inFlight = true;
+            try {
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const res = await fetch(draftEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                    credentials: 'same-origin',
+                });
+                if (res.ok) serverSave.current.lastHash = hash;
+            } catch {
+                // Silent: they never asked for this save and their local copy
+                // is already safe. Don't interrupt someone mid-form.
+            } finally {
+                serverSave.current.inFlight = false;
+            }
+        }, 4000); // debounce so fast typing doesn't hammer the endpoint
+
+        return () => clearTimeout(t);
+    }, [data, draftEndpoint]);
 
     const saveDraftNow = () => {
         if (!data) return;

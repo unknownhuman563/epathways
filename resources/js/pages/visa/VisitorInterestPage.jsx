@@ -18,7 +18,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Every step in the form. The submit sweep and the error-clearing effect
 // both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
 // silently never run.
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 9;
 
 const FIELD_TO_STEP = {
     terms_accepted: 1,
@@ -42,7 +42,7 @@ const FIELD_TO_STEP = {
     multi_entry_plans: 6, has_leave_permit: 6,
     travel_funds_description: 7, can_provide_statements: 7,
     has_other_assets: 7, other_assets_details: 7,
-    declaration_accepted: 10, signature_name: 10, signature_date: 10,
+    declaration_accepted: 9, signature_name: 9, signature_date: 9,
 };
 
 const FIELD_LABELS = {
@@ -176,7 +176,7 @@ export default function VisitorInterestPage() {
                 if (!data.travel_funds_description?.trim()) errs.travel_funds_description = 'Funds description is required';
                 if (!data.can_provide_statements) errs.can_provide_statements = 'Please answer';
                 break;
-            case 10:
+            case 9:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }
@@ -464,6 +464,7 @@ export default function VisitorInterestPage() {
                 submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
+                draftEndpoint="/visa-interest/visitor/draft"
                 step={step}
                 setStep={setStep}
                 visitedSteps={visitedSteps}
