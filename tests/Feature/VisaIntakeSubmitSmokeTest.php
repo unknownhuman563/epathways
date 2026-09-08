@@ -76,6 +76,28 @@ class VisaIntakeSubmitSmokeTest extends TestCase
         $res->assertRedirect();
     }
 
+    public function test_family_intake_submits_even_when_family_visa_type_is_soft_deleted(): void
+    {
+        // Reproduces the prod failure: an admin soft-deleted the FAMILY visa
+        // type. A trashed row still holds the unique `code`, so firstOrCreate
+        // couldn't see it yet collided on insert (SQLSTATE 1062) — every Family
+        // submit 500'd. The controller must find it withTrashed and restore it.
+        $type = \App\Models\VisaType::create([
+            'code' => 'FAMILY', 'name' => 'Family Visa (Partner / Child)',
+            'category' => 'Partnership', 'active' => true,
+        ]);
+        $type->delete(); // soft delete
+        $this->assertSoftDeleted('visa_types', ['code' => 'FAMILY']);
+
+        $res = $this->post('/family-interest', $this->base());
+
+        $res->assertSessionHasNoErrors();
+        $this->assertSame('Family Visa (Partner / Child)', session('intake_submitted'));
+        // The type is restored, and there is still exactly one FAMILY row.
+        $this->assertFalse($type->fresh()->trashed());
+        $this->assertSame(1, \App\Models\VisaType::withTrashed()->where('code', 'FAMILY')->count());
+    }
+
     /** @dataProvider draftVisas */
     public function test_draft_endpoint_saves(string $visa): void
     {
