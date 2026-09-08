@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
+import { IntakeViewModal } from "@/pages/portal/immigration/Assessments";
 
 // Documents tab — table view that joins the visa-type checklist with
 // uploaded LeadDocuments by checklist_key. Each row is a required (or
@@ -748,7 +749,7 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), keyThread
             <td className="px-4 py-3">
                 {vif && (
                     <div className="mb-2">
-                        <VifButtons vif={vif} />
+                        <VifButtons vif={vif} leadId={leadId} checklistKey={row.key} keyThreads={keyThreads} />
                     </div>
                 )}
                 {doc ? (
@@ -2146,18 +2147,50 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
 // The generate actions for the ePathways VIF — filled from the case's visa
 // assessment. Reused inside the "Visa Information Form" checklist row so the
 // generator lives right where that requirement is fulfilled.
-function VifButtons({ vif }) {
-    // Preview stays visible; the PDF / Word downloads live in a ⋮ menu to keep
-    // the row tidy.
+function VifButtons({ vif, leadId = null, checklistKey = null, keyThreads = [] }) {
+    // "Preview VIF" opens the full readiness workspace (same modal as the visa
+    // assessment "Open"); the PDF / Word downloads live in a ⋮ menu.
+    const [open, setOpen] = useState(false);
+
+    // In case context the modal's notes ARE this VIF row's checklist thread —
+    // seed from it and post back to it, so a note in the modal shows on the row.
+    const caseNotes = useMemo(
+        () => (keyThreads || []).filter((t) => ! t.parent_id).map((t) => ({
+            id: t.id, author: t.author, role: t.author_role, body: t.body, at: t.created_at,
+        })),
+        [keyThreads],
+    );
+    const canThread = !! (leadId && checklistKey);
+    const postToThread = canThread
+        ? (body) => new Promise((resolve) => {
+            router.post(`/portal/immigration/cases/${leadId}/threads`,
+                { anchor_type: "checklist", anchor_key: checklistKey, body, addressed_to_id: null, requires_answer: false, client_visible: false },
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: () => { toast.success("Note added"); resolve(true); },
+                    onError: (e) => { toast.error(Object.values(e)[0] || "Could not post note"); resolve(false); },
+                });
+        })
+        : undefined;
+
     return (
         <div className="flex items-center gap-1.5 flex-wrap">
-            <a href={vif.preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
+            <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
                 <Eye size={12} /> Preview VIF
-            </a>
+            </button>
             <DownloadMenu items={[
                 { label: "Download PDF", href: vif.pdf_url },
                 { label: "Download Word", href: vif.word_url },
             ]} />
+            {open && (
+                <IntakeViewModal
+                    intake={{ visa_type: vif.type, id: vif.id, can_convert: false }}
+                    onClose={() => setOpen(false)}
+                    notesOverride={canThread ? caseNotes : undefined}
+                    onPostNote={postToThread}
+                />
+            )}
         </div>
     );
 }

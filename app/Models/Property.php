@@ -16,6 +16,16 @@ class Property extends Model
     /** Property-type options (whole-dwelling classification, internal). */
     public const PROPERTY_TYPES = ['House', 'Apartment', 'Townhouse', 'Studio', 'Room'];
 
+    /**
+     * How this listing is rented. Drives which fields the form + public
+     * page use — per_room shows rent_single/rent_couple + room/bed/bath
+     * type; whole_property shows whole_property_rent_weekly + bedrooms +
+     * bathrooms. Bond + advance stay visible in both modes.
+     */
+    public const RENTAL_MODE_PER_ROOM = 'per_room';
+    public const RENTAL_MODE_WHOLE = 'whole_property';
+    public const RENTAL_MODES = [self::RENTAL_MODE_PER_ROOM, self::RENTAL_MODE_WHOLE];
+
     /** Owner/PM payout cadences. */
     public const PAYMENT_SCHEDULES = [
         'Every Friday', 'Every Tuesday', 'Every Monday',
@@ -39,6 +49,7 @@ class Property extends Model
     protected $fillable = [
         'name', 'slug', 'location', 'suburb', 'room_type', 'has_wardrobe', 'bed_type',
         'bathroom_type', 'includes', 'rent_single', 'rent_couple',
+        'rental_mode', 'whole_property_rent_weekly', 'bedrooms', 'bathrooms', 'rooms_layout',
         'bills_excluded', 'description', 'map_url', 'status',
         // Internal management fields
         'code', 'address', 'city', 'region', 'property_type', 'total_rooms',
@@ -54,6 +65,10 @@ class Property extends Model
         'bills_excluded' => 'boolean',
         'rent_single' => 'decimal:2',
         'rent_couple' => 'decimal:2',
+        'whole_property_rent_weekly' => 'decimal:2',
+        'bedrooms' => 'integer',
+        'bathrooms' => 'integer',
+        'rooms_layout' => 'array',
         'total_rooms' => 'integer',
         'bond_total_nzd' => 'decimal:2',
         'advance_total_nzd' => 'decimal:2',

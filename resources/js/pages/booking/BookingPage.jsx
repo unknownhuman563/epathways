@@ -128,18 +128,20 @@ const consultants = {
             // widget. Weekly windows are in the consultant's timezone; the
             // client sees each slot converted to their own.
             timezone: 'Asia/Manila',
-            // 15-min slots, weekdays 11am–6pm — mirrors Emma's Google
+            // 15-min slots, weekdays 7am–2pm Manila — mirrors Emma's Google
             // appointment schedule (hours aren't API-readable, so keep this in
-            // sync if she changes them there). Busy times are pulled live from
-            // her calendar. Sat/Sun are omitted = unavailable.
+            // sync if she changes them there). These windows are in HER
+            // timezone (Asia/Manila) and each slot is converted to the client's
+            // own tz for display. Busy times are pulled live from her calendar.
+            // Sat/Sun are omitted = unavailable.
             slotMinutes: 15,
             busyUrl: '/booking/busy',
-            // end is exclusive of the last start, so 18:15 makes 6:00 PM the
-            // last bookable slot (window 11:00 AM – 6:00 PM inclusive).
+            // end is exclusive of the last start, so 14:15 makes 2:00 PM the
+            // last bookable slot (window 7:00 AM – 2:00 PM Manila, inclusive).
             availabilityConfig: {
-                mon: { start: '11:00', end: '18:15' }, tue: { start: '11:00', end: '18:15' },
-                wed: { start: '11:00', end: '18:15' }, thu: { start: '11:00', end: '18:15' },
-                fri: { start: '11:00', end: '18:15' },
+                mon: { start: '07:00', end: '14:15' }, tue: { start: '07:00', end: '14:15' },
+                wed: { start: '07:00', end: '14:15' }, thu: { start: '07:00', end: '14:15' },
+                fri: { start: '07:00', end: '14:15' },
             },
         },
         {

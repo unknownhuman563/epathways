@@ -642,9 +642,12 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore'], true)) {
+            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)) {
                 if ($type === 'consultancy_onshore') {
                     $generator->onshoreEngagement($lead, $overrides);
+                } elseif ($type === 'consultancy_offshore_zero') {
+                    // Same offshore document, all fees waived (NZ$0).
+                    $generator->consultancyOffshore($lead, array_merge($overrides, ['zero_fees' => true]));
                 } elseif ($type === 'consultancy_offshore') {
                     $generator->consultancyOffshore($lead, $overrides);
                 } else {
@@ -1465,8 +1468,11 @@ class LeadDocumentController extends Controller
             $payload = $generator->buildOnshoreEngagementPayload($lead, $overrides);
             $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
             $view = 'agreements.onshore-engagement';
-        } elseif ($type === 'consultancy_offshore') {
-            $payload = $generator->buildOffshorePayload($lead, $overrides);
+        } elseif ($type === 'consultancy_offshore' || $type === 'consultancy_offshore_zero') {
+            $offshoreOverrides = $type === 'consultancy_offshore_zero'
+                ? array_merge($overrides, ['zero_fees' => true])
+                : $overrides;
+            $payload = $generator->buildOffshorePayload($lead, $offshoreOverrides);
             $payload['preview'] = true;
             $view = 'agreements.consultancy-offshore';
         } elseif ($consultancyScenario !== null) {
@@ -1603,6 +1609,17 @@ class LeadDocumentController extends Controller
             }
 
             $count = count($ids);
+
+            // Notify via the Education "Proposal submitted for verification"
+            // automation (a no-op unless an admin has enabled a message for it).
+            if ($count > 0) {
+                $titles = \App\Models\Program::whereIn('id', $ids)->orderBy('title')->pluck('title')->all();
+                app(\App\Services\EmailAutomationService::class)->fire('education.proposal.submitted', $lead->fresh(), [
+                    'program_list' => implode(', ', $titles),
+                    'program_count' => $count,
+                ]);
+            }
+
             $msg = $count === 0
                 ? "Proposal cleared for {$lead->first_name} {$lead->last_name}."
                 : "Submitted {$count} program".($count === 1 ? '' : 's').' for verification — the client sees them once approved.';
@@ -1710,7 +1727,7 @@ class LeadDocumentController extends Controller
      * to "Proposal Sent". Shared by the Notify button and the Program
      * Verification approval step. Safe no-op when the lead has no email.
      */
-    public function sendProposalReadyEmail(Lead $lead): bool
+    public function sendProposalReadyEmail(Lead $lead, bool $sendMail = true): bool
     {
         if (empty($lead->email)) {
             return false;
@@ -1722,6 +1739,13 @@ class LeadDocumentController extends Controller
         if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
             $lead->status = 'Proposal Sent';
             $lead->save();
+        }
+
+        // A configured client automation may already own the "proposal ready"
+        // email — in that case advance the pipeline but skip the built-in send
+        // so the client isn't emailed twice.
+        if (! $sendMail) {
+            return true;
         }
 
         $res = app(\App\Services\CommunicationService::class)

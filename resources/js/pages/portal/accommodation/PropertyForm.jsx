@@ -71,6 +71,9 @@ export default function PropertyForm({ property = null, options = {}, next_code 
         name: property?.name ?? "",
         location: property?.location ?? "",
         suburb: property?.suburb ?? "",
+        // Rental mode decides which listing fields drive the public page.
+        rental_mode: property?.rental_mode ?? "per_room",
+        // Per-room fields
         room_type: property?.room_type ?? "single",
         has_wardrobe: property?.has_wardrobe ?? false,
         bed_type: property?.bed_type ?? "single",
@@ -78,6 +81,11 @@ export default function PropertyForm({ property = null, options = {}, next_code 
         includes: property?.includes ?? "",
         rent_single: property?.rent_single ?? "",
         rent_couple: property?.rent_couple ?? "",
+        // Whole-property fields
+        whole_property_rent_weekly: property?.whole_property_rent_weekly ?? "",
+        bedrooms: property?.bedrooms ?? "",
+        bathrooms: property?.bathrooms ?? "",
+        rooms_layout: Array.isArray(property?.rooms_layout) ? property.rooms_layout : [],
         bills_excluded: property?.bills_excluded ?? true,
         description: property?.description ?? "",
         map_url: property?.map_url ?? "",
@@ -217,6 +225,39 @@ export default function PropertyForm({ property = null, options = {}, next_code 
                 {/* Public listing (existing marketing fields) */}
                 <Section title="Public listing" hint="Shown on the public accommodation page" defaultOpen={!isEdit}>
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                        {/* Show-on-landing-page switch — bound to `status`,
+                            which the public /accommodation controller already
+                            filters on (status = 'available'). Making it a
+                            switch here makes the visibility control obvious. */}
+                        <div className="md:col-span-2">
+                            <div className="flex items-start justify-between gap-4 rounded-2xl border border-gray-100 bg-gray-50/60 px-5 py-4">
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-900">Show on landing page</p>
+                                    <p className="mt-0.5 text-xs text-gray-500">
+                                        {data.status === "available"
+                                            ? "This property is visible on the public /accommodation page."
+                                            : "This property is hidden from the public /accommodation page."}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={data.status === "available"}
+                                    onClick={() => setData("status", data.status === "available" ? "unavailable" : "available")}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#1F5A8B]/40 ${
+                                        data.status === "available" ? "bg-[#1F5A8B]" : "bg-gray-300"
+                                    }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                                            data.status === "available" ? "translate-x-6" : "translate-x-1"
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+                            {err("status")}
+                        </div>
+
                         <div className="md:col-span-2">
                             <label className={label}>Listing name / title</label>
                             <input className={field} value={data.name} onChange={(e) => setData("name", e.target.value)} />
@@ -239,45 +280,234 @@ export default function PropertyForm({ property = null, options = {}, next_code 
                             </select>
                             {err("suburb")}
                         </div>
-                        <div>
-                            <label className={label}>Room type</label>
-                            <select className={field} value={data.room_type} onChange={(e) => setData("room_type", e.target.value)}>
-                                <option value="single">Single</option>
-                                <option value="ensuite">Ensuite</option>
-                            </select>
-                            {err("room_type")}
-                        </div>
-                        <div>
-                            <label className={label}>Bed / mattress</label>
-                            <select className={field} value={data.bed_type} onChange={(e) => setData("bed_type", e.target.value)}>
-                                <option value="single">Single bed mattress</option>
-                                <option value="double">Double bed mattress</option>
-                            </select>
-                            {err("bed_type")}
-                        </div>
-                        <div>
-                            <label className={label}>Toilet & bathroom</label>
-                            <select className={field} value={data.bathroom_type} onChange={(e) => setData("bathroom_type", e.target.value)}>
-                                <option value="shared">Shared</option>
-                                <option value="private">Private</option>
-                            </select>
-                            {err("bathroom_type")}
-                        </div>
-                        <div className="flex items-center gap-3 pt-7">
-                            <input id="wardrobe" type="checkbox" checked={data.has_wardrobe} onChange={(e) => setData("has_wardrobe", e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#1F5A8B] focus:ring-[#1F5A8B]" />
-                            <label htmlFor="wardrobe" className="text-sm font-medium text-gray-700">Has wardrobe</label>
-                        </div>
-                        {f("rent_single", "Rent — single ($/week)", { type: "number", step: "0.01" })}
-                        {f("rent_couple", "Rent — couple ($/week)", { type: "number", step: "0.01" })}
-                        <div className="flex items-center gap-3 md:col-span-2">
-                            <input id="bills" type="checkbox" checked={data.bills_excluded} onChange={(e) => setData("bills_excluded", e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#1F5A8B] focus:ring-[#1F5A8B]" />
-                            <label htmlFor="bills" className="text-sm font-medium text-gray-700">Bills excluded</label>
-                        </div>
+
+                        {/* Rental mode — decides which set of listing fields
+                            drives the public page. Bond + advance stay
+                            visible in both modes (further down under
+                            Financials). Existing rows default to per_room. */}
                         <div className="md:col-span-2">
-                            <label className={label}>Includes (appliances / shared areas)</label>
-                            <textarea rows={3} className={field} value={data.includes} onChange={(e) => setData("includes", e.target.value)} placeholder="Shared kitchen and living areas with fridge, microwave, couch, TV, washing machine, and dining table." />
-                            {err("includes")}
+                            <label className={label}>Rental mode</label>
+                            <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setData("rental_mode", "per_room")}
+                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                                        data.rental_mode === "per_room"
+                                            ? "bg-white text-[#1F5A8B] shadow-sm"
+                                            : "text-gray-500 hover:text-gray-800"
+                                    }`}
+                                >
+                                    Per room
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setData("rental_mode", "whole_property")}
+                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                                        data.rental_mode === "whole_property"
+                                            ? "bg-white text-[#1F5A8B] shadow-sm"
+                                            : "text-gray-500 hover:text-gray-800"
+                                    }`}
+                                >
+                                    Whole property
+                                </button>
+                            </div>
+                            <p className="mt-1.5 text-xs text-gray-500">
+                                {data.rental_mode === "per_room"
+                                    ? "You're renting individual rooms in this property. Each listing describes one room."
+                                    : "You're renting the entire property to one tenant / group at a single weekly rent."}
+                            </p>
+                            {err("rental_mode")}
                         </div>
+
+                        {/* Per-room fields — hidden when whole-property mode */}
+                        {data.rental_mode === "per_room" && (
+                            <>
+                                <div>
+                                    <label className={label}>Room type</label>
+                                    <select className={field} value={data.room_type} onChange={(e) => setData("room_type", e.target.value)}>
+                                        <option value="single">Single</option>
+                                        <option value="ensuite">Ensuite</option>
+                                    </select>
+                                    {err("room_type")}
+                                </div>
+                                <div>
+                                    <label className={label}>Bed / mattress</label>
+                                    <select className={field} value={data.bed_type} onChange={(e) => setData("bed_type", e.target.value)}>
+                                        <option value="single">Single bed mattress</option>
+                                        <option value="double">Double bed mattress</option>
+                                    </select>
+                                    {err("bed_type")}
+                                </div>
+                                <div>
+                                    <label className={label}>Toilet & bathroom</label>
+                                    <select className={field} value={data.bathroom_type} onChange={(e) => setData("bathroom_type", e.target.value)}>
+                                        <option value="shared">Shared</option>
+                                        <option value="private">Private</option>
+                                    </select>
+                                    {err("bathroom_type")}
+                                </div>
+                                <div className="flex items-center gap-3 pt-7">
+                                    <input id="wardrobe" type="checkbox" checked={data.has_wardrobe} onChange={(e) => setData("has_wardrobe", e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#1F5A8B] focus:ring-[#1F5A8B]" />
+                                    <label htmlFor="wardrobe" className="text-sm font-medium text-gray-700">Has wardrobe</label>
+                                </div>
+                                {f("rent_single", "Rent — single ($/week)", { type: "number", step: "0.01" })}
+                                {f("rent_couple", "Rent — couple ($/week)", { type: "number", step: "0.01" })}
+                                <div className="flex items-center gap-3 md:col-span-2">
+                                    <input id="bills" type="checkbox" checked={data.bills_excluded} onChange={(e) => setData("bills_excluded", e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#1F5A8B] focus:ring-[#1F5A8B]" />
+                                    <label htmlFor="bills" className="text-sm font-medium text-gray-700">Bills excluded</label>
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className={label}>Includes (appliances / shared areas)</label>
+                                    <textarea rows={3} className={field} value={data.includes} onChange={(e) => setData("includes", e.target.value)} placeholder="Shared kitchen and living areas with fridge, microwave, couch, TV, washing machine, and dining table." />
+                                    {err("includes")}
+                                </div>
+                            </>
+                        )}
+
+                        {/* Whole-property fields */}
+                        {data.rental_mode === "whole_property" && (
+                            <>
+                                {f("whole_property_rent_weekly", "Whole property rent ($/week)", { type: "number", step: "0.01" })}
+                                <div className="hidden md:block" />
+                                {f("bedrooms", "Bedrooms (total)", { type: "number", min: "0", step: "1" })}
+                                {f("bathrooms", "Bathrooms (total)", { type: "number", min: "0", step: "1" })}
+
+                                {/* Room-by-room layout table — optional detail
+                                    for the public listing so prospects can see
+                                    what's actually in the house. Each row is a
+                                    single room with type, bed, ensuite and
+                                    notes. Rows left completely blank are
+                                    dropped server-side. */}
+                                <div className="md:col-span-2">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <label className={label}>Room-by-room detail (optional)</label>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setData("rooms_layout", [
+                                                    ...data.rooms_layout,
+                                                    { name: "", type: "Bedroom", bed: "", ensuite: "No", notes: "" },
+                                                ])
+                                            }
+                                            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-[#1F5A8B] hover:text-[#1F5A8B]"
+                                        >
+                                            + Add room
+                                        </button>
+                                    </div>
+                                    {data.rooms_layout.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-6 text-center text-xs text-gray-500">
+                                            No rooms listed yet. Add rows to describe each room shown on the public listing.
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto rounded-xl border border-gray-100">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-gray-50 text-left text-[10px] uppercase tracking-wider text-gray-500">
+                                                    <tr>
+                                                        <th className="px-3 py-2 font-semibold">Room name</th>
+                                                        <th className="px-3 py-2 font-semibold">Type</th>
+                                                        <th className="px-3 py-2 font-semibold">Bed</th>
+                                                        <th className="px-3 py-2 font-semibold">Ensuite</th>
+                                                        <th className="px-3 py-2 font-semibold">Notes</th>
+                                                        <th className="w-10" />
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {data.rooms_layout.map((row, idx) => {
+                                                        const updateRow = (key, value) => {
+                                                            const next = data.rooms_layout.map((r, i) =>
+                                                                i === idx ? { ...r, [key]: value } : r
+                                                            );
+                                                            setData("rooms_layout", next);
+                                                        };
+                                                        const removeRow = () => {
+                                                            setData(
+                                                                "rooms_layout",
+                                                                data.rooms_layout.filter((_, i) => i !== idx)
+                                                            );
+                                                        };
+                                                        const cell = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-[#1F5A8B] focus:ring-1 focus:ring-[#1F5A8B]";
+                                                        return (
+                                                            <tr key={idx} className="border-t border-gray-100">
+                                                                <td className="px-2 py-2">
+                                                                    <input
+                                                                        className={cell}
+                                                                        placeholder="e.g. Master bedroom"
+                                                                        value={row.name ?? ""}
+                                                                        onChange={(e) => updateRow("name", e.target.value)}
+                                                                    />
+                                                                </td>
+                                                                <td className="px-2 py-2">
+                                                                    <select
+                                                                        className={cell}
+                                                                        value={row.type ?? "Bedroom"}
+                                                                        onChange={(e) => updateRow("type", e.target.value)}
+                                                                    >
+                                                                        <option>Bedroom</option>
+                                                                        <option>Master bedroom</option>
+                                                                        <option>Living</option>
+                                                                        <option>Kitchen</option>
+                                                                        <option>Dining</option>
+                                                                        <option>Office / study</option>
+                                                                        <option>Bathroom</option>
+                                                                        <option>Garage</option>
+                                                                        <option>Other</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td className="px-2 py-2">
+                                                                    <select
+                                                                        className={cell}
+                                                                        value={row.bed ?? ""}
+                                                                        onChange={(e) => updateRow("bed", e.target.value)}
+                                                                    >
+                                                                        <option value="">—</option>
+                                                                        <option>Single</option>
+                                                                        <option>Double</option>
+                                                                        <option>Queen</option>
+                                                                        <option>King</option>
+                                                                        <option>Bunk</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td className="px-2 py-2">
+                                                                    <select
+                                                                        className={cell}
+                                                                        value={row.ensuite ?? "No"}
+                                                                        onChange={(e) => updateRow("ensuite", e.target.value)}
+                                                                    >
+                                                                        <option>No</option>
+                                                                        <option>Yes</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td className="px-2 py-2">
+                                                                    <input
+                                                                        className={cell}
+                                                                        placeholder="e.g. wardrobe, sunny"
+                                                                        value={row.notes ?? ""}
+                                                                        onChange={(e) => updateRow("notes", e.target.value)}
+                                                                    />
+                                                                </td>
+                                                                <td className="px-2 py-2 text-right">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={removeRow}
+                                                                        className="rounded-lg p-1.5 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                                                                        title="Remove row"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                    {errors["rooms_layout"] && (
+                                        <p className="mt-1 text-xs text-rose-600">{errors["rooms_layout"]}</p>
+                                    )}
+                                </div>
+                            </>
+                        )}
                         <div className="md:col-span-2">
                             <label className={label}>Description (optional)</label>
                             <textarea rows={3} className={field} value={data.description} onChange={(e) => setData("description", e.target.value)} />
@@ -287,14 +517,6 @@ export default function PropertyForm({ property = null, options = {}, next_code 
                             <label className={label}>Google Maps link (optional)</label>
                             <input className={field} value={data.map_url} onChange={(e) => setData("map_url", e.target.value)} placeholder="Paste a Google Maps link to show the location on the listing" />
                             {err("map_url")}
-                        </div>
-                        <div>
-                            <label className={label}>Listing status</label>
-                            <select className={field} value={data.status} onChange={(e) => setData("status", e.target.value)}>
-                                <option value="available">Available</option>
-                                <option value="unavailable">Unavailable</option>
-                            </select>
-                            {err("status")}
                         </div>
                     </div>
 

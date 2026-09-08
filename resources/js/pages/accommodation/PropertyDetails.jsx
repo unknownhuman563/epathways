@@ -38,12 +38,20 @@ const PropertyDetails = ({ property }) => {
     };
   }, [lightboxOpen, images.length]);
 
-  const features = [
-    { name: 'Room type', value: property?.room_type, cap: true },
-    { name: 'Bed', value: property?.bed_type ? `${property.bed_type} mattress` : null, cap: true },
-    { name: 'Wardrobe', value: property?.has_wardrobe ? 'Yes' : 'No' },
-    { name: 'Bathroom', value: property?.bathroom_type, cap: true },
-  ].filter((f) => f.value);
+  const isWholeProperty = property?.rental_mode === 'whole_property';
+
+  const features = isWholeProperty
+    ? [
+        { name: 'Bedrooms', value: property?.bedrooms },
+        { name: 'Bathrooms', value: property?.bathrooms },
+        { name: 'Whole property', value: 'Yes' },
+      ].filter((f) => f.value != null && f.value !== '')
+    : [
+        { name: 'Room type', value: property?.room_type, cap: true },
+        { name: 'Bed', value: property?.bed_type ? `${property.bed_type} mattress` : null, cap: true },
+        { name: 'Wardrobe', value: property?.has_wardrobe ? 'Yes' : 'No' },
+        { name: 'Bathroom', value: property?.bathroom_type, cap: true },
+      ].filter((f) => f.value);
 
   // Embeddable Google map — use the precise pin from a pasted Maps link if
   // available, otherwise fall back to the suburb / location.
@@ -80,7 +88,9 @@ const PropertyDetails = ({ property }) => {
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
             <div className="flex items-center space-x-3 mb-3">
-              <span className="px-3 py-1 bg-gray-100 text-xs font-bold uppercase tracking-wider rounded-full capitalize">{property?.room_type} room</span>
+              <span className="px-3 py-1 bg-gray-100 text-xs font-bold uppercase tracking-wider rounded-full capitalize">
+                {isWholeProperty ? 'Whole property' : `${property?.room_type ?? ''} room`}
+              </span>
               {(property?.suburb || property?.location) && (
                 <span className="text-sm text-gray-500 font-medium">{[property?.suburb, property?.location].filter(Boolean).join(' · ')}</span>
               )}
@@ -177,27 +187,73 @@ const PropertyDetails = ({ property }) => {
                 ))}
               </div>
             </div>
+
+            {isWholeProperty && Array.isArray(property?.rooms_layout) && property.rooms_layout.length > 0 && (
+              <div>
+                <h3 className="text-2xl font-bold mb-6">Rooms</h3>
+                <div className="overflow-x-auto rounded-2xl border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Room</th>
+                        <th className="px-4 py-3 font-semibold">Type</th>
+                        <th className="px-4 py-3 font-semibold">Bed</th>
+                        <th className="px-4 py-3 font-semibold">Ensuite</th>
+                        <th className="px-4 py-3 font-semibold">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {property.rooms_layout.map((row, idx) => (
+                        <tr key={idx} className="border-t border-gray-100">
+                          <td className="px-4 py-3 font-semibold text-gray-900">{row.name || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{row.type || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{row.bed || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{row.ensuite || '—'}</td>
+                          <td className="px-4 py-3 text-gray-500">{row.notes || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
           <div className="lg:w-1/3">
             <div className="sticky top-28 bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100">
               <div className="mb-6 rounded-2xl border border-[#1F5A8B]/15 bg-[#1F5A8B]/5 p-5">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Single</span>
-                  <span className="text-4xl font-extrabold text-[#282728] leading-none">
-                    {money(property?.rent_single)}<span className="text-sm text-gray-400 font-medium">/wk</span>
-                  </span>
-                </div>
-                {property?.rent_couple != null && (
-                  <div className="mt-4 pt-4 border-t border-[#1F5A8B]/15 flex items-baseline justify-between gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Couple</span>
-                    <span className="text-3xl font-extrabold text-[#282728] leading-none">
-                      {money(property.rent_couple)}<span className="text-sm text-gray-400 font-medium">/wk</span>
-                    </span>
-                  </div>
+                {isWholeProperty ? (
+                  <>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Whole property</span>
+                      <span className="text-4xl font-extrabold text-[#282728] leading-none">
+                        {money(property?.whole_property_rent_weekly)}<span className="text-sm text-gray-400 font-medium">/wk</span>
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-4">
+                      {[property?.bedrooms ? `${property.bedrooms} bed` : null, property?.bathrooms ? `${property.bathrooms} bath` : null].filter(Boolean).join(' · ') || 'entire home'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Single</span>
+                      <span className="text-4xl font-extrabold text-[#282728] leading-none">
+                        {money(property?.rent_single)}<span className="text-sm text-gray-400 font-medium">/wk</span>
+                      </span>
+                    </div>
+                    {property?.rent_couple != null && (
+                      <div className="mt-4 pt-4 border-t border-[#1F5A8B]/15 flex items-baseline justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Couple</span>
+                        <span className="text-3xl font-extrabold text-[#282728] leading-none">
+                          {money(property.rent_couple)}<span className="text-sm text-gray-400 font-medium">/wk</span>
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-gray-400 mt-4">single occupant{property?.bills_excluded ? ' · excludes bills' : ''}</p>
+                  </>
                 )}
-                <p className="text-[11px] text-gray-400 mt-4">single occupant{property?.bills_excluded ? ' · excludes bills' : ''}</p>
               </div>
 
               <a href={`/accommodation/expression-of-interest-hot?property=${encodeURIComponent([property?.name, property?.suburb].filter(Boolean).join(' — '))}`} className="w-full py-4 bg-[#1F5A8B] text-white rounded-full font-bold hover:bg-[#184A73] transition-colors shadow-lg shadow-[#1F5A8B]/20 text-center block">

@@ -534,7 +534,7 @@ export function ProgramModal({ open, onClose, editing, schools = [], portalBase 
                                 </div>
                                 <div>
                                     <Label>Hours/Week</Label>
-                                    <Input type="number" min="0" value={data.hours_per_week} onChange={e => setField('hours_per_week', e.target.value)} />
+                                    <Input type="text" placeholder="e.g. 25 or Unlimited" value={data.hours_per_week} onChange={e => setField('hours_per_week', e.target.value)} />
                                 </div>
                             </div>
                             <SectionsField

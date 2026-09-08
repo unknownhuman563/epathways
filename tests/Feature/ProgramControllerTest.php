@@ -33,7 +33,7 @@ class ProgramControllerTest extends TestCase
             'duration_months' => 18,
             'credits' => 180,
             'residency_points' => 3,
-            'hours_per_week' => 25,
+            'hours_per_week' => '25', // free text — form posts always send a string
             'entry_requirements' => [
                 ['intro' => 'NCEA Level 2.', 'bullets' => []],
             ],
@@ -104,6 +104,15 @@ class ProgramControllerTest extends TestCase
 
         $response->assertRedirect();
         $this->assertDatabaseHas('programs', ['id' => $program->id, 'title' => 'Updated Title']);
+    }
+
+    public function test_hours_per_week_accepts_a_word(): void
+    {
+        $response = $this->actingAs($this->admin())
+            ->post('/admin/programs', $this->payload(['hours_per_week' => 'Unlimited']));
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('programs', ['title' => 'NZ Diploma in Enrolled Nursing', 'hours_per_week' => 'Unlimited']);
     }
 
     public function test_admin_update_keeps_existing_image_when_no_new_file(): void

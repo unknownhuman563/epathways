@@ -65,11 +65,15 @@ class EmailAutomationService
      *  built-in client email and avoid double-sending). Staff notices return false. */
     private function deliver(EmailAutomationMessage $msg, Lead $lead, array $context, string $department): bool
     {
+        // When configured, keep the lead's own recruiting agent in the loop by
+        // CC-ing them — resolved per-lead, so each client's agent is used.
+        $agentCc = ($msg->cc_agent && ! empty($lead->agent?->email)) ? $lead->agent->email : null;
+
         if ($msg->recipient === 'client') {
             // The client is the lead — CommunicationService handles email/SMS
             // routing and message logging for us.
             if (! empty($lead->email) || ! empty($lead->phone)) {
-                $this->comms->sendTemplated($msg->template_key, $lead, $context, $department);
+                $this->comms->sendTemplated($msg->template_key, $lead, $context, $department, $agentCc);
 
                 return true;
             }
@@ -79,7 +83,7 @@ class EmailAutomationService
 
         // Staff recipient — render the template with the case's context and send
         // to each resolved staff email as an internal notice.
-        $emails = $this->staffEmails($msg->recipient, $lead);
+        $emails = $this->staffEmails($msg->recipient, $lead, $department);
         if (empty($emails)) {
             return false;
         }
@@ -87,7 +91,7 @@ class EmailAutomationService
         $template = MessageTemplate::active()
             ->where('key', $msg->template_key)
             ->orderByRaw("CASE WHEN department = '' OR department IS NULL THEN 1 ELSE 0 END")
-            ->orderByRaw("CASE WHEN department = ? THEN 0 ELSE 1 END", [$department])
+            ->orderByRaw('CASE WHEN department = ? THEN 0 ELSE 1 END', [$department])
             ->first();
 
         if (! $template) {
@@ -97,25 +101,57 @@ class EmailAutomationService
         $subject = $this->comms->render($lead, (string) ($template->email_subject ?? ''), $context);
         $body = $this->comms->render($lead, (string) ($template->email_body ?? ''), $context);
 
-        foreach (array_unique($emails) as $email) {
-            $this->comms->sendComposedEmail($email, $subject !== '' ? $subject : 'Case update', $body, [], true, $lead->id);
-        }
+        // The recipient role only picks the BASE addresses; the template's own
+        // "To — also send to" / Cc / Bcc add the rest, so a staff notice reaches
+        // exactly the recipients configured on the template (e.g. "Case team"
+        // resolves the adviser + manager, and the template Cc's the wider team).
+        $this->comms->sendComposedEmail(
+            array_values(array_unique($emails)),
+            $subject !== '' ? $subject : 'Case update',
+            $body,
+            [],
+            true,
+            $lead->id,
+            $template->to_extra,
+            $this->comms->mergeAddressList($template->cc, $agentCc),
+            $template->bcc,
+        );
 
         return false; // staff notice — not a client send
     }
 
     /** Resolve staff recipient role → email addresses for this case. */
-    private function staffEmails(string $role, Lead $lead): array
+    private function staffEmails(string $role, Lead $lead, string $department = 'immigration'): array
     {
+        // Outside immigration, "team" means the department's own staff (role ==
+        // department, e.g. "education"), plus the lead's assigned staff member.
+        if ($role === 'team' && $department !== 'immigration') {
+            return $this->departmentTeamEmails($department, $lead);
+        }
+
         $adviser = $this->adviserFor($lead);
         $manager = $this->managerFor($lead);
 
         return match ($role) {
             'adviser' => array_filter([$adviser?->email]),
             'manager' => array_filter([$manager?->email]),
-            'team'    => array_filter([$adviser?->email, $manager?->email]),
-            default   => [],
+            'team' => array_filter([$adviser?->email, $manager?->email]),
+            default => [],
         };
+    }
+
+    /** A department's team: everyone whose role is that department, plus the
+     *  lead's own assigned staff member (deduped). */
+    private function departmentTeamEmails(string $department, Lead $lead): array
+    {
+        $emails = User::where('role', $department)
+            ->whereNotNull('email')->pluck('email')->all();
+
+        if (! empty($lead->assignee?->email)) {
+            $emails[] = $lead->assignee->email;
+        }
+
+        return array_values(array_unique(array_filter($emails)));
     }
 
     /** The licensed adviser on the case: the engagement signer, else the named

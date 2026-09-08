@@ -25,6 +25,14 @@ class ImmigrationController extends Controller
 
     private const LEAD_STATUSES = Lead::STAGES;
 
+    /** Free-assessment Personal-detail fields that map 1:1 to Lead columns and
+     *  are therefore inline-editable from the assessment modal. */
+    private const FREE_EDITABLE_COLUMNS = [
+        'dob', 'gender', 'marital_status', 'other_names', 'country_of_birth',
+        'place_of_birth', 'citizenship', 'residence_city', 'residence_state',
+        'residence_country', 'has_passport', 'passport_number', 'passport_expiry',
+    ];
+
     /**
      * Immigration dashboard — adviser-focused. Top tiles show "what's on my
      * plate today", visa-case pipeline + INZ aging surface the active work,
@@ -1702,6 +1710,13 @@ class ImmigrationController extends Controller
     public function convertAssessmentToCase(\Illuminate\Http\Request $request, $id)
     {
         try {
+            // Free assessment — a lead with an AI eligibility score, no intake or
+            // paired Assessment. Convert the lead record directly (nothing to
+            // migrate: free-assessment uploads are already LeadDocument rows).
+            if ($request->input('intake_type') === 'free') {
+                return $this->convertFreeAssessmentToCase((int) ($request->input('intake_id') ?: $id));
+            }
+
             $typeMap = [
                 'resident' => ResidentIntake::class,
                 'work' => \App\Models\WorkIntake::class,
@@ -1901,6 +1916,33 @@ class ImmigrationController extends Controller
      * Assessment paired (submission predates Phase A and backfill hasn't
      * run yet). Preserves the original behaviour from before this build.
      */
+    /**
+     * Convert a FREE-assessment lead into an immigration case. A free assessment
+     * is just a Lead with an AI eligibility score — there is no intake or paired
+     * Assessment to migrate, and its enrolment uploads are already LeadDocument
+     * rows, so this simply flips the case flag (idempotent on a re-run).
+     */
+    private function convertFreeAssessmentToCase(int $leadId)
+    {
+        $lead = Lead::find($leadId);
+        if (! $lead) {
+            return back()->with('error', 'Could not find this assessment.');
+        }
+
+        if (! $lead->is_immigration_case) {
+            $lead->fill([
+                'is_immigration_case' => true,
+                'immigration_converted_at' => now(),
+                'immigration_converted_by' => auth()->id(),
+                'stage_updated_at' => now(),
+                'stage_updated_by' => auth()->id(),
+            ])->save();
+        }
+
+        return redirect("/portal/immigration/cases/{$lead->id}/profile?tab=documents")
+            ->with('success', "Converted {$lead->first_name} to an immigration case.");
+    }
+
     private function convertResidentIntakeWithoutAssessment(ResidentIntake $intake)
     {
         return DB::transaction(function () use ($intake) {
@@ -2213,7 +2255,10 @@ class ImmigrationController extends Controller
             'readiness_pct' => $pct,
             'readiness_reviewed' => false,
             'extra' => null,
-            'can_convert' => false,
+            // Free assessments can be converted straight to a case (the /free-
+            // assessment funnel is an immigration enquiry). Hidden once it's
+            // already a case so it can't be double-converted.
+            'can_convert' => ! $l->is_immigration_case,
             'detail_url' => "/admin/leads/{$l->id}",
             'data_url' => "/portal/immigration/assessments/free/{$l->id}/data",
             'journey' => [
@@ -2237,11 +2282,20 @@ class ImmigrationController extends Controller
         $l->loadMissing(['studyPlans', 'educationExps']);
 
         // One label/value field — blank shown as "—" so every form field appears.
-        $field = function (string $key, string $label, $val) {
+        // Personal-detail fields map 1:1 to Lead columns and are inline-editable;
+        // study-plan / education fields come from relations / JSON so stay read-only.
+        $editableCols = self::FREE_EDITABLE_COLUMNS;
+        $field = function (string $key, string $label, $val) use ($editableCols) {
             $v = $this->formatIntakeValue($val);
             $prov = ! ($v === null || $v === '');
 
-            return ['key' => $key, 'label' => $label, 'value' => $prov ? $v : '—', 'provided' => $prov];
+            return [
+                'key' => $key, 'label' => $label,
+                'value' => $prov ? $v : '—',
+                'raw' => $this->rawIntakeValue($val),
+                'editable' => in_array($key, $editableCols, true),
+                'provided' => $prov,
+            ];
         };
         // Normalise a stored value (array cast OR raw JSON string) to an array.
         $asArray = function ($v) {
@@ -2464,6 +2518,83 @@ class ImmigrationController extends Controller
         ]);
     }
 
+    /** Raw, input-friendly value for inline editing (dates → Y-m-d; arrays skipped). */
+    private function rawIntakeValue($v): ?string
+    {
+        if ($v instanceof \DateTimeInterface) {
+            return $v->format('Y-m-d');
+        }
+        if (is_bool($v)) {
+            return $v ? '1' : '0';
+        }
+        if (is_array($v)) {
+            return null;
+        }
+
+        return $v === null ? '' : (string) $v;
+    }
+
+    /**
+     * Staff inline edit of an intake's form fields from the assessment modal.
+     * Only columns that appear in this visa type's form schema are writable, so
+     * internal / system columns can never be touched. Returns the same payload
+     * as intakeData() so the modal refreshes in place.
+     */
+    public function updateIntakeFields(Request $request, string $type, int $id)
+    {
+        $data = $request->validate(['fields' => 'required|array']);
+
+        // Free assessment — a Lead, not an intake. Its editable Personal-detail
+        // fields map 1:1 to Lead columns (whitelisted), so update those directly.
+        if ($type === 'free') {
+            $lead = Lead::findOrFail($id);
+            $changed = false;
+            foreach ((array) $data['fields'] as $key => $val) {
+                if (! in_array($key, self::FREE_EDITABLE_COLUMNS, true)) {
+                    continue;
+                }
+                $lead->{$key} = ($val === '' || $val === null) ? null : $val;
+                $changed = true;
+            }
+            if ($changed) {
+                $lead->save();
+            }
+
+            return $this->freeAssessmentData($id);
+        }
+
+        $modelMap = [
+            'resident' => \App\Models\ResidentIntake::class,
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
+        ];
+        abort_unless(isset($modelMap[$type]), 404, 'Unknown intake type.');
+
+        $intake = $modelMap[$type]::findOrFail($id);
+
+        // Whitelist: only the real form fields for this visa type may be written.
+        $allowed = collect($this->intakeSectionSchema($type))->flatten()->filter()->all();
+        $attrs = $intake->getAttributes();
+
+        $changed = false;
+        foreach ((array) $data['fields'] as $key => $val) {
+            if (! in_array($key, $allowed, true) || ! array_key_exists($key, $attrs)) {
+                continue; // silently drop anything that isn't a whitelisted field
+            }
+            // A blank clears the field back to null.
+            $intake->{$key} = ($val === '' || $val === null) ? null : $val;
+            $changed = true;
+        }
+
+        if ($changed) {
+            $intake->save();
+        }
+
+        return $this->intakeData($type, $id);
+    }
+
     /**
      * The client's submitted visa-interest form as JSON — every filled field,
      * humanised — for the Assessments "Open" modal. Read-only; no side effects.
@@ -2506,12 +2637,16 @@ class ImmigrationController extends Controller
                     continue; // column not present on this model — skip defensively
                 }
                 $used[$col] = true;
-                $value = $this->formatIntakeValue($intake->{$col});
+                $rawVal = $intake->{$col};
+                $value = $this->formatIntakeValue($rawVal);
                 $provided = ! ($value === null || $value === '');
                 $fields[] = [
                     'key' => $col,
                     'label' => $this->intakeFieldLabel($col),
                     'value' => $provided ? $value : '—',
+                    // Raw value + editability for inline "Edit section" in the modal.
+                    'raw' => $this->rawIntakeValue($rawVal),
+                    'editable' => ! is_array($rawVal),
                     'provided' => $provided,
                 ];
             }
@@ -2532,7 +2667,7 @@ class ImmigrationController extends Controller
             if ($value === null || $value === '') {
                 continue;
             }
-            $extra[] = ['key' => $key, 'label' => $this->intakeFieldLabel($key), 'value' => $value, 'provided' => true];
+            $extra[] = ['key' => $key, 'label' => $this->intakeFieldLabel($key), 'value' => $value, 'raw' => null, 'editable' => false, 'provided' => true];
         }
         if (! empty($extra)) {
             $sections[] = ['title' => 'Other details', 'fields' => $extra];
@@ -2541,6 +2676,39 @@ class ImmigrationController extends Controller
         $review = \App\Models\AssessmentAiReview::latestFor($intake::class, $intake->id);
         $flags = $this->adviserFlags($intake);
 
+        // The files the applicant uploaded with this submission — a flat, viewable
+        // list for the "Documents" tab. Each entry streams inline (viewable) from
+        // the PRIVATE disk via the role-gated download route for its intake type.
+        $docFiles = is_array($intake->document_files ?? null) ? $intake->document_files : [];
+        $docLabels = [
+            'passport' => 'Passport (all pages)', 'visa_copies' => 'All NZ visa copies',
+            'contracts' => 'NZ employment contracts + JD', 'payslips' => 'Payslips — first 2 mo + latest 1 mo',
+            'ird_summary' => 'IRD summary of earnings (monthly)', 'education_certs' => 'Education certificates / transcripts',
+            'cv' => 'CV (NZ + overseas history)', 'other' => 'Other supporting documents',
+            'job_offer' => 'Job Offer', 'job_token' => 'Job Token / Job Check',
+            'employment_contract' => 'Employment Contract', 'valid_pcc' => 'Valid PCC',
+            'current_nz_visa' => 'Current NZ Visa Copy', 'anzsco_skills' => 'ANZSCO Skills 3/4/5 evidence',
+            'english_test' => 'English Proficiency Test Result', 'ird_earnings' => 'IRD Earnings Summary',
+        ];
+        $documents = [];
+        foreach ($docFiles as $key => $entry) {
+            $paths = array_values(is_array($entry) ? $entry : [$entry]);
+            $label = $docLabels[$key] ?? ucwords(str_replace('_', ' ', (string) $key));
+            foreach ($paths as $idx => $p) {
+                if (empty($p)) {
+                    continue;
+                }
+                $documents[] = [
+                    'label' => $label.(count($paths) > 1 ? ' ('.($idx + 1).')' : ''),
+                    'ext' => strtoupper(pathinfo($p, PATHINFO_EXTENSION) ?: 'PDF'),
+                    'url' => $type === 'resident'
+                        ? "/admin/immigration/resident-intakes/{$intake->id}/documents/{$key}/{$idx}"
+                        : "/admin/immigration/intakes/{$type}/{$intake->id}/documents/{$key}/{$idx}",
+                ];
+            }
+        }
+        $documentsCount = count($documents);
+
         return response()->json([
             'name' => trim(($intake->first_name ?? '').' '.($intake->last_name ?? $intake->family_name ?? '')) ?: 'Applicant',
             'email' => $intake->email,
@@ -2548,6 +2716,8 @@ class ImmigrationController extends Controller
             'reference' => $intake->intake_id,
             'visa_label' => \App\Support\IntakeVisaTypeMap::label($intake::class),
             'submitted_at' => optional($intake->created_at)->toIso8601String(),
+            'documents_count' => $documentsCount,
+            'documents' => $documents,
             'detail_url' => $type === 'resident'
                 ? "/admin/immigration/resident-intakes/{$intake->id}"
                 : "/portal/immigration/intakes/{$type}/{$intake->id}",
@@ -3363,6 +3533,24 @@ class ImmigrationController extends Controller
      */
     private function intakeVifData(string $type, int $id): array
     {
+        // Free assessment — a Lead, not an intake. Its attributes feed the same
+        // VIF builder (identity fields populate; unmatched questions stay blank,
+        // exactly like the paper form), so it exports in the official format too.
+        if ($type === 'free') {
+            $lead = Lead::findOrFail($id);
+            $vif = \App\Support\VisaInformationForm::build($lead->toArray());
+            $applicant = $vif['applicant'] ?: (trim("{$lead->first_name} {$lead->last_name}") ?: 'Applicant');
+            $data = [
+                'applicant' => $applicant,
+                'sections' => $vif['sections'],
+                'intakeId' => $lead->lead_id,
+                'generatedAt' => now()->format('d/m/Y'),
+            ];
+            $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? '')) ?: ($lead->lead_id ?? 'Applicant');
+
+            return [$data, $name.' VIF'];
+        }
+
         $modelMap = [
             'resident' => \App\Models\ResidentIntake::class,
             'work' => \App\Models\WorkIntake::class,

@@ -38,8 +38,8 @@
     // the preview silently falls back to a generic sans, which is why it
     // never looked like the PDF.
     $logoSrc = $preview
-        ? asset('images/philippines-logo.png')
-        : public_path('images/philippines-logo.png');
+        ? asset('images/ep-logo.png')
+        : public_path('images/ep-logo.png');
     $font = fn ($file) => $preview
         ? asset("fonts/urbanist/{$file}")
         : public_path("fonts/urbanist/{$file}");
@@ -57,7 +57,7 @@
     @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 700; src: url('{{ $font("Urbanist-Bold.ttf") }}') format('truetype'); }
     @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 700; src: url('{{ $font("Urbanist-BoldItalic.ttf") }}') format('truetype'); }
 
-    @page { margin: 132px 62px 75px 62px; }
+    @page { margin: 144px 62px 75px 62px; }
     /* The browser preview has no page box, so the @page side margins above
        don't apply and content would sit flush against the panel edge. */
     body.preview { padding: 24px 62px; }
@@ -72,19 +72,19 @@
     @media screen {
         body { max-width: 794px; margin: 0 auto; padding: 24px 55px; background: #fff; }
         .page-header { position: static; text-align: center; margin: -8px 0 12px 0; }
-        .page-header img { height: 56px; }
+        .page-header img { height: 88px; }
     }
 
     /* Running header — dompdf repeats fixed-position elements on every
        page, so the logo shows at the top of pages 1 through 9. Height
        chosen to fit the logo comfortably; body @page margin above
        reserves the space so text doesn't run under it. */
-    /* The logo file is pre-trimmed (the raw asset is ~72% transparent
-       padding), so this height is all artwork — keep it that way if the
-       image is ever re-exported. */
-    .page-header { position: fixed; top: -96px; left: 0; right: 0; text-align: center;
+    /* The logo file (ep-logo.png) is pre-trimmed of its transparent padding,
+       so this height is all artwork — keep it that way if the image is ever
+       re-exported. */
+    .page-header { position: fixed; top: -116px; left: 0; right: 0; text-align: center;
                    border-bottom: 1.5px solid #436235; padding-bottom: 10px; }
-    .page-header img { height: 68px; width: auto; }
+    .page-header img { height: 100px; width: auto; }
     /* Preview-only: drop the logo into normal flow so it's actually visible
        in the browser, where the negative fixed offset would hide it. */
     .page-header.in-flow { position: static; margin-bottom: 16px; }

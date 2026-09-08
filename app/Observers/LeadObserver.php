@@ -43,6 +43,8 @@ class LeadObserver
 
     public function updated(Lead $lead): void
     {
+        $this->syncPortalLoginEmail($lead);
+
         // Only when assigned_to actually changed in this save, and only on
         // assignment (not un-assignment to null).
         if (! $lead->wasChanged('assigned_to') || $lead->assigned_to === null) {
@@ -60,5 +62,54 @@ class LeadObserver
             $actor?->id,
             $actor?->name ?? 'System',
         ));
+    }
+
+    /**
+     * A lead's portal login is a separate User row (role=lead, linked by
+     * lead_id) whose `email` is the sign-in identifier. It was snapshotted when
+     * credentials were generated and does NOT follow later edits to the lead's
+     * email on its own — so without this, changing a client's email leaves them
+     * logging in with the old address while all mail goes to the new one.
+     *
+     * Keep the login email in lockstep whenever staff change an active client's
+     * email. Skipped for revoked accounts (login intentionally disabled) and
+     * when the new value collides with another account — a collision is a
+     * genuine conflict we can't auto-resolve, so we log and leave login on the
+     * old address rather than throwing (which would roll back the lead edit).
+     */
+    private function syncPortalLoginEmail(Lead $lead): void
+    {
+        if (! $lead->wasChanged('email')) {
+            return;
+        }
+
+        $newEmail = trim((string) $lead->email);
+        if ($newEmail === '') {
+            return; // never clear a login email — that would lock the client out
+        }
+
+        $portalUser = $lead->portalUser;
+        if (! $portalUser || $portalUser->role !== User::ROLE_LEAD) {
+            return; // no active portal account (or revoked)
+        }
+
+        if (strcasecmp($portalUser->email, $newEmail) === 0) {
+            return; // already in sync
+        }
+
+        $collision = User::where('email', $newEmail)
+            ->where('id', '!=', $portalUser->id)
+            ->exists();
+        if ($collision) {
+            \Illuminate\Support\Facades\Log::warning('Lead email changed but portal login not synced — email already in use by another account', [
+                'lead_id' => $lead->id,
+                'portal_user_id' => $portalUser->id,
+                'new_email' => $newEmail,
+            ]);
+
+            return;
+        }
+
+        $portalUser->forceFill(['email' => $newEmail])->save();
     }
 }

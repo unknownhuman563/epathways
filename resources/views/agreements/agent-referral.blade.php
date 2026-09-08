@@ -14,7 +14,7 @@
     };
 
     $preview = $preview ?? false;
-    $logoSrc = $preview ? asset('images/philippines-logo.png') : public_path('images/philippines-logo.png');
+    $logoSrc = $preview ? asset('images/ep-logo.png') : public_path('images/ep-logo.png');
     $font = fn ($file) => $preview ? asset("fonts/urbanist/{$file}") : public_path("fonts/urbanist/{$file}");
 @endphp
 <!DOCTYPE html>
@@ -27,18 +27,18 @@
     @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 400; src: url('{{ $font("Urbanist-Italic.ttf") }}') format('truetype'); }
     @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 700; src: url('{{ $font("Urbanist-Bold.ttf") }}') format('truetype'); }
 
-    @page { margin: 132px 62px 75px 62px; }
+    @page { margin: 144px 62px 75px 62px; }
     body.preview { padding: 24px 62px; }
     body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 10pt; color: #111; line-height: 1.45; }
 
     @media screen {
         body { max-width: 794px; margin: 0 auto; padding: 24px 55px; background: #fff; }
         .page-header { position: static; text-align: center; margin: -8px 0 12px 0; }
-        .page-header img { height: 56px; }
+        .page-header img { height: 88px; }
     }
 
-    .page-header { position: fixed; top: -96px; left: 0; right: 0; text-align: center; border-bottom: 1.5px solid #436235; padding-bottom: 10px; }
-    .page-header img { height: 68px; width: auto; }
+    .page-header { position: fixed; top: -116px; left: 0; right: 0; text-align: center; border-bottom: 1.5px solid #436235; padding-bottom: 10px; }
+    .page-header img { height: 100px; width: auto; }
     .page-header.in-flow { position: static; margin-bottom: 16px; }
     .page-footer { position: fixed; bottom: -34px; left: 0; right: 0; border-top: 1.5px solid #436235; }
 

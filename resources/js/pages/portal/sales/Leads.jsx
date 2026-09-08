@@ -172,6 +172,16 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
     // manages them from the dedicated Portal Invitations screen), so admin
     // does not surface the per-row "request access" action here.
     const canRequestInvite = ["sales", "education", "immigration"].includes(portal);
+    // Bulk assign / delete / import act on an ARRAY of lead ids in the request
+    // body, which the lead.scope middleware cannot check — it only guards the id
+    // in the URL. Until those endpoints scope their own payload, they stay with
+    // sales; everything per-lead (stage, visa, notes, kanban) is scoped and works
+    // in the recruiting portals too.
+    const canBulkManage = portal !== "agent";
+    // The recruiting AGENT column (and the Agents tab) is a sales/education
+    // concept — immigration and the agent portal itself don't surface it.
+    // Kept in step with the Agents-tab visibility below.
+    const showAgentColumn = ["sales", "admin", "education"].includes(portal);
 
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
@@ -372,7 +382,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                 {! ["immigration", "immigration-adviser"].includes(portal) && (
                     <div className="flex items-center gap-2">
                         <AddLeadButton portalBase={portalBase} statuses={statuses} programs={programs} staffOptions={staffOptions} agents={agents} />
-                        <ImportLeadsButton />
+                        {canBulkManage && <ImportLeadsButton />}
                     </div>
                 )}
             </div>
@@ -530,8 +540,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                     count={selectedIds.size}
                     onClear={() => setSelectedIds(new Set())}
                     onEmail={() => setBulkOpen(true)}
-                    onAssignAgent={() => setBulkAgentOpen(true)}
-                    onDelete={() => setBulkDeleteConfirm(true)}
+                    onAssignAgent={canBulkManage ? () => setBulkAgentOpen(true) : null}
+                    onDelete={canBulkManage ? () => setBulkDeleteConfirm(true) : null}
                 />
             )}
 
@@ -556,7 +566,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                 <SortableTh label="Stage" sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Contact</th>
                                 <th className="px-3 py-3">Location</th>
-                                <th className="px-3 py-3">Agent</th>
+                                {showAgentColumn && <th className="px-3 py-3">Agent</th>}
                                 <th className="px-3 py-3">Docs</th>
                                 <th className="px-3 py-3 w-[160px]">Visa</th>
                                 <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
@@ -566,7 +576,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={11} className="px-6 py-20 text-center">
+                                    <td colSpan={showAgentColumn ? 11 : 10} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Search size={22} />
                                             <p className="text-sm font-medium">No leads match your filters</p>
@@ -707,17 +717,20 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                         </td>
 
                                         {/* AGENT — recruiting agent who added this lead (null
-                                            for staff-added leads). */}
-                                        <td className="px-3 py-2.5">
-                                            {l.agent ? (
-                                                <div className="inline-flex items-center gap-1.5 text-gray-700" title={`Recruited by ${l.agent.name}`}>
-                                                    <Avatar name={l.agent.name} src={l.agent.avatar_url} colorKey={l.agent.id} size={20} />
-                                                    <span className="truncate max-w-[120px] font-medium">{l.agent.name}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-300">—</span>
-                                            )}
-                                        </td>
+                                            for staff-added leads). Hidden in portals that
+                                            don't deal with recruiting agents (immigration). */}
+                                        {showAgentColumn && (
+                                            <td className="px-3 py-2.5">
+                                                {l.agent ? (
+                                                    <div className="inline-flex items-center gap-1.5 text-gray-700" title={`Recruited by ${l.agent.name}`}>
+                                                        <Avatar name={l.agent.name} src={l.agent.avatar_url} colorKey={l.agent.id} size={20} />
+                                                        <span className="truncate max-w-[120px] font-medium">{l.agent.name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-300">—</span>
+                                                )}
+                                            </td>
+                                        )}
 
                                         {/* DOCS — % of the visible checklist this lead has
                                             submitted. Mirrors the immigration Cases column
@@ -801,7 +814,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                         live here so the table itself stays compact. */}
                                     {isExpanded && (
                                         <tr className="bg-blue-50/20 border-t border-blue-100/60">
-                                            <td colSpan={11} className="px-6 py-4">
+                                            <td colSpan={showAgentColumn ? 11 : 10} className="px-6 py-4">
                                                 <LeadDashboardPanel lead={l} goalChipClass={goalChipClass} portalBase={portalBase} staffOptions={staffOptions} />
                                             </td>
                                         </tr>
@@ -916,6 +929,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
 // ── Bulk actions bar — appears above the leads table whenever at least
 //    one lead checkbox is selected. Delegates the actual work to callbacks
 //    on the parent (open modals, fire router.post, etc.). ─────────────────
+// A null handler means the caller's portal cannot perform that action, so the
+// button is omitted rather than rendered inert.
 function BulkActionsBar({ count, onClear, onEmail, onAssignAgent, onDelete }) {
     return (
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-gray-900 text-white rounded-2xl shadow-sm">
@@ -940,22 +955,26 @@ function BulkActionsBar({ count, onClear, onEmail, onAssignAgent, onDelete }) {
                 >
                     <Mail size={13} /> Email
                 </button>
-                <button
-                    type="button"
-                    onClick={onAssignAgent}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold transition-colors"
-                    title="Set or edit the recruiting agent on selected leads"
-                >
-                    <UserCheck size={13} /> Set / edit agent
-                </button>
-                <button
-                    type="button"
-                    onClick={onDelete}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/90 hover:bg-red-500 text-xs font-semibold transition-colors"
-                    title="Delete selected leads"
-                >
-                    <Trash2 size={13} /> Delete
-                </button>
+                {onAssignAgent && (
+                    <button
+                        type="button"
+                        onClick={onAssignAgent}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold transition-colors"
+                        title="Set or edit the recruiting agent on selected leads"
+                    >
+                        <UserCheck size={13} /> Set / edit agent
+                    </button>
+                )}
+                {onDelete && (
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/90 hover:bg-red-500 text-xs font-semibold transition-colors"
+                        title="Delete selected leads"
+                    >
+                        <Trash2 size={13} /> Delete
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -2355,6 +2374,10 @@ const DOC_STATUS_STYLE = {
 };
 
 function EditLeadModal({ lead, portalBase, statuses = [], staffOptions = [], agents = [], onClose }) {
+    // The Edit modal reads and writes personal FACTS through the admin lead
+    // endpoints. The agent portal mirrors just those two under its own prefix, so
+    // an agent can still fix a name or phone on a lead they recruited.
+    const editBase = ["/portal/agent", "/portal/sub-agent"].includes(portalBase) ? portalBase : "/admin";
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState(null);
     const [tab, setTab] = useState("personal");
@@ -2384,7 +2407,7 @@ function EditLeadModal({ lead, portalBase, statuses = [], staffOptions = [], age
     };
 
     // getJson returns { ok, status, data } — the lead payload lives on .data.
-    const refetch = () => getJson(`/admin/leads/${lead.id}/edit-data`)
+    const refetch = () => getJson(`${editBase}/leads/${lead.id}/edit-data`)
         .then((res) => { if (res.ok && res.data) { setData(res.data); setForm(res.data.personal || {}); } })
         .catch(() => toast.error("Could not load this lead."))
         .finally(() => setLoading(false));
@@ -2392,7 +2415,7 @@ function EditLeadModal({ lead, portalBase, statuses = [], staffOptions = [], age
     useEffect(() => {
         let alive = true;
         setLoading(true);
-        getJson(`/admin/leads/${lead.id}/edit-data`)
+        getJson(`${editBase}/leads/${lead.id}/edit-data`)
             .then((res) => {
                 if (!alive) return;
                 if (res.ok && res.data) { setData(res.data); setForm(res.data.personal || {}); }
@@ -2409,7 +2432,7 @@ function EditLeadModal({ lead, portalBase, statuses = [], staffOptions = [], age
 
     const savePersonal = () => {
         setSaving(true);
-        router.post(`/admin/leads/${lead.id}/personal`, form, {
+        router.post(`${editBase}/leads/${lead.id}/personal`, form, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => toast.success("Personal information updated."),
@@ -2796,7 +2819,10 @@ function VisaCell({ lead, options = [], onChange, disabled = false }) {
 
 // ── Stage picker — clickable pill with popover menu ────────────────────────
 
-export function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving }) {
+// `readOnly` renders the stage as a plain badge — no caret, no menu. The agent
+// portal reuses this table but has no stage endpoint: sales owns the pipeline
+// once a referral is handed over, so the control comes off rather than 403.
+export function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving, readOnly = false }) {
     const menuRef = useRef(null);
     const triggerRef = useRef(null);
     const [menuPos, setMenuPos] = useState(null);
@@ -2833,16 +2859,25 @@ export function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, i
 
     return (
         <>
-            <button
-                ref={triggerRef}
-                type="button"
-                disabled={isSaving}
-                onClick={onToggle}
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase hover:shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed ${stageClass(current)}`}
-            >
-                <span className="truncate max-w-[180px]">{current}</span>
-                <ChevronDown size={10} strokeWidth={2.5} className="flex-shrink-0 opacity-60" />
-            </button>
+            {readOnly ? (
+                <span
+                    title="Sales manages this lead's pipeline stage"
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase ${stageClass(current)}`}
+                >
+                    <span className="truncate max-w-[180px]">{current}</span>
+                </span>
+            ) : (
+                <button
+                    ref={triggerRef}
+                    type="button"
+                    disabled={isSaving}
+                    onClick={onToggle}
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase hover:shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed ${stageClass(current)}`}
+                >
+                    <span className="truncate max-w-[180px]">{current}</span>
+                    <ChevronDown size={10} strokeWidth={2.5} className="flex-shrink-0 opacity-60" />
+                </button>
+            )}
 
             {open && menuPos && createPortal(
                 <div

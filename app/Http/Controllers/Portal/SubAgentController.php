@@ -414,6 +414,22 @@ class SubAgentController extends Controller
         return count(self::DOC_TYPES);
     }
 
+    /**
+     * Full lead profile, inside the Sub-agent portal chrome.
+     *
+     * findScoped() enforces the same row filter as every other write here, so
+     * a sub-agent can only open a lead belonging to their parent agent.
+     * LeadController::show() then picks the page component and portal base off
+     * the request path, which keeps the profile under SubAgentLayout and every
+     * link inside it on /portal/sub-agent/* — the sidebar never changes.
+     */
+    public function showLead($id)
+    {
+        $this->findScoped($id);
+
+        return app(\App\Http\Controllers\LeadController::class)->show($id);
+    }
+
     /** Stage/status update — ownership re-checked, then the sales handler runs. */
     public function updateLead(Request $request, $id)
     {

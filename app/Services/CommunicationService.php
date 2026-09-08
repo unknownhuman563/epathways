@@ -34,7 +34,7 @@ class CommunicationService
      *
      * @return array{email: ?MessageLog, sms: ?MessageLog}
      */
-    public function sendTemplated(string $key, Lead $lead, array $extraContext = [], ?string $department = null): array
+    public function sendTemplated(string $key, Lead $lead, array $extraContext = [], ?string $department = null, ?string $extraCc = null): array
     {
         $template = MessageTemplate::resolve($key, $department);
         if (! $template) {
@@ -45,7 +45,7 @@ class CommunicationService
             return ['email' => null, 'sms' => null];
         }
 
-        return $this->dispatch($template, $lead, $extraContext);
+        return $this->dispatch($template, $lead, $extraContext, [], $extraCc);
     }
 
     /**
@@ -68,7 +68,7 @@ class CommunicationService
      * @param  list<array{path: string, name: string}>  $attachments
      * @return array{email: ?MessageLog, sms: ?MessageLog}
      */
-    private function dispatch(MessageTemplate $template, Lead $lead, array $extraContext, array $attachments = []): array
+    private function dispatch(MessageTemplate $template, Lead $lead, array $extraContext, array $attachments = [], ?string $extraCc = null): array
     {
         $result = ['email' => null, 'sms' => null];
 
@@ -84,13 +84,16 @@ class CommunicationService
         if (in_array('email', $channels, true) && ! empty($lead->email)) {
             $subject = $this->substitute((string) $template->email_subject, $context, false);
             $body = $this->substitute((string) $template->email_body, $context, true);
+            // Merge any per-send extra CC (e.g. the lead's own agent) with the
+            // template's static CC list, deduped.
+            $cc = $this->mergeAddressList($template->cc, $extraCc);
             $result['email'] = $this->sendEmail(
                 $lead, $subject, $body, $template->key, $attachments, null,
                 $template->banner_image,
                 $template->footer_image,
                 $template->from_email,
                 $template->from_name,
-                $template->cc,
+                $cc,
                 $template->bcc,
                 $template->branding,
                 $template->to_extra,
@@ -267,27 +270,42 @@ class CommunicationService
      * the caller. Logs with source='compose' and recipient_type 'lead'/'raw'.
      * $rawHtml=true sends a self-contained builder email (no branded shell).
      */
-    public function sendComposedEmail(string $address, ?string $subject, string $body, array $attachments = [], bool $rawHtml = false, ?int $leadId = null): MessageLog
+    public function sendComposedEmail(string|array $address, ?string $subject, string $body, array $attachments = [], bool $rawHtml = false, ?int $leadId = null, ?string $toExtra = null, ?string $cc = null, ?string $bcc = null): MessageLog
     {
-        $address = strtolower(trim($address));
+        // Primary To address(es) plus any template "To — also send to" extras,
+        // lower-cased and deduped. Accepts a single address or a list (a staff
+        // notice resolves several role recipients).
+        $recipients = collect(is_array($address) ? $address : [$address])
+            ->merge($this->parseAddresses($toExtra))
+            ->map(fn ($e) => strtolower(trim((string) $e)))
+            ->filter()->unique()->values()->all();
 
         $log = $this->log([
             'source' => 'compose',
             'channel' => MessageLog::CHANNEL_EMAIL,
             'recipient_type' => $leadId ? 'lead' : 'raw',
             'recipient_id' => $leadId,
-            'recipient_address' => $address,
+            'recipient_address' => implode(', ', $recipients),
             'subject' => $subject,
             'body' => $body,
             'status' => MessageLog::STATUS_QUEUED,
         ]);
 
+        if (empty($recipients)) {
+            $log->update(['status' => MessageLog::STATUS_FAILED, 'error_message' => 'No valid recipient address.', 'failed_at' => now()]);
+
+            return $log;
+        }
+
         try {
-            Mail::to($address)->queue(
-                new TemplatedMessage($subject ?? '', $body, $attachments, null, null, $log->id, null, null, null, null, null, $rawHtml)
+            // Cc/Bcc ride along via TemplatedMessage's envelope, same as the
+            // templated client path — so a staff notice honours the template's
+            // configured Cc/Bcc, not just the resolved role address.
+            Mail::to($recipients)->queue(
+                new TemplatedMessage($subject ?? '', $body, $attachments, null, null, $log->id, null, null, $cc, $bcc, null, $rawHtml)
             );
         } catch (\Throwable $e) {
-            Log::error('Composed email failed', ['address' => $address, 'error' => $e->getMessage()]);
+            Log::error('Composed email failed', ['address' => implode(', ', $recipients), 'error' => $e->getMessage()]);
             $log->update(['status' => MessageLog::STATUS_FAILED, 'error_message' => $e->getMessage(), 'failed_at' => now()]);
         }
 
@@ -336,6 +354,20 @@ class CommunicationService
         }
 
         return $log;
+    }
+
+    /**
+     * Combine one or more comma/semicolon-separated address strings into a
+     * single deduped comma-separated list (blank when none are valid).
+     */
+    public function mergeAddressList(?string ...$lists): ?string
+    {
+        $all = collect($lists)
+            ->flatMap(fn ($l) => $this->parseAddresses($l))
+            ->map(fn ($e) => strtolower(trim($e)))
+            ->filter()->unique()->values();
+
+        return $all->isNotEmpty() ? $all->implode(', ') : null;
     }
 
     /** Split a comma/semicolon-separated address string into valid emails. */

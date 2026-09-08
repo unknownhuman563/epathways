@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import ProgramDetailsModal from '@/components/ui/ProgramDetailsModal';
 
 // Human-readable file size from a byte count.
 const fmtBytes = (bytes) => {
@@ -3445,6 +3446,10 @@ function StatusLabel({ status, alternative = false }) {
 // low stakes).
 function ProposalShortlist({ proposal, code }) {
     const [savingId, setSavingId] = useState(null);
+    // Which program's details modal is open. Reading the full write-up should
+    // not cost the client their place on the tracker, so it opens over the
+    // page rather than navigating off to the public program page.
+    const [detailId, setDetailId] = useState(null);
     const chosenId = proposal.preferred_program_id;
 
     const submit = (programId) => {
@@ -3568,17 +3573,15 @@ function ProposalShortlist({ proposal, code }) {
                                             {isSaving ? 'Saving…' : (<>Choose this <ArrowRight size={11} strokeWidth={2.5} /></>)}
                                         </button>
                                     )}
-                                    {p.public_url && (
-                                        <a
-                                            href={p.public_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
-                                            title="See full details"
-                                        >
-                                            <Eye size={12} />
-                                        </a>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setDetailId(p.id)}
+                                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                                        title="See full details"
+                                        aria-label={`See full details for ${p.title}`}
+                                    >
+                                        <Eye size={12} />
+                                    </button>
                                 </div>
                             </div>
                         </article>
@@ -3608,9 +3611,12 @@ function ProposalShortlist({ proposal, code }) {
                                         {v.programs.map((p) => {
                                             const wasChosen = v.selected_program_id === p.id;
                                             return (
-                                                <div
+                                                <button
                                                     key={p.id}
-                                                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${wasChosen ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-white'}`}
+                                                    type="button"
+                                                    onClick={() => setDetailId(p.id)}
+                                                    title={`See full details for ${p.title}`}
+                                                    className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors hover:border-gray-300 hover:shadow-sm ${wasChosen ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-white'}`}
                                                 >
                                                     {p.level != null && (
                                                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${wasChosen ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
@@ -3624,7 +3630,7 @@ function ProposalShortlist({ proposal, code }) {
                                                             <Check size={11} strokeWidth={3} />
                                                         </span>
                                                     )}
-                                                </div>
+                                                </button>
                                             );
                                         })}
                                     </div>
@@ -3633,6 +3639,10 @@ function ProposalShortlist({ proposal, code }) {
                         </div>
                     </details>
                 </div>
+            )}
+
+            {detailId !== null && (
+                <ProgramDetailsModal code={code} programId={detailId} onClose={() => setDetailId(null)} />
             )}
         </section>
     );

@@ -658,8 +658,8 @@ class SalesController extends Controller
             // Tab: Proposals — leads with a program shortlist saved. Each
             // row exposes the picked programs (id + title) so the frontend
             // can render badges without a second lookup.
-            $programCatalog = Program::orderBy('title')
-                ->get(['id', 'title', 'level', 'category', 'price_text', 'location', 'industry']);
+            $programCatalog = Program::with('school:id,name')->orderBy('title')
+                ->get(['id', 'title', 'level', 'category', 'price_text', 'location', 'industry', 'school_id', 'institution']);
             $programMap = $programCatalog->keyBy('id');
 
             // Reusable: turn a list of program ids into badge payloads,
@@ -674,6 +674,7 @@ class SalesController extends Controller
                     'category' => $p->category,
                     'price_text' => $p->price_text,
                     'location' => $p->location,
+                    'school' => $p->school?->name ?: ($p->institution ?: null),
                 ])
                 ->values();
 
@@ -689,12 +690,71 @@ class SalesController extends Controller
                 ->orderByDesc('updated_at')
                 ->get();
 
+            // Resolve reviewer / submitter names once for the "owner" line.
+            $ownerIds = $proposalLeads->flatMap(function (Lead $l) {
+                $r = is_array($l->proposal_review) ? $l->proposal_review : [];
+
+                return [$r['verified_by'] ?? null, $r['submitted_by'] ?? null, $r['changes_requested']['by'] ?? null];
+            })->filter()->unique()->values();
+            $ownerNames = \App\Models\User::whereIn('id', $ownerIds)->pluck('name', 'id');
+
             $proposals = $proposalLeads
                 ->filter(fn (Lead $l) => is_array($l->proposed_program_ids) && count($l->proposed_program_ids) > 0)
-                ->map(function (Lead $l) use ($mapPrograms) {
+                ->map(function (Lead $l) use ($mapPrograms, $programMap, $ownerNames) {
                     // Active shortlist = the lead's current proposed_program_ids;
-                    // its selection is the live preferred_program_id.
-                    $picks = $mapPrograms($l->proposed_program_ids);
+                    // its selection is the live preferred_program_id. Each pick
+                    // is merged with the Program Verification overrides (fee /
+                    // school / intake / per-program status), the internal staff
+                    // note, and the client-facing reason.
+                    $meta = is_array($l->proposed_program_meta) ? $l->proposed_program_meta : [];
+                    $reasons = is_array($l->proposed_program_reasons) ? $l->proposed_program_reasons : [];
+                    $picks = collect(is_array($l->proposed_program_ids) ? $l->proposed_program_ids : [])
+                        ->map(function ($pid) use ($programMap, $meta, $reasons) {
+                            $p = $programMap->get((int) $pid);
+                            if (! $p) {
+                                return null;
+                            }
+                            $m = is_array($meta[(string) $p->id] ?? null) ? $meta[(string) $p->id] : [];
+
+                            return [
+                                'id' => $p->id,
+                                'title' => $p->title,
+                                'level' => $p->level,
+                                'category' => $p->category,
+                                'price_text' => $p->price_text,
+                                'location' => $p->location,
+                                // Program Verification overrides + notes.
+                                'school' => $m['school'] ?? null,
+                                'intake' => $m['intake'] ?? null,
+                                'fee' => $m['fee'] ?? null,
+                                'fee_confirmed' => (bool) ($m['fee_confirmed'] ?? false),
+                                'verify_status' => $m['status'] ?? null, // verified | needs_check | null
+                                'note' => trim((string) ($m['note'] ?? '')) ?: null,   // internal (staff)
+                                'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null, // client-facing
+                                // Threaded review notes for this programme (Proposals inbox).
+                                'notes' => collect(is_array($m['notes'] ?? null) ? $m['notes'] : [])
+                                    ->map(fn ($n) => [
+                                        'id' => $n['id'] ?? null,
+                                        'tag' => $n['tag'] ?? 'note',
+                                        'body' => $n['body'] ?? '',
+                                        'author' => $n['author'] ?? 'Staff',
+                                        'role' => $n['role'] ?? null,
+                                        'created_at' => $n['created_at'] ?? null,
+                                        'actioned_at' => $n['actioned_at'] ?? null,
+                                        'actioned_by' => $n['actioned_by'] ?? null,
+                                        'replies' => collect(is_array($n['replies'] ?? null) ? $n['replies'] : [])
+                                            ->map(fn ($rp) => [
+                                                'id' => $rp['id'] ?? null,
+                                                'body' => $rp['body'] ?? '',
+                                                'author' => $rp['author'] ?? 'Staff',
+                                                'role' => $rp['role'] ?? null,
+                                                'created_at' => $rp['created_at'] ?? null,
+                                            ])->values(),
+                                    ])->values(),
+                            ];
+                        })
+                        ->filter()
+                        ->values();
 
                     // Previous versions = every saved proposal EXCEPT the newest
                     // (which is the active one shown above). Each keeps the
@@ -729,6 +789,31 @@ class SalesController extends Controller
                         // Verification status: pending | verified | approved.
                         // Null = legacy proposal (predates the workflow).
                         'proposal_status' => $l->proposalStatus(),
+                        // Reviewer's "request changes" note + the specific
+                        // programmes flagged for revision (from Program
+                        // Verification). Null when nothing was requested.
+                        'changes_requested' => (function () use ($l, $ownerNames) {
+                            $r = is_array($l->proposal_review) ? $l->proposal_review : [];
+                            $cr = $r['changes_requested'] ?? null;
+
+                            return is_array($cr) ? [
+                                'message' => $cr['message'] ?? null,
+                                'program_ids' => array_map('intval', $cr['program_ids'] ?? []),
+                                'at' => $cr['at'] ?? null,
+                                'by' => isset($cr['by']) ? ($ownerNames[$cr['by']] ?? null) : null,
+                            ] : null;
+                        })(),
+                        // Review-inbox grouping: action sits with staff (needs_you)
+                        // until the client has chosen / the proposal is approved,
+                        // when it's waiting on the client (with_client).
+                        'group' => ($l->preferred_program_id || $l->proposalStatus() === 'approved') ? 'with_client' : 'needs_you',
+                        'owner_name' => (function () use ($l, $ownerNames) {
+                            $r = is_array($l->proposal_review) ? $l->proposal_review : [];
+                            $id = $r['verified_by'] ?? ($r['changes_requested']['by'] ?? ($r['submitted_by'] ?? null));
+
+                            return $id ? ($ownerNames[$id] ?? null) : null;
+                        })(),
+                        'created_by_label' => $l->preferred_program_id ? 'client selected' : 'created by staff',
                         'updated_at' => optional($l->updated_at)->toIso8601String(),
                     ];
                 })
@@ -817,6 +902,7 @@ class SalesController extends Controller
                     'price_text' => $p->price_text,
                     'location' => $p->location,
                     'industry' => $p->industry,
+                    'school' => $p->school?->name ?: ($p->institution ?: null),
                 ])->values(),
             ]);
         } catch (\Throwable $e) {

@@ -133,10 +133,48 @@ export default function PropertyDetail({ property, tenants = [], historicalTenan
 
                     <Card title="Public listing" icon={<Home size={18} className="text-[#1F5A8B]" />}>
                         <Row label="Listing name" value={show(property.name)} />
-                        <Row label="Room type" value={show(property.room_type)} />
-                        <Row label="Rent (single)" value={property.rent_single != null ? `${money(property.rent_single)}/wk` : "—"} />
-                        <Row label="Rent (couple)" value={property.rent_couple != null ? `${money(property.rent_couple)}/wk` : "—"} />
+                        <Row label="Rental mode" value={property.rental_mode === "whole_property" ? "Whole property" : "Per room"} />
+                        {property.rental_mode === "whole_property" ? (
+                            <>
+                                <Row label="Rent" value={property.whole_property_rent_weekly != null ? `${money(property.whole_property_rent_weekly)}/wk` : "—"} />
+                                <Row label="Bedrooms" value={show(property.bedrooms)} />
+                                <Row label="Bathrooms" value={show(property.bathrooms)} />
+                            </>
+                        ) : (
+                            <>
+                                <Row label="Room type" value={show(property.room_type)} />
+                                <Row label="Rent (single)" value={property.rent_single != null ? `${money(property.rent_single)}/wk` : "—"} />
+                                <Row label="Rent (couple)" value={property.rent_couple != null ? `${money(property.rent_couple)}/wk` : "—"} />
+                            </>
+                        )}
                         <Row label="Listing status" value={show(property.status)} />
+                        {property.rental_mode === "whole_property" && Array.isArray(property.rooms_layout) && property.rooms_layout.length > 0 && (
+                            <div className="mt-4">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Rooms ({property.rooms_layout.length})</p>
+                                <div className="overflow-x-auto rounded-xl border border-gray-100">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-gray-50 text-left text-[10px] uppercase tracking-wider text-gray-500">
+                                            <tr>
+                                                <th className="px-2 py-1.5 font-semibold">Room</th>
+                                                <th className="px-2 py-1.5 font-semibold">Type</th>
+                                                <th className="px-2 py-1.5 font-semibold">Bed</th>
+                                                <th className="px-2 py-1.5 font-semibold">Ensuite</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {property.rooms_layout.map((row, idx) => (
+                                                <tr key={idx} className="border-t border-gray-100">
+                                                    <td className="px-2 py-1.5 font-semibold text-gray-900">{row.name || "—"}</td>
+                                                    <td className="px-2 py-1.5 text-gray-700">{row.type || "—"}</td>
+                                                    <td className="px-2 py-1.5 text-gray-700">{row.bed || "—"}</td>
+                                                    <td className="px-2 py-1.5 text-gray-700">{row.ensuite || "—"}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </Card>
 
                     <Card title="Property manager" icon={<UserCog size={18} className="text-[#1F5A8B]" />} internal>

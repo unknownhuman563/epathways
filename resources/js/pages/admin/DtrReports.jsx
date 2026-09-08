@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, CircleDashed, CalendarDays, Clock, AlertTriangle, Download, Pencil, Trash2, Plus, X, Save } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, CircleDashed, CalendarDays, Clock, AlertTriangle, Download, Pencil, Trash2, Plus, X, Save, Mail, Send, FileDown, Users } from "lucide-react";
 
 const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const pad = (n) => String(n).padStart(2, "0");
@@ -246,7 +246,199 @@ function RosterRow({ r, date }) {
     );
 }
 
-export default function DtrReports({ date = "", today = "", staffCount = 0, dayCounts = {}, roster = [] }) {
+// Monday (as YYYY-MM-DD) of the week containing `ds`.
+function mondayOf(ds) {
+    const d = new Date(ds + "T00:00:00");
+    const dow = (d.getDay() + 6) % 7; // 0 = Monday
+    d.setDate(d.getDate() - dow);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+const addDaysStr = (ds, n) => {
+    const d = new Date(ds + "T00:00:00");
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const TEAMS = [
+    { key: "all", label: "Both teams" },
+    { key: "nz", label: "New Zealand" },
+    { key: "ph", label: "Philippines" },
+];
+
+// Admin/super_admin: pick a week, type recipient emails, generate the weekly
+// DTR PDF and email it — or preview the PDF in a modal first.
+function WeeklyReportPanel({ weekStart }) {
+    const [open, setOpen] = useState(false);
+    const [week, setWeek] = useState(() => mondayOf(weekStart || new Date().toISOString().slice(0, 10)));
+    const [team, setTeam] = useState("all");
+    const [emails, setEmails] = useState([]);
+    const [emailInput, setEmailInput] = useState("");
+    const [greeting, setGreeting] = useState("Team");
+    const [note, setNote] = useState("");
+    const [sending, setSending] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
+
+    const weekEnd = addDaysStr(week, 6);
+    const rangeLabel = useMemo(() => {
+        try {
+            const s = new Date(week + "T00:00:00");
+            const e = new Date(weekEnd + "T00:00:00");
+            const sM = s.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+            const eM = e.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+            return `${sM} – ${eM}`;
+        } catch { return `${week} – ${weekEnd}`; }
+    }, [week, weekEnd]);
+
+    // Add one or more emails from the input (supports comma/space separated).
+    const addEmails = () => {
+        const parts = emailInput.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+        const valid = parts.filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+        if (valid.length) setEmails((l) => Array.from(new Set([...l, ...valid])));
+        setEmailInput("");
+    };
+    const removeEmail = (e) => setEmails((l) => l.filter((x) => x !== e));
+
+    const recipients = emails;
+    const previewUrl = `/admin/dtr/weekly-report?week=${week}&team=${team}&inline=1`;
+
+    const send = () => {
+        if (recipients.length === 0) return;
+        setSending(true);
+        router.post("/admin/dtr/weekly-report", {
+            week, team, recipients,
+            greeting: greeting.trim() || "Team",
+            note: note.trim() || null,
+        }, {
+            preserveScroll: true,
+            onFinish: () => setSending(false),
+        });
+    };
+
+    const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-[#436235] focus:ring-1 focus:ring-[#436235] outline-none";
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50/60 transition-colors">
+                <div className="flex items-center gap-2.5">
+                    <span className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center"><Mail size={17} className="text-[#436235]" /></span>
+                    <div>
+                        <h2 className="text-base font-bold text-gray-900">Generate weekly report</h2>
+                        <p className="text-xs text-gray-500">Build the week's DTR as a PDF and email it to whoever should receive it.</p>
+                    </div>
+                </div>
+                <ChevronDown size={18} className={`text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+
+            {open && (
+                <div className="px-6 pb-6 pt-2 border-t border-gray-100 space-y-5">
+                    {/* Week + team */}
+                    <div className="grid sm:grid-cols-2 gap-5">
+                        <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Week</label>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setWeek((w) => addDaysStr(w, -7))} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50"><ChevronLeft size={16} /></button>
+                                <div className="flex-1 text-center rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2 text-sm font-semibold text-gray-800">{rangeLabel}</div>
+                                <button onClick={() => setWeek((w) => addDaysStr(w, 7))} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50"><ChevronRight size={16} /></button>
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-1.5">Monday–Sunday. Use the arrows to pick which week to report on.</p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Team</label>
+                            <div className="flex gap-2">
+                                {TEAMS.map((t) => (
+                                    <button key={t.key} onClick={() => setTeam(t.key)}
+                                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${team === t.key ? "bg-[#436235] text-white border-[#436235]" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"}`}>
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Recipients — type any email(s) */}
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 flex items-center gap-1.5"><Users size={12} /> Send to</label>
+                        {emails.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                {emails.map((e) => (
+                                    <span key={e} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                                        {e}
+                                        <button onClick={() => removeEmail(e)} className="hover:text-emerald-900"><X size={12} /></button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <input value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addEmails(); } }}
+                                onBlur={() => emailInput.trim() && addEmails()}
+                                type="email" placeholder="Type an email and press Enter…" className={inputCls} />
+                            <button onClick={addEmails} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:border-[#436235] hover:text-[#436235] shrink-0">Add</button>
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1.5">Enter any email address. Separate several with a comma or Enter.</p>
+                    </div>
+
+                    {/* Greeting + note */}
+                    <div className="grid sm:grid-cols-2 gap-5">
+                        <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Greeting</label>
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-sm text-gray-500 shrink-0">Hi</span>
+                                <input value={greeting} onChange={(e) => setGreeting(e.target.value)} placeholder="Dev and Dinah" className={inputCls} />
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-1.5">Shown as "Hi &lt;greeting&gt;," in the email.</p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Extra note <span className="text-gray-300 normal-case tracking-normal">(optional)</span></label>
+                            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a line to the message…" className={inputCls} />
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                        <p className="text-xs text-gray-500">
+                            {recipients.length > 0
+                                ? <><strong className="text-gray-700">{recipients.length}</strong> recipient{recipients.length === 1 ? "" : "s"} · {TEAMS.find((t) => t.key === team)?.label} · {rangeLabel}</>
+                                : "Add at least one recipient to send."}
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setPreviewOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-lg hover:border-[#436235] hover:text-[#436235] transition-colors">
+                                <FileDown size={14} /> Preview PDF
+                            </button>
+                            <button onClick={send} disabled={sending || recipients.length === 0}
+                                className="inline-flex items-center gap-2 px-5 py-2 bg-[#436235] text-white text-xs font-bold rounded-lg hover:bg-[#375029] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Send size={14} /> {sending ? "Sending…" : "Generate & email"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Preview modal */}
+            {previewOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setPreviewOpen(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                            <div className="flex items-center gap-2">
+                                <FileDown size={16} className="text-[#436235]" />
+                                <h3 className="text-sm font-bold text-gray-900">Weekly DTR — {rangeLabel}</h3>
+                                <span className="text-xs text-gray-400">{TEAMS.find((t) => t.key === team)?.label}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <a href={previewUrl.replace("&inline=1", "")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                                    <Download size={13} /> Download
+                                </a>
+                                <button onClick={() => setPreviewOpen(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"><X size={18} /></button>
+                            </div>
+                        </div>
+                        <iframe key={previewUrl} src={previewUrl} title="Weekly DTR preview" className="flex-1 w-full bg-gray-100" />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function DtrReports({ date = "", today = "", staffCount = 0, dayCounts = {}, roster = [], weekStart = "" }) {
     const pick = (ds) => router.get("/admin/dtr/reports", { date: ds }, { preserveState: true, preserveScroll: true, replace: true });
 
     const submittedCount = useMemo(() => roster.filter((r) => r.submitted).length, [roster]);
@@ -267,6 +459,8 @@ export default function DtrReports({ date = "", today = "", staffCount = 0, dayC
                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team Daily Reports</h1>
                 <p className="text-sm text-gray-500 mt-1">See who has submitted their end-of-day report. Pick a day on the calendar, then open a staffer's row to read their report.</p>
             </div>
+
+            <WeeklyReportPanel weekStart={weekStart} />
 
             <ReportCalendar date={date} today={today} dayCounts={dayCounts} staffCount={staffCount} onPick={pick} />
 
