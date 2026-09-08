@@ -18,6 +18,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // when the SERVER rejects a field we still know which step to navigate the
 // applicant to. (Client validation only tracks required fields — this map
 // covers every input.)
+// Every step in the form. The submit sweep and the error-clearing effect
+// both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
+// silently never run.
+const TOTAL_STEPS = 10;
+
 const FIELD_TO_STEP = {
     // Step 1 — Privacy & Terms
     terms_accepted: 1,
@@ -182,7 +187,7 @@ export default function StudentInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 9; n++) {
+        for (let n = 1; n <= TOTAL_STEPS; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -238,7 +243,7 @@ export default function StudentInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 9; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= TOTAL_STEPS; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {

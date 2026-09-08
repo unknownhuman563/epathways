@@ -19,6 +19,11 @@ const APPLYING_AS = ['Partner', 'Dependent child'];
 const DRAFT_KEY = 'epathways_family_intake_draft';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Every step in the form. The submit sweep and the error-clearing effect
+// both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
+// silently never run.
+const TOTAL_STEPS = 8;
+
 const FIELD_TO_STEP = {
     terms_accepted: 1,
     family_name: 2, first_name: 2, other_names: 2, gender: 2, dob: 2, partnership_status: 2,
@@ -121,7 +126,7 @@ export default function FamilyInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 8; n++) {
+        for (let n = 1; n <= TOTAL_STEPS; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);

@@ -15,6 +15,11 @@ const STAY_LENGTH = ['Less than 59 days', 'More than 6 months', 'More than 12 mo
 const DRAFT_KEY = 'epathways_visitor_intake_draft';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Every step in the form. The submit sweep and the error-clearing effect
+// both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
+// silently never run.
+const TOTAL_STEPS = 10;
+
 const FIELD_TO_STEP = {
     terms_accepted: 1,
     family_name: 2, first_name: 2, other_names: 2, gender: 2, dob: 2,
@@ -183,7 +188,7 @@ export default function VisitorInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 9; n++) {
+        for (let n = 1; n <= TOTAL_STEPS; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -233,7 +238,7 @@ export default function VisitorInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 9; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= TOTAL_STEPS; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
