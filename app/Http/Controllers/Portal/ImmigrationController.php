@@ -2036,10 +2036,29 @@ class ImmigrationController extends Controller
         ];
 
         $data = $request->validate([
-            'intake_type' => ['required', \Illuminate\Validation\Rule::in(array_keys($typeMap))],
+            // Which table the id belongs to. Visa drafts and free assessments
+            // are Lead rows, not intake rows — the frontend marks them 'lead' so
+            // we delete the right record. An intake id and a lead id can collide
+            // (separate auto-increment tables), so we must NOT guess by trying
+            // one then the other. Defaults to 'intake' for older callers.
+            'record' => ['nullable', \Illuminate\Validation\Rule::in(['intake', 'lead'])],
+            'intake_type' => ['required', 'string'],
             'intake_id' => ['required', 'integer'],
         ]);
 
+        // Lead-backed rows: in-progress visa drafts (SavesIntakeDraft) and free
+        // assessments. There is no intake row to remove — delete the Lead.
+        if (($data['record'] ?? 'intake') === 'lead') {
+            $lead = Lead::findOrFail($data['intake_id']);
+            if ($lead->is_immigration_case) {
+                return back()->with('error', 'This is already a case — delete or unconvert the case first.');
+            }
+            $lead->delete();
+
+            return back()->with('success', 'Assessment deleted.');
+        }
+
+        abort_unless(isset($typeMap[$data['intake_type']]), 404);
         $cls = $typeMap[$data['intake_type']];
         $intake = $cls::findOrFail($data['intake_id']);
         $assessment = Assessment::where('intakeable_type', $cls)->where('intakeable_id', $intake->id)->first();
@@ -2114,6 +2133,7 @@ class ImmigrationController extends Controller
 
                 return [
                     'id' => $intake->id,
+                    'record' => 'intake', // deletes from the intake table
                     'assessment_id' => $assessment?->id,
                     'intake_id' => $intake->intake_id,
                     'visa_type' => $visaType, // resident | work | student | visitor
@@ -2272,6 +2292,7 @@ class ImmigrationController extends Controller
 
         return [
             'id' => $l->id,
+            'record' => 'lead', // draft lives on the Lead, not an intake row
             'assessment_id' => null,
             'intake_id' => $l->lead_id,
             'visa_type' => $visaType,
@@ -2319,6 +2340,7 @@ class ImmigrationController extends Controller
 
         return [
             'id' => $l->id,
+            'record' => 'lead', // free assessment lives on the Lead
             'assessment_id' => null,
             'intake_id' => $l->lead_id,
             'visa_type' => 'free',

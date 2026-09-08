@@ -379,7 +379,10 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
     const runDelete = () => {
         setDeleteOpen(false);
         router.delete("/portal/immigration/assessments", {
-            data: { intake_type: i.visa_type, intake_id: i.id },
+            // `record` tells the server which table the id belongs to — visa
+            // drafts and free assessments are Lead rows, real submissions are
+            // intake rows. Defaults to "intake" for older payloads.
+            data: { record: i.record || "intake", intake_type: i.visa_type, intake_id: i.id },
             preserveScroll: true,
         });
     };
