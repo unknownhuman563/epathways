@@ -178,6 +178,10 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
     // sales; everything per-lead (stage, visa, notes, kanban) is scoped and works
     // in the recruiting portals too.
     const canBulkManage = portal !== "agent";
+    // The recruiting AGENT column (and the Agents tab) is a sales/education
+    // concept — immigration and the agent portal itself don't surface it.
+    // Kept in step with the Agents-tab visibility below.
+    const showAgentColumn = ["sales", "admin", "education"].includes(portal);
 
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
@@ -562,7 +566,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                 <SortableTh label="Stage" sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Contact</th>
                                 <th className="px-3 py-3">Location</th>
-                                <th className="px-3 py-3">Agent</th>
+                                {showAgentColumn && <th className="px-3 py-3">Agent</th>}
                                 <th className="px-3 py-3">Docs</th>
                                 <th className="px-3 py-3 w-[160px]">Visa</th>
                                 <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
@@ -572,7 +576,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={11} className="px-6 py-20 text-center">
+                                    <td colSpan={showAgentColumn ? 11 : 10} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Search size={22} />
                                             <p className="text-sm font-medium">No leads match your filters</p>
@@ -713,17 +717,20 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                         </td>
 
                                         {/* AGENT — recruiting agent who added this lead (null
-                                            for staff-added leads). */}
-                                        <td className="px-3 py-2.5">
-                                            {l.agent ? (
-                                                <div className="inline-flex items-center gap-1.5 text-gray-700" title={`Recruited by ${l.agent.name}`}>
-                                                    <Avatar name={l.agent.name} src={l.agent.avatar_url} colorKey={l.agent.id} size={20} />
-                                                    <span className="truncate max-w-[120px] font-medium">{l.agent.name}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-300">—</span>
-                                            )}
-                                        </td>
+                                            for staff-added leads). Hidden in portals that
+                                            don't deal with recruiting agents (immigration). */}
+                                        {showAgentColumn && (
+                                            <td className="px-3 py-2.5">
+                                                {l.agent ? (
+                                                    <div className="inline-flex items-center gap-1.5 text-gray-700" title={`Recruited by ${l.agent.name}`}>
+                                                        <Avatar name={l.agent.name} src={l.agent.avatar_url} colorKey={l.agent.id} size={20} />
+                                                        <span className="truncate max-w-[120px] font-medium">{l.agent.name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-300">—</span>
+                                                )}
+                                            </td>
+                                        )}
 
                                         {/* DOCS — % of the visible checklist this lead has
                                             submitted. Mirrors the immigration Cases column
@@ -807,7 +814,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                         live here so the table itself stays compact. */}
                                     {isExpanded && (
                                         <tr className="bg-blue-50/20 border-t border-blue-100/60">
-                                            <td colSpan={11} className="px-6 py-4">
+                                            <td colSpan={showAgentColumn ? 11 : 10} className="px-6 py-4">
                                                 <LeadDashboardPanel lead={l} goalChipClass={goalChipClass} portalBase={portalBase} staffOptions={staffOptions} />
                                             </td>
                                         </tr>
