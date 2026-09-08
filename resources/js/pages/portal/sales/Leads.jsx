@@ -2387,9 +2387,10 @@ function EditLeadModal({ lead, portalBase, statuses = [], staffOptions = [], age
     const [stageSaving, setStageSaving] = useState(false);
     const [openAgent, setOpenAgent] = useState(false);
     const [agentSaving, setAgentSaving] = useState(false);
-    // Agent assignment is a sales-only surface (the recruiting-agent roster
-    // lives on the sales screen); other portals keep the read-only badge.
-    const canPickAgent = portalBase === "/portal/sales" && agents.length > 0;
+    // Agent assignment lives on the sales screen and the admin List of Leads
+    // (both ship the recruiting-agent roster); other portals keep the read-only
+    // badge.
+    const canPickAgent = ["/portal/sales", "/admin"].includes(portalBase) && agents.length > 0;
 
     const changeAgent = (agentId) => {
         setAgentSaving(true);
