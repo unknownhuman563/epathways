@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Models\Lead;
 use App\Services\LeadIntakeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -403,21 +404,7 @@ class BookingController extends Controller
             // event + auto Meet link, then a confirmation email that includes
             // the Meet link. Event is created synchronously so the link is ready
             // for the email; both steps are best-effort.
-            if (! empty($booking->appointment_at) && empty($booking->property_id)) {
-                if (\App\Services\GoogleCalendarService::isConfigured()) {
-                    try {
-                        app(\App\Services\GoogleCalendarService::class)->createConsultationEvent($booking);
-                        $booking->refresh();
-                    } catch (\Throwable $e) {
-                        Log::error('Booking calendar event (sync) failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
-                    }
-                }
-                // Confirmation email now (booking_confirmation_1) + schedule the
-                // future reminders (2..5) based on the appointment time.
-                $notifier = app(\App\Services\BookingNotificationService::class);
-                $notifier->sendTemplateKey($booking, 'booking_confirmation_1');
-                $notifier->scheduleReminders($booking);
-            }
+            $this->finalizeConsultationBooking($booking);
 
             // Property-viewing bookings are free — confirm them by email right
             // away. (Consultation bookings email their invoice after payment,
@@ -439,6 +426,94 @@ class BookingController extends Controller
             Log::error('Booking create failed', ['error' => $e->getMessage()]);
 
             return response()->json(['message' => 'Could not create booking. Please try again.'], 500);
+        }
+    }
+
+    /**
+     * Consultation side-effects after a booking is created: sync a Google
+     * Calendar event (best-effort, gives us the Meet link) then send the
+     * confirmation email + schedule the reminder drip. No-op for viewings
+     * (property_id) or slot-less enquiries. Shared by store() and storeForLead().
+     */
+    private function finalizeConsultationBooking(Booking $booking): void
+    {
+        if (empty($booking->appointment_at) || ! empty($booking->property_id)) {
+            return;
+        }
+
+        if (\App\Services\GoogleCalendarService::isConfigured()) {
+            try {
+                app(\App\Services\GoogleCalendarService::class)->createConsultationEvent($booking);
+                $booking->refresh();
+            } catch (\Throwable $e) {
+                Log::error('Booking calendar event (sync) failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        // Confirmation email now (booking_confirmation_1) + schedule the future
+        // reminders (2..5) based on the appointment time.
+        $notifier = app(\App\Services\BookingNotificationService::class);
+        $notifier->sendTemplateKey($booking, 'booking_confirmation_1');
+        $notifier->scheduleReminders($booking);
+    }
+
+    /**
+     * Staff "Book" action on a lead's profile — creates a consultation booking
+     * for an EXISTING lead using their own details (no intake form). The slot,
+     * timezone and consultant come from the in-app scheduler modal. Reuses the
+     * same calendar + confirmation-email side-effects as the public flow.
+     */
+    public function storeForLead(Request $request, $id)
+    {
+        $lead = Lead::findOrFail($id);
+
+        $data = $request->validate([
+            'service_type' => 'required|string|max:60',
+            'consultant_name' => 'required|string|max:255',
+            'appointment_date' => 'required|date',
+            'appointment_time' => 'required|string|max:50',
+            'appointment_at' => 'required|date',
+            'client_timezone' => 'nullable|string|max:64',
+        ]);
+
+        try {
+            $payload = [
+                'lead_id' => $lead->id,
+                'first_name' => $lead->first_name ?: 'Client',
+                'last_name' => $lead->last_name,
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'service_type' => $data['service_type'],
+                'consultant_name' => $data['consultant_name'],
+                'appointment_date' => $data['appointment_date'],
+                'appointment_time' => $data['appointment_time'],
+                'appointment_at' => $data['appointment_at'],
+                'client_timezone' => $data['client_timezone'] ?? null,
+                'platform' => 'Google Calendar',
+                'payment_status' => Booking::PAYMENT_UNPAID,
+            ];
+
+            // Same-slot idempotency guard as the public flow.
+            if ($this->findDuplicateBooking($lead->id, $payload)) {
+                return back()->with('success', "A booking for {$payload['first_name']} at that time already exists.");
+            }
+
+            $booking = Booking::create($payload);
+
+            // A staff booking moves the lead to "Booking Confirmation" so the
+            // pipeline reflects the upcoming consultation.
+            if ($lead->status !== 'Booking Confirmation') {
+                $lead->status = 'Booking Confirmation';
+                $lead->save();
+            }
+
+            $this->finalizeConsultationBooking($booking);
+
+            return back()->with('success', "Consultation booked for {$payload['first_name']} — moved to Booking Confirmation.");
+        } catch (\Throwable $e) {
+            Log::error('Staff booking-for-lead failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not create the booking. Please try again.');
         }
     }
 

@@ -989,6 +989,10 @@ Route::middleware(['auth'])->group(function () {
     // write too — the adviser is no longer read-only; advice-bearing artifacts
     // are gated by AdviceBearingPolicy (licence), not by withholding routes.
     Route::middleware('portal:admin,sales,education,english,immigration,immigration_manager,immigration_adviser,accommodation,finance')->group(function () {
+        // Staff "Book" action on a lead profile — creates a consultation booking
+        // for the existing lead (no intake form) from the scheduler modal.
+        Route::post('/admin/leads/{id}/booking', [BookingController::class, 'storeForLead'])
+            ->name('admin.leads.booking');
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
         // Per-lead ad-hoc document rows on the Documents tab — scoped to this

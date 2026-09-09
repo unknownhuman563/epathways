@@ -12,13 +12,14 @@ import {
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
     Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare, Search, Pin, Loader2,
-    Building2,
+    Building2, CalendarCheck,
 } from 'lucide-react';
 import { LeadStatStrip, LeadProgressStrip, LeadActivityTimeline } from '@/components/leads/LeadOverviewStrips';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import { ThreadItem, ThreadComposer } from '@/components/immigration/case-profile/threads';
 import { LeadDocViewerModal, LeadDocFileMenu } from '@/components/ui/LeadDocViewerModal';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
+import LeadBookingModal from '@/components/leads/LeadBookingModal';
 import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
 import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
 import CommunicationsPanel from '@/components/sales/CommunicationsPanel';
@@ -486,6 +487,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
     const [activeTab, setActiveTab] = useState(initialTab);
     const [showSendUpdate, setShowSendUpdate] = useState(false);
     const [composeOpen, setComposeOpen] = useState(false);
+    const [bookingOpen, setBookingOpen] = useState(false);
     const [stageOpen, setStageOpen] = useState(false);
 
     // "Edit Lead as a whole" — when true, every Personal Info section opens
@@ -807,7 +809,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
 
             {/* Identity + the five facts underneath read as one block, so they
                 share a card rather than sitting in two with a gap between. */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
                 <div className="flex items-start justify-between gap-4 flex-wrap px-5 py-4">
                     <div className="flex items-start gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-[12px] font-bold shrink-0">
@@ -830,7 +832,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                                         <ChevronDown size={10} strokeWidth={2.5} className="opacity-60" />
                                     </button>
                                     {stageOpen && (
-                                        <div role="listbox" className="absolute z-30 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[420px] overflow-y-auto">
+                                        <div role="listbox" className="absolute z-50 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[420px] overflow-y-auto">
                                             <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
                                                 Move to stage{leadDept !== "sales" ? ` · ${leadDept}` : ""}
                                             </p>
@@ -885,6 +887,13 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                         >
                             Message lead
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setBookingOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                            <CalendarCheck size={15} className="text-[#436235]" /> Book
+                        </button>
                         <ConvertMenu lead={backendLead} canRevert={currentUser?.is_admin} />
                         <LeadActionsMenu
                             editAll={editAll}
@@ -900,8 +909,12 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 </div>
 
                 {/* Stage, owner, record readiness, programs, last contact —
-                    inside this card so identity and status read as one block. */}
-                <LeadStatStrip overview={overview} />
+                    inside this card so identity and status read as one block.
+                    Its own overflow-hidden clips the bottom corners so the stage
+                    dropdown above (in the now overflow-visible card) isn't cut off. */}
+                <div className="rounded-b-2xl overflow-hidden">
+                    <LeadStatStrip overview={overview} />
+                </div>
             </div>
 
             <SendUpdateModal
@@ -910,6 +923,10 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 open={showSendUpdate}
                 onClose={() => setShowSendUpdate(false)}
             />
+
+            {bookingOpen && (
+                <LeadBookingModal lead={backendLead} onClose={() => setBookingOpen(false)} />
+            )}
 
             {/* Tab strip */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
