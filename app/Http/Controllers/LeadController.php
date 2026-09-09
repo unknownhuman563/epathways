@@ -1551,24 +1551,38 @@ class LeadController extends Controller
         $proposal = null;
         $ppIds = is_array($lead->proposed_program_ids) ? array_values($lead->proposed_program_ids) : [];
         if (! empty($ppIds)) {
-            $ppPrograms = \App\Models\Program::whereIn('id', $ppIds)
-                ->get(['id', 'title', 'slug', 'level', 'category', 'location', 'price_text', 'duration_months', 'intake_months', 'image'])
+            $ppPrograms = \App\Models\Program::with('school:id,name')
+                ->whereIn('id', $ppIds)
+                ->get(['id', 'title', 'slug', 'level', 'category', 'location', 'price_text', 'duration_months', 'intake_months', 'image', 'institution', 'school_id'])
                 ->keyBy('id');
+            $ppMeta = is_array($lead->proposed_program_meta) ? $lead->proposed_program_meta : [];
             $ppOrdered = collect($ppIds)
                 ->map(fn ($pid) => $ppPrograms->get($pid))
                 ->filter()
-                ->map(fn ($p) => [
-                    'id' => $p->id,
-                    'title' => $p->title,
-                    'level' => $p->level,
-                    'category' => $p->category,
-                    'location' => $p->location,
-                    'price_text' => $p->price_text,
-                    'duration_months' => $p->duration_months,
-                    'intake_months' => $p->intake_months,
-                    'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
-                    'public_url' => '/program-details/'.($p->slug ?: $p->id),
-                ])
+                ->map(function ($p) use ($ppMeta) {
+                    $m = is_array($ppMeta[(string) $p->id] ?? null) ? $ppMeta[(string) $p->id] : [];
+
+                    return [
+                        'id' => $p->id,
+                        'title' => $p->title,
+                        // Two programmes can share a title across providers, so
+                        // the school is what tells the shortlist apart. Same
+                        // fallback the add-a-program picker uses below.
+                        'school' => $p->institution ?: optional($p->school)->name,
+                        'level' => $p->level,
+                        'category' => $p->category,
+                        'location' => $p->location,
+                        'price_text' => $p->price_text,
+                        'duration_months' => $p->duration_months,
+                        'intake_months' => $p->intake_months,
+                        'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
+                        'public_url' => '/program-details/'.($p->slug ?: $p->id),
+                        // Per-program review state (shared with Program Verification).
+                        'review_status' => $m['status'] ?? null,      // verified | rejected | needs_check | null
+                        'remarks' => trim((string) ($m['note'] ?? '')) ?: null,
+                        'fee' => array_key_exists('fee', $m) ? $m['fee'] : null,
+                    ];
+                })
                 ->values();
             $proposal = [
                 'programs' => $ppOrdered,
@@ -3307,6 +3321,59 @@ class LeadController extends Controller
             \Illuminate\Support\Facades\Log::error('Shortlist update failed', ['lead' => $id, 'error' => $e->getMessage()]);
 
             return back()->with('error', 'Could not update the programs.');
+        }
+    }
+
+    /**
+     * Review one shortlisted program from the "Programs offered" card: set its
+     * status (verified / rejected), leave remarks, and edit the amount. Stored on
+     * leads.proposed_program_meta[<program>] — the same place Program
+     * Verification reads, so the two stay in sync.
+     */
+    public function reviewProposedProgram(\Illuminate\Http\Request $request, $id, $program)
+    {
+        $validated = $request->validate([
+            'status' => ['nullable', \Illuminate\Validation\Rule::in(['verified', 'rejected', 'needs_check'])],
+            'remarks' => 'nullable|string|max:1000',
+            'amount' => 'nullable|numeric|min:0|max:100000000',
+        ]);
+
+        $lead = Lead::findOrFail($id);
+        $pid = (string) (int) $program;
+
+        $ids = array_map('strval', is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : []);
+        abort_unless(in_array($pid, $ids, true), 404, 'That program is not on this shortlist.');
+
+        try {
+            $meta = is_array($lead->proposed_program_meta) ? $lead->proposed_program_meta : [];
+            $current = is_array($meta[$pid] ?? null) ? $meta[$pid] : [];
+
+            if (array_key_exists('status', $validated)) {
+                $current['status'] = $validated['status'];
+                if ($validated['status'] === 'verified') {
+                    $current['fee_confirmed'] = true;
+                }
+            }
+            if (array_key_exists('remarks', $validated)) {
+                $current['note'] = ($validated['remarks'] === '' || $validated['remarks'] === null) ? null : $validated['remarks'];
+            }
+            if (array_key_exists('amount', $validated)) {
+                $newFee = ($validated['amount'] === '' || $validated['amount'] === null) ? null : (int) $validated['amount'];
+                if (($current['fee'] ?? null) !== $newFee) {
+                    $current['edited'] = true;
+                }
+                $current['fee'] = $newFee;
+            }
+
+            $meta[$pid] = $current;
+            $lead->proposed_program_meta = $meta ?: null;
+            $lead->save();
+
+            return back()->with('success', 'Program review saved.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Program review failed', ['lead' => $id, 'program' => $program, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not save the program review.');
         }
     }
 

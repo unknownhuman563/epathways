@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     BadgeCheck, Check, AlertCircle, Loader2, ChevronRight, ExternalLink,
-    X, Flag, Send, MessageSquarePlus,
+    X, Flag, Send, MessageSquarePlus, FileText, Eye, Download,
 } from "lucide-react";
 
 // ── Consultancy Agreement Verification ───────────────────────────────────────
@@ -23,7 +23,7 @@ export default function ConsultancyVerification({ proposals = [], counts = {}, l
                     <h1 className="text-[22px] font-bold text-gray-900">Consultancy Agreement Verification</h1>
                 </div>
                 <p className="text-[13px] text-gray-500 mb-5">
-                    {counts.pending ?? 0} pending · {counts.verified ?? 0} verified · {counts.approved_today ?? 0} approved today
+                    {counts.pending ?? 0} draft · {counts.verified ?? 0} verified · {counts.approved_today ?? 0} approved today
                 </p>
 
                 {proposals.length === 0 ? (
@@ -37,7 +37,7 @@ export default function ConsultancyVerification({ proposals = [], counts = {}, l
                         {/* Queue */}
                         <div className="w-[300px] flex-shrink-0 space-y-2">
                             <div className="flex items-center gap-2">
-                                <StatCard label="Pending" value={counts.pending ?? 0} tone="amber" active />
+                                <StatCard label="Draft" value={counts.pending ?? 0} tone="amber" active />
                                 <StatCard label="Verified" value={counts.verified ?? 0} tone="emerald" />
                                 <StatCard label="Approved" value={counts.approved_today ?? 0} tone="gray" />
                             </div>
@@ -73,6 +73,7 @@ export default function ConsultancyVerification({ proposals = [], counts = {}, l
 function Panel({ p, leadBase }) {
     const [busy, setBusy] = useState(null);
     const [requesting, setRequesting] = useState(false);
+    const [viewing, setViewing] = useState(false);
 
     const post = (url, data, key) => {
         setBusy(key);
@@ -86,6 +87,7 @@ function Panel({ p, leadBase }) {
     const base = `/consultancy-verification/${p.id}`;
     const metaUpdate = (patch, key) => post(`${base}/meta`, { meta: patch }, key);
     const approve = (opts) => post(`${base}/approve`, opts, opts.verify_all ? "verify-all" : opts.send_email === false ? "approve-noemail" : "approve");
+    const draft = () => post(`${base}/draft`, {}, "draft");
 
     return (
         <div className="flex-1 min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -110,6 +112,11 @@ function Panel({ p, leadBase }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button type="button" onClick={draft}
+                        disabled={busy === "draft" || p.status === "approved"}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50 disabled:opacity-40">
+                        {busy === "draft" ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} Draft
+                    </button>
                     <button type="button" onClick={() => setRequesting(true)}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50">
                         Request changes
@@ -117,7 +124,7 @@ function Panel({ p, leadBase }) {
                     <button type="button" onClick={() => approve({ verify_all: true, send_email: true })}
                         disabled={busy === "verify-all" || p.status === "approved"}
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-bold hover:bg-black disabled:opacity-40">
-                        {busy === "verify-all" ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />} Verify &amp; approve all
+                        {busy === "verify-all" ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />} Approve
                     </button>
                 </div>
             </div>
@@ -135,47 +142,54 @@ function Panel({ p, leadBase }) {
                 </div>
             )}
 
-            {/* Fee items */}
-            <div className="p-6">
-                {p.items.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-[12.5px] text-gray-500">
-                        This agreement has no fee line-items (free engagement). Verify &amp; approve to send it.
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto -mx-2">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                                    <th className="py-2 pl-2 pr-3">Fee item</th>
-                                    <th className="py-2 px-3 w-[170px]">Amount ({p.currency_symbol})</th>
-                                    <th className="py-2 px-3">Notes</th>
-                                    <th className="py-2 px-3 text-right pr-2 w-[130px]">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {p.items.map((it) => (
-                                    <FeeRow
-                                        key={it.key} item={it} leadId={p.id}
-                                        currency={p.currency_symbol}
-                                        flagged={(p.changes_requested?.item_keys || []).includes(it.key)}
-                                        onAmount={(amount) => metaUpdate({ [it.key]: { amount } }, `row-${it.key}`)}
-                                        onStatus={() => metaUpdate({ [it.key]: { status: it.status === "verified" ? "needs_check" : "verified" } }, `row-${it.key}`)}
-                                        busy={busy === `row-${it.key}`}
+            {/* Document summary — the agreement is reviewed as ONE document:
+                its total amount, a note, and the overall status (no per fee
+                line-item breakdown). */}
+            <div className="p-6 pt-4">
+                <div className="overflow-x-auto -mx-2">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                                <th className="py-2 pl-2 pr-3">Document</th>
+                                <th className="py-2 px-3 w-[150px]">Total amount ({p.currency_symbol})</th>
+                                <th className="py-2 px-3">Note</th>
+                                <th className="py-2 px-3 text-right pr-2 w-[120px]">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="align-top">
+                                <td className="py-3 pl-2 pr-3">
+                                    <button type="button" onClick={() => setViewing(true)} className="text-left group" title="Open preview">
+                                        <div className="text-[13px] font-semibold text-indigo-600 group-hover:text-indigo-800 group-hover:underline underline-offset-2 inline-flex items-center gap-1.5">
+                                            <FileText size={14} className="text-rose-400 shrink-0" />
+                                            {p.document ? p.document.name : p.scenario_label}
+                                        </div>
+                                        {p.document && <div className="text-[11px] text-gray-400">{p.scenario_label}</div>}
+                                    </button>
+                                    {p.document && (
+                                        <a href={p.document.download_url} className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-800 mt-1">
+                                            <Download size={11} /> Download
+                                        </a>
+                                    )}
+                                </td>
+                                <td className="py-3 px-3 text-[14px] font-bold text-gray-900 tabular-nums whitespace-nowrap">
+                                    {p.currency_symbol} {Number(p.total_amount).toLocaleString()}
+                                </td>
+                                <td className="py-3 px-3">
+                                    <DocNote
+                                        value={p.note}
+                                        disabled={p.status === "approved"}
+                                        busy={busy === "doc-note"}
+                                        onSave={(note) => post(`${base}/meta`, { review_note: note }, "doc-note")}
                                     />
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr className="border-t border-gray-100">
-                                    <td className="py-2.5 pl-2 pr-3 text-[12px] font-bold text-gray-700">Total</td>
-                                    <td className="py-2.5 px-3 text-[13px] font-bold text-gray-900">{p.currency_symbol} {Number(p.total_amount).toLocaleString()}</td>
-                                    <td colSpan={2} className="py-2.5 px-3 text-right text-[11px] text-gray-400">
-                                        {p.confirmed_count} of {p.items_count} verified
-                                    </td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                )}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                    <StatusPill status={p.status} />
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {requesting && (
@@ -186,6 +200,164 @@ function Panel({ p, leadBase }) {
                     busy={busy === "req"}
                 />
             )}
+
+            {viewing && (
+                <AgreementReviewModal
+                    p={p}
+                    onClose={() => setViewing(false)}
+                    metaUpdate={metaUpdate}
+                    approve={approve}
+                    onDraft={draft}
+                    busy={busy}
+                    onRequestChanges={() => { setViewing(false); setRequesting(true); }}
+                    onDocNote={(note) => post(`${base}/meta`, { review_note: note }, "doc-note")}
+                />
+            )}
+        </div>
+    );
+}
+
+// Full-screen review modal: the generated PDF alongside the fee-item settings
+// (amount / status / note) and the Verify & approve / Request changes actions.
+function AgreementReviewModal({ p, onClose, metaUpdate, approve, busy, onRequestChanges, onDraft, onDocNote }) {
+    return (
+        <>
+            <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" onClick={onClose}>
+                <div className="w-full max-w-6xl h-[92vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3 shrink-0">
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-[15px] font-bold text-gray-900 truncate">{p.name}</h3>
+                                <StatusPill status={p.status} />
+                            </div>
+                            <div className="text-[11px] text-gray-500 truncate">
+                                {p.scenario_label}{p.document ? '' : ' · preview (PDF on approval)'}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {p.document && (
+                                <a href={p.document.download_url}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50">
+                                    <Download size={13} /> Download
+                                </a>
+                            )}
+                            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X size={18} /></button>
+                        </div>
+                    </div>
+
+                    {/* Body — live agreement preview left, settings right */}
+                    <div className="flex-1 flex min-h-0 flex-col lg:flex-row">
+                        <div className="flex-1 lg:min-w-0 min-h-[45vh] lg:min-h-0 bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 relative">
+                            <iframe src={p.preview_url} title="Agreement preview" className="absolute inset-0 w-full h-full" />
+                            <a href={p.preview_url} target="_blank" rel="noopener noreferrer"
+                                className="absolute bottom-2 right-2 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/90 border border-gray-200 text-[11px] font-semibold text-gray-700 shadow-sm hover:bg-white">
+                                <ExternalLink size={11} /> Open in new tab
+                            </a>
+                        </div>
+
+                        <div className="w-full lg:w-96 lg:shrink-0 overflow-y-auto p-4 space-y-3">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Fee items</div>
+
+                            {p.changes_requested?.message && (
+                                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Changes requested</div>
+                                    <p className="text-[12px] text-gray-800 mt-0.5 whitespace-pre-wrap">{p.changes_requested.message}</p>
+                                </div>
+                            )}
+
+                            {p.items.length === 0 ? (
+                                <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-[12px] text-gray-500">
+                                    Free engagement — no fees. Approve to send.
+                                </div>
+                            ) : p.items.map((it) => (
+                                <ItemEditor
+                                    key={it.key} item={it} currency={p.currency_symbol}
+                                    onAmount={(amount) => metaUpdate({ [it.key]: { amount } }, `row-${it.key}`)}
+                                />
+                            ))}
+
+                            <div className="flex items-center justify-between pt-1 text-[12px]">
+                                <span className="font-bold text-gray-700">Total</span>
+                                <span className="font-bold text-gray-900">{p.currency_symbol} {Number(p.total_amount).toLocaleString()}</span>
+                            </div>
+
+                            {/* One note for the whole agreement — the SAME note shown
+                                in the Note column of the list. */}
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Note</div>
+                                <DocNote
+                                    value={p.note}
+                                    disabled={p.status === "approved"}
+                                    busy={busy === "doc-note"}
+                                    onSave={onDocNote}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Footer actions */}
+                    <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
+                        <button type="button" onClick={onDraft}
+                            disabled={busy === "draft" || p.status === "approved"}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50 disabled:opacity-40">
+                            {busy === "draft" ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} Draft
+                        </button>
+                        <button type="button" onClick={onRequestChanges}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-[12px] font-semibold hover:bg-gray-50">
+                            Request changes
+                        </button>
+                        <button type="button" onClick={() => approve({ verify_all: true, send_email: true })}
+                            disabled={busy === "verify-all" || p.status === "approved"}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-bold hover:bg-black disabled:opacity-40">
+                            {busy === "verify-all" ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />} Approve
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}
+
+// One fee item's amount inside the review modal — no status, no per-item note
+// (the note lives at the document level, shared with the Note column).
+function ItemEditor({ item, currency, onAmount }) {
+    const [amount, setAmount] = useState(item.amount ?? "");
+    const saveAmount = () => { const n = amount === "" ? null : Number(amount); if (n !== item.amount) onAmount(n); };
+
+    return (
+        <div className="rounded-xl border border-gray-100 p-3">
+            <label className="block text-[12.5px] font-semibold text-gray-900 mb-1">{item.label}</label>
+            <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">{currency}</span>
+                <input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={saveAmount}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                    placeholder="Set amount"
+                    className="w-full pl-10 pr-2.5 py-1.5 border border-gray-200 rounded-lg text-[12.5px] focus:outline-none focus:border-gray-900" />
+            </div>
+        </div>
+    );
+}
+
+// Document-level note — one note for the whole agreement. Saves on blur.
+function DocNote({ value, onSave, busy, disabled }) {
+    const [note, setNote] = useState(value ?? "");
+    useEffect(() => { setNote(value ?? ""); }, [value]);
+    const save = () => { if ((note || "") !== (value || "")) onSave(note); };
+
+    return (
+        <div>
+            <textarea
+                rows={2}
+                value={note}
+                disabled={disabled}
+                onChange={(e) => setNote(e.target.value)}
+                onBlur={save}
+                placeholder="Add a note about this agreement…"
+                className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-[12.5px] focus:outline-none focus:border-gray-900 resize-y disabled:bg-gray-50 disabled:text-gray-400"
+            />
+            {busy && <span className="text-[10px] text-gray-400">Saving…</span>}
         </div>
     );
 }
@@ -360,7 +532,7 @@ function StatCard({ label, value, tone, active }) {
 
 function StatusPill({ status }) {
     const map = {
-        pending: ["bg-amber-50 text-amber-700 border-amber-200", "Pending"],
+        pending: ["bg-amber-50 text-amber-700 border-amber-200", "Draft"],
         verified: ["bg-blue-50 text-blue-700 border-blue-200", "Verified"],
         approved: ["bg-emerald-50 text-emerald-700 border-emerald-200", "Approved"],
     };

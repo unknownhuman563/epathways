@@ -106,9 +106,82 @@ class ConsultancyReviewService
             'currency' => $overrides['currency'] ?? 'php',
             'item_keys' => array_map(fn ($it) => $it['key'], $items),
             'items' => $meta,
+            // Everything needed to render the preview and generate the final PDF
+            // on approval (fees, bank details, applicant mode, currency). No PDF
+            // exists until the agreement is approved.
+            'overrides' => $overrides,
             'emailed' => false,
         ];
         $lead->save();
+    }
+
+    /**
+     * Rebuild the fee/override array for rendering — the stored submit overrides
+     * (bank details, mode, currency) with the reviewer's edited item amounts
+     * mapped back onto the fee keys.
+     */
+    public static function overridesForGeneration(array $review): array
+    {
+        $out = is_array($review['overrides'] ?? null) ? $review['overrides'] : [];
+        $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+
+        $amt = fn ($key) => isset($items[$key]['amount']) && $items[$key]['amount'] !== null ? (int) $items[$key]['amount'] : null;
+
+        if (($v = $amt('school_enrolment')) !== null) {
+            $out['school_enrolment_fee'] = $v;
+        }
+        if (($v = $amt('english_proficiency')) !== null) {
+            $out['english_proficiency_fee'] = $v;
+        }
+        // Offshore's single package fee rides the school_enrolment_fee override.
+        if (($v = $amt('package')) !== null) {
+            $out['school_enrolment_fee'] = $v;
+        }
+
+        return $out;
+    }
+
+    /** Map the stored agreement type → [view, payload] for an HTML preview. */
+    public static function previewPayload(\App\Services\AgreementGenerator $g, Lead $lead, ?string $type, array $overrides): array
+    {
+        if ($type === 'consultancy_onshore') {
+            $payload = $g->buildOnshoreEngagementPayload($lead, $overrides);
+            $view = 'agreements.onshore-engagement';
+        } elseif ($type === 'consultancy_offshore' || $type === 'consultancy_offshore_zero') {
+            $payload = $g->buildOffshorePayload($lead, $type === 'consultancy_offshore_zero' ? array_merge($overrides, ['zero_fees' => true]) : $overrides);
+            $view = 'agreements.consultancy-offshore';
+        } else {
+            [$payload] = $g->buildConsultancyPayload($lead, static::scenarioKey($type), $overrides);
+            $view = 'agreements.consultancy';
+        }
+        $payload['preview'] = true; // in-flow logo, no PDF-only running footer
+
+        return [$view, $payload];
+    }
+
+    /** Generate + attach the final PDF for an approved agreement. */
+    public static function generatePdf(\App\Services\AgreementGenerator $g, Lead $lead, ?string $type, array $overrides): void
+    {
+        if ($type === 'consultancy_onshore') {
+            $g->onshoreEngagement($lead, $overrides);
+        } elseif ($type === 'consultancy_offshore_zero') {
+            $g->consultancyOffshore($lead, array_merge($overrides, ['zero_fees' => true]));
+        } elseif ($type === 'consultancy_offshore') {
+            $g->consultancyOffshore($lead, $overrides);
+        } else {
+            $g->consultancy($lead, static::scenarioKey($type), $overrides);
+        }
+    }
+
+    /** Stored agreement type → AgreementGenerator scenario key. */
+    private static function scenarioKey(?string $type): string
+    {
+        return match ($type) {
+            'consultancy_voucher_150' => 'voucher_150',
+            'consultancy_std_100' => 'std_100',
+            'consultancy_english_100' => 'english_100',
+            default => 'std_150',
+        };
     }
 
     private static function posInt($val): ?int

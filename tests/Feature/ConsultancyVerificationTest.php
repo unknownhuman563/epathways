@@ -153,4 +153,30 @@ class ConsultancyVerificationTest extends TestCase
             ->post("/consultancy-verification/{$lead->id}/notes/nope", ['body' => 'x'])
             ->assertNotFound();
     }
+
+    public function test_preview_renders_html_without_a_generated_pdf(): void
+    {
+        $lead = $this->submitted('consultancy_std_150', ['school_enrolment_fee' => 150000]);
+
+        // No document is generated at submit time.
+        $this->assertDatabaseMissing('lead_documents', ['lead_id' => $lead->id, 'checklist_key' => 'agree.consultancy']);
+
+        $res = $this->actingAs($this->reviewer())->get("/consultancy-verification/{$lead->id}/preview");
+        $res->assertOk();
+        $this->assertStringContainsStringIgnoringCase('agreement', $res->getContent());
+    }
+
+    public function test_draft_moves_a_verified_agreement_back_to_pending(): void
+    {
+        $lead = $this->submitted('consultancy_std_100');
+        $reviewer = $this->reviewer();
+
+        $this->actingAs($reviewer)->post("/consultancy-verification/{$lead->id}/verify")->assertRedirect();
+        $this->assertSame('verified', $lead->refresh()->consultancy_review['status']);
+
+        $this->actingAs($reviewer)->post("/consultancy-verification/{$lead->id}/draft")->assertRedirect();
+        $review = $lead->refresh()->consultancy_review;
+        $this->assertSame('pending', $review['status']);
+        $this->assertArrayNotHasKey('verified_at', $review);
+    }
 }

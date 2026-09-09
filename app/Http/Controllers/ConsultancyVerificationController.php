@@ -34,6 +34,8 @@ class ConsultancyVerificationController extends Controller
             })
             ->orderByDesc('updated_at')
             ->limit(300)
+            ->with(['documents' => fn ($q) => $q->where('checklist_key', 'agree.consultancy')
+                ->where('source', 'generated')->latest()])
             ->get();
 
         $userIds = $leads->flatMap(function (Lead $l) {
@@ -65,7 +67,12 @@ class ConsultancyVerificationController extends Controller
 
                 return [
                     'key' => $key,
-                    'label' => $m['label'] ?? $key,
+                    // Always resolve the friendly label from the canonical map
+                    // (it's never user-edited), so older reviews that snapshotted
+                    // the raw key — or a missing label — still read as a name,
+                    // e.g. "school_enrolment" → "School Enrolment & Documentation".
+                    'label' => \App\Services\ConsultancyReviewService::ITEM_LABELS[$key]
+                        ?? ($m['label'] ?? \Illuminate\Support\Str::headline($key)),
                     'amount' => $m['amount'] ?? null,
                     'status' => $m['status'] ?? 'needs_check', // verified | needs_check
                     'edited' => (bool) ($m['edited'] ?? false),
@@ -87,8 +94,21 @@ class ConsultancyVerificationController extends Controller
             $total = $items->count();
             $confirmed = $items->where('status', 'verified')->count();
 
+            // The generated agreement PDF the reviewer opens to verify. Staff
+            // download route (re-checks ownership); ?inline=1 renders in-tab.
+            $doc = $l->documents->first();
+            $document = $doc ? [
+                'id' => $doc->id,
+                'name' => $doc->original_name ?: 'Consultancy Agreement.pdf',
+                'created_at' => optional($doc->created_at)->toIso8601String(),
+                'view_url' => "/admin/documents/{$doc->id}/download?inline=1",
+                'download_url' => "/admin/documents/{$doc->id}/download",
+            ] : null;
+
             return [
                 'id' => $l->id,
+                'document' => $document,
+                'preview_url' => "/consultancy-verification/{$l->id}/preview",
                 'lead_id' => $l->lead_id,
                 'name' => trim("{$l->first_name} {$l->last_name}") ?: '—',
                 'initials' => $this->initials("{$l->first_name} {$l->last_name}"),
@@ -109,6 +129,7 @@ class ConsultancyVerificationController extends Controller
                 'items_count' => $total,
                 'confirmed_count' => $confirmed,
                 'total_amount' => $items->sum(fn ($i) => (int) ($i['amount'] ?? 0)),
+                'note' => $review['note'] ?? null, // document-level review note
                 'changes_requested' => $review['changes_requested'] ?? null,
             ];
         })->values();
@@ -123,6 +144,27 @@ class ConsultancyVerificationController extends Controller
         ]);
     }
 
+    /**
+     * Live HTML preview of the agreement — rendered from the lead's stored
+     * consultancy_review (with the reviewer's edited fees), NOT a generated PDF.
+     * Same look as the generation modal's preview; no PDF exists until approval.
+     */
+    public function preview(Request $request, Lead $lead, \App\Services\AgreementGenerator $generator)
+    {
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        abort_if(empty($review), 404, 'No consultancy agreement to preview.');
+
+        [$view, $payload] = \App\Services\ConsultancyReviewService::previewPayload(
+            $generator,
+            $lead,
+            $review['scenario'] ?? null,
+            \App\Services\ConsultancyReviewService::overridesForGeneration($review),
+        );
+
+        return response(view($view, $payload)->render())
+            ->header('Content-Type', 'text/html; charset=utf-8');
+    }
+
     // ── Write ─────────────────────────────────────────────────────────────────
 
     /** Partial per fee-item patch: edit the amount, set the status, or set the note. */
@@ -131,17 +173,24 @@ class ConsultancyVerificationController extends Controller
         $this->guardUnderReview($lead);
 
         $validated = $request->validate([
-            'meta' => 'required|array',
+            'meta' => 'nullable|array',
             'meta.*.amount' => 'nullable|numeric|min:0|max:100000000',
             'meta.*.status' => 'nullable|in:verified,needs_check',
             'meta.*.note' => 'nullable|string|max:1000',
+            // Document-level note — the verification screen now reviews the
+            // agreement as one document rather than per fee line-item.
+            'review_note' => 'nullable|string|max:2000',
         ]);
 
         $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
         $meta = is_array($review['items'] ?? null) ? $review['items'] : [];
         $keys = array_keys($meta);
 
-        foreach ($validated['meta'] as $key => $patch) {
+        if ($request->has('review_note')) {
+            $review['note'] = ($validated['review_note'] ?? '') === '' ? null : $validated['review_note'];
+        }
+
+        foreach ((array) ($validated['meta'] ?? []) as $key => $patch) {
             $key = (string) $key;
             if (! in_array($key, $keys, true)) {
                 continue; // only items already on this agreement
@@ -226,6 +275,24 @@ class ConsultancyVerificationController extends Controller
     }
 
     /**
+     * Move the agreement back to DRAFT — keeps the reviewer's edits/notes but
+     * clears the verified stamp and any "changes requested" flag, so it sits in
+     * the Draft column again (nothing is sent). No-op if already approved.
+     */
+    public function draft(Request $request, Lead $lead)
+    {
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        abort_unless(in_array($review['status'] ?? null, ['pending', 'verified'], true), 422, 'This agreement is not under review.');
+
+        $review['status'] = 'pending';
+        unset($review['verified_at'], $review['verified_by'], $review['changes_requested']);
+        $lead->consultancy_review = $review;
+        $lead->save();
+
+        return back()->with('success', 'Saved as draft.');
+    }
+
+    /**
      * Step 2 — approve: send the consultancy agreement to the client. `verify_all`
      * confirms every fee item first; `send_email=0` approves without emailing.
      */
@@ -256,6 +323,20 @@ class ConsultancyVerificationController extends Controller
         unset($review['changes_requested']);
         $lead->consultancy_review = $review;
         $lead->save();
+
+        // Now generate the final PDF (with the reviewer's confirmed fees) and
+        // attach it to the lead's documents — it's this approval, not the
+        // original submit, that produces the client-facing agreement.
+        try {
+            \App\Services\ConsultancyReviewService::generatePdf(
+                app(\App\Services\AgreementGenerator::class),
+                $lead,
+                $review['scenario'] ?? null,
+                \App\Services\ConsultancyReviewService::overridesForGeneration($review),
+            );
+        } catch (\Throwable $e) {
+            Log::error('Consultancy PDF generation on approval failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
 
         if ($sendEmail) {
             try {
