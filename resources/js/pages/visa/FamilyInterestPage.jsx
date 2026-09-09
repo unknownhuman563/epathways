@@ -19,6 +19,11 @@ const APPLYING_AS = ['Partner', 'Dependent child'];
 const DRAFT_KEY = 'epathways_family_intake_draft';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Every step in the form. The submit sweep and the error-clearing effect
+// both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
+// silently never run.
+const TOTAL_STEPS = 8;
+
 const FIELD_TO_STEP = {
     terms_accepted: 1,
     family_name: 2, first_name: 2, other_names: 2, gender: 2, dob: 2, partnership_status: 2,
@@ -33,7 +38,7 @@ const FIELD_TO_STEP = {
     currently_working: 6, current_employer_name: 6, current_employer_address: 6,
     current_employer_phone: 6, current_employer_email: 6, current_occupation: 6,
     current_start: 6, current_end: 6,
-    nz_contacts: 7, declaration_accepted: 7, signature_name: 7, signature_date: 7,
+    nz_contacts: 8, declaration_accepted: 8, signature_name: 8, signature_date: 8,
 };
 
 const FIELD_LABELS = {
@@ -109,7 +114,7 @@ export default function FamilyInterestPage() {
                 else if (!EMAIL_RE.test(data.email)) errs.email = 'Enter a valid email address';
                 if (!data.phone?.trim()) errs.phone = 'Contact number is required';
                 break;
-            case 7:
+            case 8:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
             default:
@@ -121,7 +126,7 @@ export default function FamilyInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 8; n++) {
+        for (let n = 1; n <= TOTAL_STEPS; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -340,6 +345,7 @@ export default function FamilyInterestPage() {
                 submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
+                draftEndpoint="/visa-interest/family/draft"
                 step={step}
                 setStep={setStep}
                 visitedSteps={visitedSteps}

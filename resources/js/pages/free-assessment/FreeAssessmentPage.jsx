@@ -46,6 +46,36 @@ const C = {
     bg: '#f9fafb'
 };
 
+// Gate for the server-side draft save — the controller requires a usable email
+// before it will create a Lead row, so don't bother it with a half-typed one.
+const DRAFT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Flatten the nested form state into FormData using Laravel's bracket notation
+ * (`work_experience[0][job_title]`), so the draft endpoint reads it with the
+ * same rules as the final submit. Nulls and undefined are skipped; booleans go
+ * as 1/0 because FormData would otherwise stringify `false` to "false".
+ */
+function draftToFormData(value, fd = new FormData(), prefix = '') {
+    if (value === null || value === undefined) return fd;
+
+    if (Array.isArray(value)) {
+        value.forEach((item, i) => draftToFormData(item, fd, `${prefix}[${i}]`));
+    } else if (value instanceof File) {
+        fd.append(prefix, value);
+    } else if (typeof value === 'object') {
+        Object.entries(value).forEach(([k, v]) => {
+            draftToFormData(v, fd, prefix ? `${prefix}[${k}]` : k);
+        });
+    } else if (typeof value === 'boolean') {
+        fd.append(prefix, value ? '1' : '0');
+    } else {
+        fd.append(prefix, value);
+    }
+
+    return fd;
+}
+
 export default function FreeAssessment({ programs = [] }) {
     const { flash } = usePage().props;
     const [step, setStep] = useState(1);
@@ -239,6 +269,59 @@ export default function FreeAssessment({ programs = [] }) {
         if (isLoaded && !isSuccess) {
             localStorage.setItem('assessment_draft', JSON.stringify(data));
         }
+    }, [data, isLoaded, isSuccess]);
+
+    // ── Silent server-side auto-save ───────────────────────────────────────
+    // The localStorage draft above only ever lived in the applicant's own
+    // browser, so a half-filled assessment was invisible to staff — the
+    // Assessments dashboard showed nothing until final submit. This posts the
+    // same data to /free-assessment/draft, which creates (or updates by email)
+    // a Lead with status 'Draft' so the team can see progress and follow up.
+    //
+    // Mirrors EducationEnrolmentPage, which has always done this. Gated on a
+    // first name + valid email because that is the minimum the controller
+    // needs to identify and dedupe the row; below that the draft stays local.
+    const autoSaveRef = useRef({ inFlight: false, lastHash: '' });
+    useEffect(() => {
+        if (!isLoaded || isSuccess) return;
+        const okName = data.first_name?.trim();
+        const okEmail = data.email?.trim() && DRAFT_EMAIL_RE.test(data.email);
+        if (!okName || !okEmail) return;
+
+        // The passport PDF is only persisted on final submit, so re-uploading
+        // it on every autosave would burn the applicant's bandwidth for
+        // nothing. Strip it from both the payload and the change hash.
+        const draftPayload = { ...data, passport_pdf: undefined };
+        const hash = (() => {
+            try { return JSON.stringify(draftPayload); } catch { return Math.random().toString(); }
+        })();
+        if (hash === autoSaveRef.current.lastHash) return;
+
+        const t = setTimeout(async () => {
+            if (autoSaveRef.current.inFlight) return;
+            autoSaveRef.current.inFlight = true;
+            try {
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const res = await fetch('/free-assessment/draft', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        Accept: 'application/json',
+                    },
+                    body: draftToFormData(draftPayload),
+                    credentials: 'same-origin',
+                });
+                if (res.ok) autoSaveRef.current.lastHash = hash;
+            } catch {
+                // Silent: the applicant never asked for this save, and their
+                // local draft is already safe. Don't interrupt them.
+            } finally {
+                autoSaveRef.current.inFlight = false;
+            }
+        }, 4000); // debounce so fast typing doesn't spam the endpoint
+
+        return () => clearTimeout(t);
     }, [data, isLoaded, isSuccess]);
 
     const steps = [

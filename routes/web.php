@@ -261,6 +261,16 @@ Route::post('/visitor-interest', [VisitorIntakeController::class, 'store']);
 Route::get('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'showForm'])->name('family-interest');
 Route::post('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'store']);
 
+// Auto-save for the five visa intakes. Each form posts its in-progress answers
+// here every few seconds once a name + email are in; the draft is stored as a
+// Lead with status 'Draft' so staff see it in Visa Assessment before the
+// applicant ever submits. Throttled because it is a public, unauthenticated
+// endpoint that writes.
+Route::post('/visa-interest/{visa}/draft', [\App\Http\Controllers\VisaIntakeDraftController::class, 'store'])
+    ->whereIn('visa', ['resident', 'work', 'student', 'visitor', 'family'])
+    ->middleware('throttle:30,1')
+    ->name('visa-interest.draft');
+
 // Token-based edit links (no auth — the opaque token is the bearer credential).
 Route::get('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'showEditForm'])->name('resident-interest.edit');
 Route::post('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'updateFromEditLink']);
