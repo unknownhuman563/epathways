@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
 use App\Http\Controllers\Concerns\HandlesIntakeDocuments;
+use App\Http\Controllers\Concerns\SyncsIntakeToCase;
 use App\Models\Assessment;
 use App\Models\FamilyIntake;
 use App\Support\IntakeVisaTypeMap;
@@ -19,6 +20,7 @@ class FamilyIntakeController extends Controller
 {
     use FiresEnquiryAutomation;
     use HandlesIntakeDocuments;
+    use SyncsIntakeToCase;
 
     public function showForm()
     {
@@ -67,6 +69,8 @@ class FamilyIntakeController extends Controller
             DB::commit();
 
             $this->fireEnquiryCaptured($intake, 'Family Visa (Partner / Child)');
+
+            $this->syncIntakeToExistingCase($intake, 'Family Visa (Partner / Child)');
 
             return back()->with('intake_submitted', 'Family Visa (Partner / Child)');
         } catch (\Throwable $e) {

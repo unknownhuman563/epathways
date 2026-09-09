@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
+use App\Http\Controllers\Concerns\SyncsIntakeToCase;
 use App\Models\Assessment;
 use App\Models\ResidentIntake;
 use App\Support\IntakeVisaTypeMap;
@@ -15,6 +16,7 @@ use Illuminate\Support\Str;
 class ResidentIntakeController extends Controller
 {
     use FiresEnquiryAutomation;
+    use SyncsIntakeToCase;
 
     /** Document-checklist keys that may carry uploaded PDFs (plus an "other" bucket). */
     private const DOCUMENT_KEYS = [
@@ -187,6 +189,8 @@ class ResidentIntakeController extends Controller
             DB::commit();
 
             $this->fireEnquiryCaptured($intake, 'Resident Visa (SMC)');
+
+            $this->syncIntakeToExistingCase($intake, 'Resident Visa (SMC)');
 
             // return redirect()->route('assessment.pay', $assessment->token);
             return back()->with('intake_submitted', 'Resident Visa (SMC)');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
 use App\Http\Controllers\Concerns\HandlesIntakeDocuments;
+use App\Http\Controllers\Concerns\SyncsIntakeToCase;
 use App\Models\Assessment;
 use App\Models\StudentIntake;
 use App\Support\IntakeVisaTypeMap;
@@ -15,6 +16,7 @@ class StudentIntakeController extends Controller
 {
     use FiresEnquiryAutomation;
     use HandlesIntakeDocuments;
+    use SyncsIntakeToCase;
 
     public function showForm()
     {
@@ -68,6 +70,8 @@ class StudentIntakeController extends Controller
             DB::commit();
 
             $this->fireEnquiryCaptured($intake, 'Student Visa');
+
+            $this->syncIntakeToExistingCase($intake, 'Student Visa');
 
             // return redirect()->route('assessment.pay', $assessment->token);
             return back()->with('intake_submitted', 'Student Visa');

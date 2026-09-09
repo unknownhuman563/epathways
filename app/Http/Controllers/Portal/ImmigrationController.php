@@ -2090,7 +2090,19 @@ class ImmigrationController extends Controller
                 ->pluck('assessment_id')
                 ->flip();
 
-            $normalize = function ($intake, string $visaType, $assessment, $review = null) use ($convertedAssessmentIds): array {
+            // Identity keys (lower(email)|dob) of every immigration case, so a
+            // fresh submission from someone who is ALREADY a case shows as
+            // belonging to that case instead of a convertible duplicate — the
+            // public funnels sync it in (see SyncsIntakeToCase). Email+DOB (not
+            // email alone) keeps family members who share an email distinct.
+            $caseIdentities = Lead::query()
+                ->where('is_immigration_case', true)
+                ->get(['email', 'dob'])
+                ->map(fn ($c) => \App\Http\Controllers\Concerns\SyncsIntakeToCase::caseSyncIdentityKey($c->email, $c->dob))
+                ->filter()
+                ->flip();
+
+            $normalize = function ($intake, string $visaType, $assessment, $review = null) use ($convertedAssessmentIds, $caseIdentities): array {
                 $first = (string) ($intake->first_name ?? '');
                 $last = (string) ($intake->last_name ?? $intake->family_name ?? '');
                 $hasAssessment = (bool) $assessment;
@@ -2107,10 +2119,15 @@ class ImmigrationController extends Controller
                 $isTriaged = $intake->status !== null
                     && ! in_array($intake->status, $defaultStatuses, true);
 
-                // Converted — this exact assessment is linked to a case, or
-                // the intake itself has been marked "Engaged" post-convert.
+                // Converted — this exact assessment is linked to a case, the
+                // intake was marked "Engaged" post-convert, OR the submitter is
+                // already a case (same email + DOB): their fresh form was synced
+                // into that case, so it isn't a new lead to convert.
+                $identityKey = \App\Http\Controllers\Concerns\SyncsIntakeToCase::caseSyncIdentityKey($intake->email, $intake->dob);
+                $belongsToCase = $identityKey !== null && isset($caseIdentities[$identityKey]);
                 $isConverted = ($assessment && isset($convertedAssessmentIds[$assessment->id]))
-                    || $intake->status === 'Engaged';
+                    || $intake->status === 'Engaged'
+                    || $belongsToCase;
 
                 return [
                     'id' => $intake->id,
