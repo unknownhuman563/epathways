@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import {
     School as SchoolIcon, Plus, Pencil, Trash2, Globe, MapPin, Search, X, Check,
-    User, Mail, Phone, KeyRound, Link2, FileText, Upload,
+    User, Mail, Phone, KeyRound, Link2, FileText, Upload, Image as ImageIcon,
 } from "lucide-react";
 
 // Schools catalog — admin CRUD. Mirrors the Programs page in shape:
@@ -92,8 +92,10 @@ export default function SchoolsPage({ schools = [], portalBase = "/admin" }) {
                             <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                                 <td className="px-4 py-3">
                                     <div className="flex items-center gap-2">
-                                        <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0">
-                                            <SchoolIcon size={13} />
+                                        <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                            {s.logo_url
+                                                ? <img src={s.logo_url} alt="" className="w-full h-full object-contain" />
+                                                : <SchoolIcon size={13} />}
                                         </span>
                                         <div className="min-w-0">
                                             <Link
@@ -189,6 +191,8 @@ export function SchoolFormModal({ initial, onClose }) {
             : [emptyContact()]),
     );
     const [agreementFile, setAgreementFile] = useState(null);
+    const [logoFile, setLogoFile] = useState(null);
+    const logoPreview = logoFile ? URL.createObjectURL(logoFile) : (initial?.logo_url || null);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
 
@@ -203,7 +207,7 @@ export function SchoolFormModal({ initial, onClose }) {
         setErrors({});
         const url = initial ? `/admin/schools/${initial.id}` : "/admin/schools";
         // forceFormData so the (optional) agreement file uploads as multipart.
-        router.post(url, { ...form, contacts, agreement_file: agreementFile }, {
+        router.post(url, { ...form, contacts, logo: logoFile, agreement_file: agreementFile }, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => onClose?.(),
@@ -229,6 +233,27 @@ export function SchoolFormModal({ initial, onClose }) {
                 </div>
 
                 <form onSubmit={submit} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+                    {/* Logo */}
+                    <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-2xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {logoPreview
+                                ? <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
+                                : <ImageIcon size={22} className="text-gray-300" />}
+                        </div>
+                        <div className="min-w-0">
+                            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+                                <Upload size={14} className="text-gray-400" />
+                                {logoPreview ? "Change logo" : "Upload logo"}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
+                            </label>
+                            {logoFile && (
+                                <button type="button" onClick={() => setLogoFile(null)} className="ml-2 text-[10.5px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-600">Clear</button>
+                            )}
+                            {errors.logo && <p className="mt-1 text-[10.5px] text-red-600">{errors.logo}</p>}
+                            <p className="mt-1 text-[10.5px] text-gray-400">PNG, JPG, or SVG · up to 4 MB.</p>
+                        </div>
+                    </div>
+
                     <ModalField label="Name" required error={errors.name}>
                         <input type="text" required value={form.name} onChange={set("name")} maxLength={191} className={inputClass} placeholder="e.g. Auckland Institute of Studies" />
                     </ModalField>

@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class School extends Model
 {
     protected $fillable = [
-        'name', 'slug', 'country', 'city', 'website', 'description', 'status',
+        'name', 'slug', 'logo_path', 'country', 'city', 'website', 'description', 'status',
         'contacts',
         'portal_username', 'portal_password', 'portal_link',
         'agreement_path', 'agreement_name',
@@ -25,6 +26,16 @@ class School extends Model
     protected $hidden = [
         'agreement_path',
     ];
+
+    // Expose a ready-to-use public URL for the logo in every JSON payload.
+    protected $appends = [
+        'logo_url',
+    ];
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->logo_path ? Storage::disk('public')->url($this->logo_path) : null;
+    }
 
     public function getRouteKeyName(): string
     {

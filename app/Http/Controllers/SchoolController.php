@@ -73,6 +73,7 @@ class SchoolController extends Controller
         $data = $this->validatePayload($request);
         try {
             $data['contacts'] = $this->cleanContacts($data['contacts'] ?? []);
+            $data = $this->applyLogoUpload($request, $data);
             $data = $this->applyAgreementUpload($request, $data);
             School::create($data);
 
@@ -90,6 +91,7 @@ class SchoolController extends Controller
         $data = $this->validatePayload($request, $school->id);
         try {
             $data['contacts'] = $this->cleanContacts($data['contacts'] ?? []);
+            $data = $this->applyLogoUpload($request, $data, $school);
             $data = $this->applyAgreementUpload($request, $data, $school);
             $school->update($data);
 
@@ -108,6 +110,9 @@ class SchoolController extends Controller
             if ($school->agreement_path) {
                 Storage::disk('local')->delete($school->agreement_path);
             }
+            if ($school->logo_path) {
+                Storage::disk('public')->delete($school->logo_path);
+            }
             $school->delete();
 
             return back()->with('success', 'School removed.');
@@ -116,6 +121,28 @@ class SchoolController extends Controller
 
             return back()->with('error', 'Could not remove school.');
         }
+    }
+
+    /**
+     * Store a newly uploaded logo (public disk, replacing any prior one) and
+     * fold its path into the write payload. No file sent = logo untouched.
+     */
+    private function applyLogoUpload(Request $request, array $data, ?School $school = null): array
+    {
+        // 'logo' is the upload input, not a column — never persist it directly.
+        unset($data['logo']);
+
+        if (! $request->hasFile('logo')) {
+            return $data;
+        }
+
+        if ($school && $school->logo_path) {
+            Storage::disk('public')->delete($school->logo_path);
+        }
+
+        $data['logo_path'] = $request->file('logo')->store('schools/logos', 'public');
+
+        return $data;
     }
 
     /**
@@ -173,6 +200,7 @@ class SchoolController extends Controller
             'website' => 'nullable|url|max:512',
             'description' => 'nullable|string|max:5000',
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif,svg|max:4096',
             // Contacts — a school can have several people (marketing, admissions…)
             'contacts' => 'nullable|array|max:50',
             'contacts.*.name' => 'nullable|string|max:191',

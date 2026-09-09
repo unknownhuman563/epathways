@@ -51,6 +51,21 @@ class SchoolProfileTest extends TestCase
         Storage::disk('local')->assertExists($school->agreement_path);
     }
 
+    public function test_logo_upload_is_stored_and_exposed(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)->post('/admin/schools', $this->payload([
+            'logo' => UploadedFile::fake()->image('logo.png', 200, 200),
+        ]))->assertRedirect();
+
+        $school = School::first();
+        $this->assertNotNull($school->logo_path);
+        Storage::disk('public')->assertExists($school->logo_path);
+        $this->assertNotNull($school->logo_url);
+    }
+
     public function test_empty_contact_rows_are_dropped(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
