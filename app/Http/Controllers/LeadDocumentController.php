@@ -1680,6 +1680,12 @@ class LeadDocumentController extends Controller
                 Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, $kind));
             }
 
+            // Start the post-proposal feedback drip (day 1/2/5) on an actual
+            // proposal send, regardless of whether the stage transitioned.
+            if ($kind === 'proposal') {
+                \App\Jobs\SendLeadFollowupEmail::scheduleProposalDrip($lead);
+            }
+
             return back()->with('success', "Notification sent to {$lead->first_name} {$lead->last_name}.");
         } catch (\Throwable $e) {
             Log::error('Document-ready notification failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
@@ -1716,6 +1722,11 @@ class LeadDocumentController extends Controller
             $lead->status = 'Proposal Sent';
             $lead->save();
         }
+
+        // Kick off the day 1/2/5 feedback drip now that the proposal is being
+        // sent — even when the lead was already in "Proposal Sent" (so the
+        // status-change hook wouldn't have fired).
+        \App\Jobs\SendLeadFollowupEmail::scheduleProposalDrip($lead);
 
         // A configured client automation may already own the "proposal ready"
         // email — in that case advance the pipeline but skip the built-in send

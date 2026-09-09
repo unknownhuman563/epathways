@@ -801,18 +801,13 @@ class Lead extends Model
                 } elseif ($lead->status === 'Consultancy Agreement Signed') {
                     // Key intentionally spelled 'consultancy_signe' per template.
                     \App\Jobs\SendLeadFollowupEmail::sendKey('consultancy_signe', $lead);
-                } elseif ($lead->status === 'Proposal Sent') {
-                    // Feedback-request drip after the proposal (program_proposal)
-                    // is sent: day 1, day 2, day 5. Each is skipped at fire time
-                    // if the lead has moved on from "Proposal Sent" (e.g. chose a
-                    // program), so a responsive lead stops getting nudges.
-                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_1', 'Proposal Sent')
-                        ->delay(now()->addDays(1));
-                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_2', 'Proposal Sent')
-                        ->delay(now()->addDays(2));
-                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_3', 'Proposal Sent')
-                        ->delay(now()->addDays(5));
                 }
+                // NB: the post-proposal feedback drip (proposal_send_1/2/3) is NOT
+                // scheduled here — it's tied to the actual proposal email in
+                // LeadDocumentController (SendLeadFollowupEmail::scheduleProposalDrip),
+                // because the proposal is often emailed while the lead is already
+                // in "Proposal Sent" (verification approval), so no status
+                // transition fires.
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Stage-change follow-up failed', [
                     'lead_id' => $lead->id, 'status' => $lead->status, 'error' => $e->getMessage(),
