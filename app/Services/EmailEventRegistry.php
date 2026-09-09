@@ -79,11 +79,18 @@ class EmailEventRegistry
     {
         $stageEvents = [];
         foreach (Lead::IMMIGRATION_STAGES as $stage) {
+            $vars = ['first_name', 'stage', 'adviser_name', 'tracker_url'];
+            // The RFI move captures a response deadline + note, passed to the
+            // email — advertise them so admins can use them in the template.
+            if ($stage === 'Request for Information') {
+                $vars[] = 'rfi_deadline';
+                $vars[] = 'status_detail';
+            }
             $stageEvents[] = [
                 'key' => 'immigration.stage.'.Str::slug($stage, '_'),
                 'label' => 'Moved to '.$stage,
                 'when' => 'When the case stage changes to “'.$stage.'”',
-                'vars' => ['first_name', 'stage', 'adviser_name', 'tracker_url'],
+                'vars' => $vars,
             ];
         }
 
