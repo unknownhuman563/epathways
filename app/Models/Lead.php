@@ -180,6 +180,22 @@ class Lead extends Model
         return $status === 'approved' || $status === null;
     }
 
+    /** Consultancy-agreement verification status: pending | verified | approved | null. */
+    public function consultancyStatus(): ?string
+    {
+        $r = is_array($this->consultancy_review) ? $this->consultancy_review : [];
+
+        return $r['status'] ?? null;
+    }
+
+    /** A consultancy agreement is sent to the client only once approved (legacy = live). */
+    public function consultancyIsLive(): bool
+    {
+        $status = $this->consultancyStatus();
+
+        return $status === 'approved' || $status === null;
+    }
+
     public function pushStageHistory(string $department, ?string $stage, ?string $assignee = null): void
     {
         $history = $this->stage_history ?? [];
@@ -195,6 +211,24 @@ class Lead extends Model
         ];
 
         $this->stage_history = $history;
+    }
+
+    /**
+     * The RFI response deadline lives on the most recent "Request for
+     * Information" stage-history entry (set by ImmigrationController::
+     * requestForInformation) rather than a dedicated column — the `leads` god
+     * table is already at InnoDB's row-size limit. Read-only; write it through
+     * that action, which annotates the stage entry.
+     */
+    public function getRfiDeadlineAttribute(): ?\Illuminate\Support\Carbon
+    {
+        foreach (array_reverse($this->stage_history ?? []) as $entry) {
+            if (($entry['stage'] ?? null) === 'Request for Information' && ! empty($entry['rfi_deadline'])) {
+                return \Illuminate\Support\Carbon::parse($entry['rfi_deadline']);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -298,6 +332,7 @@ class Lead extends Model
         // Per-program verification overrides (fee/school/intake/status/edited),
         // keyed by program id — drives the Program Verification table.
         'proposed_program_meta',
+        'consultancy_review',
         // Study-proposal verification workflow (pending → verified → approved).
         'proposal_review',
         // Lead's chosen program (FK to programs.id) from that shortlist,
@@ -431,6 +466,7 @@ class Lead extends Model
         'proposed_program_reasons' => 'array',
         'proposed_program_meta' => 'array',
         'proposal_review' => 'array',
+        'consultancy_review' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',

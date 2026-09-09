@@ -3,7 +3,7 @@ import {
     User, Mail, Phone, MapPin, Hash, Clock, FileText, ClipboardList,
     Calendar, Megaphone, ArrowRight, ChevronRight, Check, AlertCircle,
     Sparkles, MapPinned, Users, TrendingUp, FolderCheck, CalendarClock,
-    Heart, Baby, UserCircle2, ShieldCheck,
+    Heart, Baby, UserCircle2, ShieldCheck, Download, Eye,
 } from "lucide-react";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -50,6 +50,7 @@ export default function LeadDashboard({
     nextAppointment = null,
     analytics = {},
     requestedDocuments = { total: 0, outstanding: 0, items: [] },
+    sharedDocuments = [],
 }) {
     return (
         <div className="space-y-8 max-w-6xl mx-auto pb-16">
@@ -98,6 +99,11 @@ export default function LeadDashboard({
             {/* ── Documents your adviser requested (action needed) ───────── */}
             {requestedDocuments.outstanding > 0 && (
                 <RequestedDocumentsCard data={requestedDocuments} />
+            )}
+
+            {/* ── Documents your adviser shared with you (RFI letters etc.) ─ */}
+            {sharedDocuments.length > 0 && (
+                <SharedDocumentsCard docs={sharedDocuments} />
             )}
 
             {/* ── Analytics band ─────────────────────────────────────────── */}
@@ -261,6 +267,49 @@ export default function LeadDashboard({
 
 // Prominent "your adviser needs documents" call-to-action on the dashboard.
 // Lists what's outstanding and sends the client to the Documents page to upload.
+// Documents the adviser SHARED with the client (RFI letters, outcome letters).
+// View opens inline in a new tab; Download saves the file.
+function SharedDocumentsCard({ docs = [] }) {
+    return (
+        <section className="rounded-[20px] border border-[#282728]/15 bg-white p-6 sm:p-7">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-[#009688]/10 text-[#009688] flex items-center justify-center flex-shrink-0">
+                    <FolderCheck size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#009688] mb-0.5">From your adviser</p>
+                    <h2 className="text-lg font-semibold text-[#0f172a]">Shared with you</h2>
+                </div>
+            </div>
+            <ul className="divide-y divide-gray-100">
+                {docs.map((d) => (
+                    <li key={d.id} className="py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <FileText size={16} className="text-gray-400 flex-shrink-0" />
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-[#282728] truncate">{d.title}</p>
+                                {d.created_at && (
+                                    <p className="text-[11px] text-gray-400">{new Date(d.created_at).toLocaleDateString()}</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <a href={d.view_url} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-[#009688] hover:bg-[#009688]/10">
+                                <Eye size={13} /> View
+                            </a>
+                            <a href={d.download_url}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-gray-600 hover:bg-gray-100">
+                                <Download size={13} /> Download
+                            </a>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        </section>
+    );
+}
+
 function RequestedDocumentsCard({ data }) {
     const { outstanding, items = [] } = data;
     return (

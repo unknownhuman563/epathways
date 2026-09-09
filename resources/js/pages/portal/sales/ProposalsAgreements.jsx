@@ -418,6 +418,22 @@ function ProposalReviewRow({ r, portalBase, fmtDate, onNotify }) {
                     })}
                 </div>
 
+                {/* Reviewer's overall "request changes" note (proposal-level). */}
+                {r.changes_requested?.message && (
+                    <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                        <div className="flex items-start gap-1.5">
+                            <AlertCircle size={13} className="mt-0.5 shrink-0 text-rose-500" />
+                            <div className="min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Changes requested</div>
+                                <p className="text-[12px] text-gray-800 leading-snug mt-0.5 [overflow-wrap:anywhere] whitespace-pre-wrap">{r.changes_requested.message}</p>
+                                <div className="text-[10px] text-rose-700/80 mt-1">
+                                    {r.changes_requested.by ? `${r.changes_requested.by} · ` : ''}{fmtNoteTime(r.changes_requested.at)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Previous proposals (version history) */}
                 {Array.isArray(r.previous) && r.previous.length > 0 && (
                     <details className="mt-3 group/hist">
@@ -469,6 +485,10 @@ function fmtNoteTime(iso) {
 // Threaded notes for one programme — display + Add note / Reply / Mark actioned.
 function ProgramNoteThread({ leadId, program }) {
     const notes = program.notes || [];
+    // The single free-text staff note captured on the Program Verification
+    // screen (leads.proposed_program_meta[<program>].note). Shown here so the
+    // reviewer's verification note surfaces in the Proposals inbox.
+    const vnote = (program.note || '').trim();
     // Row shows only the latest note; the rest expand on demand (like the
     // document notes on the Case Profile).
     const ordered = [...notes].reverse(); // newest first
@@ -485,16 +505,34 @@ function ProgramNoteThread({ leadId, program }) {
     const reply = (id) => { if (! replyBody.trim()) return; send(`${base}/${id}/reply`, { body: replyBody }, () => { setReplyBody(''); setReplyTo(null); }); };
     const toggle = (id) => send(`${base}/${id}/actioned`, {});
 
+    // Verification note card — always visible when the reviewer left one.
+    const verificationCard = vnote ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <div className="flex items-start gap-1.5">
+                <Flag size={12} className="mt-0.5 shrink-0 text-amber-500" />
+                <span className="text-[12px] font-medium leading-snug text-gray-800 [overflow-wrap:anywhere] whitespace-pre-wrap">{vnote}</span>
+            </div>
+            <div className="text-[10px] mt-1 ml-[18px] text-amber-700/80">From program verification</div>
+        </div>
+    ) : null;
+
     if (notes.length === 0) {
         return (
-            <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
-                {adding ? (
-                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
-                ) : (
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-gray-400 italic">No note on this program</span>
-                        <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+            <div className="space-y-2">
+                {verificationCard}
+                {! verificationCard && ! adding && (
+                    <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-gray-400 italic">No note on this program</span>
+                            <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                        </div>
                     </div>
+                )}
+                {verificationCard && ! adding && (
+                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                )}
+                {adding && (
+                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
                 )}
             </div>
         );
@@ -502,6 +540,7 @@ function ProgramNoteThread({ leadId, program }) {
 
     return (
         <div className="space-y-2">
+            {verificationCard}
             {! expanded ? (
                 /* Collapsed row — latest note as a compact coloured card. */
                 (() => {
@@ -650,6 +689,118 @@ function ProposalStatusBadge({ status }) {
 const rowInitials = (name = '') =>
     (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join('') || '?';
 
+// Threaded staff notes on one generated agreement — a straight copy of the
+// Proposals tab's per-programme note thread (ProgramNoteThread): collapsed amber
+// card for the latest note, expandable full thread with author/time, tags,
+// Acknowledge, Reply + composer, "N notes ›" collapse, and Add note. Lets the
+// generation staff and the verification staff talk on the same thread.
+function DocumentNoteThread({ docId, notes = [] }) {
+    const ordered = [...notes].reverse(); // newest first
+    const [expanded, setExpanded] = useState(false);
+    const [adding, setAdding] = useState(false);
+    const [body, setBody] = useState('');
+    const [replyTo, setReplyTo] = useState(null);
+    const [replyBody, setReplyBody] = useState('');
+    const base = `/admin/documents/${docId}/notes`;
+    const send = (url, data, done) => router.post(url, data, { preserveScroll: true, onSuccess: done });
+
+    const addNote = () => { if (! body.trim()) return; send(base, { body, tag: 'note' }, () => { setBody(''); setAdding(false); }); };
+    const reply = (id) => { if (! replyBody.trim()) return; send(`${base}/${id}/reply`, { body: replyBody }, () => { setReplyBody(''); setReplyTo(null); }); };
+    const toggle = (id) => send(`${base}/${id}/actioned`, {});
+
+    if (notes.length === 0) {
+        return (
+            <div className="space-y-2 min-w-[220px]">
+                {! adding ? (
+                    <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-gray-400 italic">No note on this agreement</span>
+                            <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                        </div>
+                    </div>
+                ) : (
+                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this agreement…" />
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-2 min-w-[240px]">
+            {! expanded ? (
+                (() => {
+                    const n = ordered[0];
+                    const done = !! n.actioned_at;
+                    const cr = n.tag === 'change_requested';
+                    return (
+                        <div className={`rounded-lg border px-3 py-2 ${cr ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
+                            <div className="flex items-start gap-1.5">
+                                <Flag size={12} className={`mt-0.5 shrink-0 ${cr ? 'text-rose-500' : 'text-amber-500'}`} />
+                                <span className={`text-[12px] font-medium leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : 'text-gray-800'}`}>{n.body}</span>
+                            </div>
+                            <div className={`text-[10px] mt-1 ml-[18px] ${cr ? 'text-rose-700/80' : 'text-amber-700/80'}`}>
+                                {n.author} · {fmtNoteTime(n.created_at)}
+                                {n.replies.length ? <span className="text-gray-400"> · {n.replies.length} repl{n.replies.length === 1 ? 'y' : 'ies'}</span> : null}
+                            </div>
+                        </div>
+                    );
+                })()
+            ) : (
+                ordered.map((n) => {
+                    const done = !! n.actioned_at;
+                    const cr = n.tag === 'change_requested';
+                    return (
+                        <div key={n.id} className="text-[11px]">
+                            <div className="flex items-center gap-1.5">
+                                <NoteTag tag={n.tag} />
+                                <span className="font-bold text-gray-800 truncate">{n.author}</span>
+                                <span className="text-gray-400 whitespace-nowrap">{fmtNoteTime(n.created_at)}</span>
+                            </div>
+                            <p className={`mt-1 text-gray-700 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : ''}`}>{n.body}</p>
+                            {n.replies.map((rp) => (
+                                <div key={rp.id} className="mt-1.5 ml-3 border-l-2 border-gray-100 pl-2.5">
+                                    <span className="font-semibold text-gray-700">{rp.author}</span>
+                                    <span className="text-gray-400"> · {fmtNoteTime(rp.created_at)}</span>
+                                    <p className="text-gray-600 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap">{rp.body}</p>
+                                </div>
+                            ))}
+                            <div className="mt-1.5 flex items-center gap-3 font-semibold">
+                                <button type="button" onClick={() => toggle(n.id)} className={done ? 'text-gray-400 hover:text-gray-600' : 'text-emerald-700 hover:text-emerald-900'}>
+                                    {done ? 'Actioned ✓' : (cr ? 'Mark as actioned' : 'Acknowledge')}
+                                </button>
+                                <button type="button" onClick={() => { setReplyTo(replyTo === n.id ? null : n.id); setReplyBody(''); }} className="text-gray-500 hover:text-gray-800">Reply</button>
+                            </div>
+                            {replyTo === n.id && (
+                                <div className="mt-1.5">
+                                    <NoteComposer value={replyBody} onChange={setReplyBody} onSubmit={() => reply(n.id)} onCancel={() => { setReplyBody(''); setReplyTo(null); }} placeholder="Write a reply…" small />
+                                </div>
+                            )}
+                        </div>
+                    );
+                })
+            )}
+
+            <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    onClick={() => setExpanded((v) => ! v)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-800"
+                >
+                    {expanded ? 'Show less' : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
+                    <ChevronRight size={12} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                </button>
+                {! adding && (
+                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                )}
+            </div>
+
+            {adding && (
+                <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this agreement…" />
+            )}
+        </div>
+    );
+}
+
 function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
     // Flatten lead-grouped rows into doc-per-row so the table renders one
     // line per generated agreement — matches the requested column layout.
@@ -662,6 +813,7 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
                     <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                         <th className="px-4 py-3">Profile</th>
                         <th className="px-3 py-3">Document</th>
+                        <th className="px-3 py-3">Notes</th>
                         <th className="px-3 py-3 whitespace-nowrap">Status &amp; created</th>
                         <th className="px-3 py-3 text-right pr-4">Actions</th>
                     </tr>
@@ -730,6 +882,11 @@ function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                     )}
                 </div>
                 <div className="text-[10px] text-gray-400 mt-1 ml-[21px]">{fmtSize(doc.size)}</div>
+            </td>
+
+            {/* ── NOTES (threaded, same as the Proposals tab) ──────── */}
+            <td className="px-3 py-3">
+                <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />
             </td>
 
             {/* ── STATUS & CREATED (merged) ────────────────────────── */}
@@ -2014,28 +2171,38 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                     {/* Email opt-in — sits on the left of the footer.
                         Disabled when the chosen lead has no email since
                         the notify endpoint would fail. */}
-                    <label className={`flex items-center gap-2 text-xs ${canNotify ? 'text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}>
-                        <button
-                            type="button"
-                            onClick={() => canNotify && setNotify((v) => ! v)}
-                            disabled={! canNotify}
-                            className={`w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0 ${
-                                notify && canNotify
-                                    ? 'bg-gray-900 border-gray-900'
-                                    : 'bg-white border-gray-300'
-                            } ${canNotify ? '' : 'opacity-60'}`}
-                            aria-checked={notify && canNotify}
-                            role="checkbox"
-                        >
-                            {notify && canNotify && <Check size={11} className="text-white" strokeWidth={3} />}
-                        </button>
-                        <Mail size={13} className={canNotify ? 'text-gray-500' : 'text-gray-300'} />
-                        <span>
-                            Email the client that their documents are available in the application tracker
-                            {chosenLead?.email && <span className="text-gray-400"> · {chosenLead.email}</span>}
-                            {chosenLead && ! chosenLead.email && <span className="text-gray-400 italic"> · no email on file</span>}
+                    {isConsultancyType ? (
+                        // Consultancy agreements go through verification first — the
+                        // client is emailed only once a reviewer approves it, so
+                        // there's no "email now" opt-in here.
+                        <span className="flex items-center gap-2 text-xs text-gray-500">
+                            <ShieldCheck size={13} className="text-emerald-600" />
+                            Submits for consultancy verification — the client is emailed once it's approved.
                         </span>
-                    </label>
+                    ) : (
+                        <label className={`flex items-center gap-2 text-xs ${canNotify ? 'text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}>
+                            <button
+                                type="button"
+                                onClick={() => canNotify && setNotify((v) => ! v)}
+                                disabled={! canNotify}
+                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0 ${
+                                    notify && canNotify
+                                        ? 'bg-gray-900 border-gray-900'
+                                        : 'bg-white border-gray-300'
+                                } ${canNotify ? '' : 'opacity-60'}`}
+                                aria-checked={notify && canNotify}
+                                role="checkbox"
+                            >
+                                {notify && canNotify && <Check size={11} className="text-white" strokeWidth={3} />}
+                            </button>
+                            <Mail size={13} className={canNotify ? 'text-gray-500' : 'text-gray-300'} />
+                            <span>
+                                Email the client that their documents are available in the application tracker
+                                {chosenLead?.email && <span className="text-gray-400"> · {chosenLead.email}</span>}
+                                {chosenLead && ! chosenLead.email && <span className="text-gray-400 italic"> · no email on file</span>}
+                            </span>
+                        </label>
+                    )}
 
                     <div className="flex items-center gap-3 flex-shrink-0">
                         <span className="text-[11px] text-gray-500">
@@ -2059,7 +2226,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                         >
                             {submitting ? <Loader size={14} className="animate-spin" /> : <Plus size={14} />}
-                            {isProposalType ? 'Submit for verification' : 'Generate'}
+                            {(isProposalType || isConsultancyType) ? 'Submit for verification' : 'Generate'}
                         </button>
                     </div>
                 </div>

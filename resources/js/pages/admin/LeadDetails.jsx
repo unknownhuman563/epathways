@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
@@ -11,8 +11,10 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare, Search,
+    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare, Search, Pin, Loader2,
+    Building2,
 } from 'lucide-react';
+import { LeadStatStrip, LeadProgressStrip, LeadActivityTimeline } from '@/components/leads/LeadOverviewStrips';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import { ThreadItem, ThreadComposer } from '@/components/immigration/case-profile/threads';
 import { LeadDocViewerModal, LeadDocFileMenu } from '@/components/ui/LeadDocViewerModal';
@@ -161,16 +163,24 @@ function ProgramAddPicker({ options = [], excludeIds = [], disabled = false, onP
 // programs offered to this lead and highlights (green) the one the client
 // chose from their tracker. Rendered on the Lead Stats tab under the AI card.
 function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
+    const writeBase = useWriteBase();
+    // Which programs go in front of a client is an advice call — staff shortlist
+    // them, the client picks one on their tracker. A recruiting agent or
+    // sub-agent reads that shortlist; they do not decide it. So the search box
+    // and the per-card remove come off in their portals, leaving the tiles and
+    // "View program" intact.
+    const canShortlist = !['/portal/agent', '/portal/sub-agent'].includes(writeBase);
     const programs = proposal?.programs || [];
     const chosenId = proposal?.preferred_program_id ?? null;
     const chosen = programs.find((p) => p.id === chosenId) || null;
     const currentIds = programs.map((p) => p.id);
     const MAX = 5;
+    const [reviewing, setReviewing] = useState(null);
 
     // Inline shortlist edit — persists to leads.proposed_program_ids without
     // spawning a proposal version (that's the Proposal & Agreements flow).
     const saveShortlist = (ids) => {
-        router.post(`/admin/leads/${leadId}/shortlist`, { program_ids: ids }, {
+        router.post(`${writeBase}/leads/${leadId}/shortlist`, { program_ids: ids }, {
             preserveScroll: true,
             preserveState: false,
             onError: (e) => toast.error(Object.values(e)[0] || 'Could not update programs'),
@@ -193,7 +203,9 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                         </h2>
                         <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
                             {programs.length === 0
-                                ? 'No programs proposed yet — search and add programs below.'
+                                ? (canShortlist
+                                    ? 'No programs proposed yet — search and add programs below.'
+                                    : 'No programs proposed yet — staff shortlist these for the client.')
                                 : chosen
                                     ? <>Client selected <span className="font-semibold text-gray-700">{chosen.title}</span> from their tracker.</>
                                     : "These are the programs staff shortlisted. The client picks one on their tracker."}
@@ -208,7 +220,7 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
             </div>
 
             {/* Inline add — search the catalogue and shortlist a program (up to 5). */}
-            {leadId && (
+            {leadId && canShortlist && (
                 <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/40">
                     <div className="max-w-md">
                         <ProgramAddPicker
@@ -238,14 +250,16 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                                 }`}
                             >
                                 {/* Remove from shortlist */}
-                                <button
-                                    type="button"
-                                    onClick={() => removeProgram(p.id)}
-                                    title="Remove from shortlist"
-                                    className="absolute top-2 left-2 z-10 w-6 h-6 rounded-full bg-white/90 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center shadow-sm"
-                                >
-                                    <X size={12} />
-                                </button>
+                                {canShortlist && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removeProgram(p.id)}
+                                        title="Remove from shortlist"
+                                        className="absolute top-2 left-2 z-10 w-6 h-6 rounded-full bg-white/90 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center shadow-sm"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                )}
                                 {isChosen && (
                                     <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
                                         <Check size={10} strokeWidth={3} /> Chosen
@@ -269,7 +283,15 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                                         )}
                                         {p.category && <span className="text-[10px] font-medium text-gray-500 capitalize">{p.category}</span>}
                                     </div>
-                                    <h3 className="text-[13px] font-bold text-gray-900 leading-snug mb-2">{p.title}</h3>
+                                    <h3 className="text-[13px] font-bold text-gray-900 leading-snug mb-1">{p.title}</h3>
+                                    {/* Two providers can offer the same qualification, so the
+                                        school is what tells one shortlist card from another. */}
+                                    {p.school && (
+                                        <p className="text-[11px] font-medium text-gray-500 leading-snug mb-2 flex items-start gap-1.5">
+                                            <Building2 size={11} className="text-gray-400 mt-0.5 shrink-0" /> {p.school}
+                                        </p>
+                                    )}
+                                    {p.review_status && <ReviewBadge status={p.review_status} />}
                                     <ul className="text-[11px] text-gray-600 space-y-1 mb-3">
                                         {p.location && (
                                             <li className="inline-flex items-center gap-1.5"><MapPin size={11} className="text-gray-400" /> {p.location}</li>
@@ -281,15 +303,28 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                                             <li className="inline-flex items-center gap-1.5"><Calendar size={11} className="text-gray-400" /> Intake: {p.intake_months}</li>
                                         )}
                                     </ul>
-                                    {p.price_text && <p className="text-[11px] font-semibold text-gray-700 mb-3">{p.price_text}</p>}
-                                    <div className="mt-auto">
+                                    {(p.fee != null || p.price_text) && (
+                                        <p className="text-[11px] font-semibold text-gray-700 mb-3">
+                                            {p.fee != null ? Number(p.fee).toLocaleString() : p.price_text}
+                                        </p>
+                                    )}
+                                    <div className="mt-auto flex items-center gap-3">
+                                        {canShortlist && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setReviewing(p)}
+                                                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#436235] hover:text-[#2f4725] transition-colors"
+                                            >
+                                                <Eye size={12} /> View
+                                            </button>
+                                        )}
                                         <a
                                             href={p.public_url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 hover:text-[#436235] transition-colors"
+                                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 hover:text-[#436235] transition-colors"
                                         >
-                                            <Eye size={12} /> View program
+                                            View program
                                         </a>
                                     </div>
                                 </div>
@@ -298,11 +333,140 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                     })}
                 </div>
             )}
+
+            {reviewing && (
+                <ProgramReviewModal
+                    program={reviewing}
+                    leadId={leadId}
+                    writeBase={writeBase}
+                    onClose={() => setReviewing(null)}
+                />
+            )}
         </div>
     );
 }
 
-export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentThreads = [], programOptions = [], documentOrphans = [], statuses = [], stageLists = {}, notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
+// Small status chip on a proposed-program card.
+function ReviewBadge({ status }) {
+    const map = {
+        verified: ['bg-emerald-50 text-emerald-700 border-emerald-200', 'Verified'],
+        rejected: ['bg-rose-50 text-rose-600 border-rose-200', 'Rejected'],
+        needs_check: ['bg-amber-50 text-amber-700 border-amber-200', 'Needs check'],
+    };
+    const [cls, label] = map[status] || ['bg-gray-50 text-gray-600 border-gray-200', status];
+    return (
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border mb-2 ${cls}`}>
+            {label}
+        </span>
+    );
+}
+
+// Review a shortlisted program: verified / rejected, remarks, and the amount.
+function ProgramReviewModal({ program, leadId, writeBase, onClose }) {
+    const [status, setStatus] = useState(program.review_status || null);
+    const [remarks, setRemarks] = useState(program.remarks || '');
+    const [amount, setAmount] = useState(program.fee != null ? String(program.fee) : '');
+    const [saving, setSaving] = useState(false);
+
+    const save = () => {
+        setSaving(true);
+        router.post(`${writeBase}/leads/${leadId}/programs/${program.id}/review`, {
+            status,
+            remarks,
+            amount: amount === '' ? null : amount,
+        }, {
+            preserveScroll: true,
+            preserveState: false,
+            onSuccess: () => { toast.success('Program review saved.'); onClose(); },
+            onError: (e) => toast.error(Object.values(e || {})[0] || 'Could not save the review.'),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <>
+            <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+                <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">Review program</p>
+                            <h3 className="text-[15px] font-bold text-gray-900 leading-snug">{program.title}</h3>
+                            {program.school && (
+                                <p className="text-[11px] font-medium text-gray-500 leading-snug">{program.school}</p>
+                            )}
+                            <a href={program.public_url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#436235] hover:underline mt-0.5">
+                                <Eye size={11} /> View full program
+                            </a>
+                        </div>
+                        <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 shrink-0"><X size={18} /></button>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">Decision</div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => setStatus('verified')}
+                                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-bold transition-colors ${
+                                        status === 'verified' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                                    }`}>
+                                    <Check size={13} /> Verified
+                                </button>
+                                <button type="button" onClick={() => setStatus('rejected')}
+                                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-bold transition-colors ${
+                                        status === 'rejected' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'
+                                    }`}>
+                                    <X size={13} /> Reject
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">Amount</div>
+                            <input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)}
+                                placeholder={program.price_text || 'Set amount'}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-gray-900" />
+                        </div>
+
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">Remarks / notes</div>
+                            <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)}
+                                placeholder="Internal remarks about this program…"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-gray-900 resize-y" />
+                        </div>
+                    </div>
+
+                    <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                        <button type="button" onClick={onClose} className="text-[13px] font-semibold text-gray-500 hover:text-gray-800">Cancel</button>
+                        <button type="button" onClick={save} disabled={saving}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[13px] font-bold hover:bg-black disabled:opacity-40">
+                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save review
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}
+
+
+/**
+ * The URL prefix this profile's write endpoints live under for the current
+ * viewer: '/admin' for admin and the department portals, '/portal/agent' or
+ * '/portal/sub-agent' for the recruiting portals, which mirror the same routes
+ * behind a row-scoping middleware.
+ *
+ * Decided server-side (LeadController::show) and threaded through context
+ * rather than props: a dozen panels several levels deep issue writes, and a
+ * single provider cannot drift the way twelve prop chains can. Hard-coding
+ * '/admin' here did more than 403 for a recruiting portal — following the
+ * redirect afterwards swapped the sidebar to another role's chrome mid-task.
+ */
+const WriteBaseContext = React.createContext('/admin');
+const useWriteBase = () => useContext(WriteBaseContext);
+
+export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentThreads = [], programOptions = [], documentOrphans = [], statuses = [], stageLists = {}, notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null, portalBase = '/admin', writeBase = '/admin', overview = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -338,7 +502,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
     // and history all survive; it just drops off the lists.
     const archiveLead = () => {
         if (! window.confirm('Delete this lead? It will be archived — notes, documents and history are kept and it can be restored.')) return;
-        router.delete(`/admin/leads/${backendLead.id}`);
+        router.delete(`${writeBase}/leads/${backendLead.id}`);
     };
 
     // Toggle whole-record edit mode and make sure the Personal Info tab is
@@ -387,7 +551,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
         setStageOpen(false);
         if (!backendLead || value === stageValue) return;
         setSavingStage(true);
-        router.post(`/admin/leads/${backendLead.id}/stage`, { status: value, field: stageField }, {
+        router.post(`${writeBase}/leads/${backendLead.id}/stage`, { status: value, field: stageField }, {
             preserveScroll: true,
             preserveState: true,
             onFinish: () => setSavingStage(false),
@@ -399,6 +563,13 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
     // this top-level key gates the Edit buttons so only one section can be
     // in edit mode at a time across the whole tab.
     const [currentEditKey, setCurrentEditKey] = useState(null);
+
+    // Files actually on file, for the Documents tab badge.
+    const documentsCount = React.useMemo(() => {
+        const fromChecklist = Object.values(checklistFiles || {})
+            .reduce((n, v) => n + (Array.isArray(v) ? v.length : 0), 0);
+        return fromChecklist + (documentOrphans?.length || 0);
+    }, [checklistFiles, documentOrphans]);
 
     // If no lead data is passed, show a loading or error state
     if (!backendLead) {
@@ -617,6 +788,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
     };
 
     return (
+        <WriteBaseContext.Provider value={writeBase}>
         <div className="space-y-6 max-w-[1200px] mx-auto pb-12">
             <Head title={`Lead Details - ${lead.personal.firstName} ${lead.personal.surname}`} />
             <AiRecordAssistant
@@ -625,136 +797,111 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 immigration={!!backendLead.is_immigration_case}
             />
 
-            {/* Header / Navigation */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="flex flex-col gap-2">
-                    <Link href={backToLeadsUrl} className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">
-                        <ArrowLeft size={16} /> Back to Leads
-                    </Link>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-                            {lead.personal.firstName} {lead.personal.surname}
-                        </h1>
+            {/* ── Header ───────────────────────────────────────
+                Identity, what is missing about it, and the two actions staff take
+                from here. The pipeline stage sits inline rather than in its own
+                block, and the stat strip below carries the rest. */}
+            <Link href={backToLeadsUrl} className="inline-flex items-center gap-1.5 -mb-2 text-[12px] font-semibold text-gray-400 hover:text-gray-700 transition-colors">
+                <ArrowLeft size={13} /> Back to leads
+            </Link>
 
-                        {/* Clickable stage editor — any staff role can change it; every transition is audited */}
-                        <div ref={stageRef} className="relative">
-                            <button
-                                type="button"
-                                disabled={savingStage}
-                                onClick={() => setStageOpen(!stageOpen)}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase hover:shadow-sm transition-all disabled:opacity-50 ${stageClass(stageValue)}`}
-                                title="Click to change stage"
-                            >
-                                {stageValue || 'Set stage'}
-                                <ChevronDown size={11} strokeWidth={2.5} className="opacity-60" />
-                            </button>
-                            {stageOpen && (
-                                <div role="listbox" className="absolute z-30 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[420px] overflow-y-auto">
-                                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
-                                        Move to stage{leadDept !== 'sales' ? ` · ${leadDept}` : ''}
-                                    </p>
-                                    {deptStages.map((s) => {
-                                        const active = s === stageValue;
-                                        return (
-                                            <button
-                                                key={s}
-                                                type="button"
-                                                onClick={() => changeStage(s)}
-                                                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-gray-50 ${active ? 'bg-gray-50/60' : ''}`}
-                                            >
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${stageClass(s)}`}>
-                                                    {s}
-                                                </span>
-                                                {active && <Check size={12} className="text-gray-900 flex-shrink-0" strokeWidth={3} />}
-                                            </button>
-                                        );
-                                    })}
+            {/* Identity + the five facts underneath read as one block, so they
+                share a card rather than sitting in two with a gap between. */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="flex items-start justify-between gap-4 flex-wrap px-5 py-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-[12px] font-bold shrink-0">
+                            {`${(backendLead.first_name || "?")[0] || ""}${(backendLead.last_name || "")[0] || ""}`.toUpperCase() || "?"}
+                        </div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h1 className="text-[20px] font-bold text-gray-900 tracking-tight truncate">
+                                    {lead.personal.firstName} {lead.personal.surname}
+                                </h1>
+                                <div ref={stageRef} className="relative">
+                                    <button
+                                        type="button"
+                                        disabled={savingStage}
+                                        onClick={() => setStageOpen(!stageOpen)}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide hover:shadow-sm transition-all disabled:opacity-50 ${stageClass(stageValue)}`}
+                                        title="Click to change stage"
+                                    >
+                                        {stageValue || "Set stage"}
+                                        <ChevronDown size={10} strokeWidth={2.5} className="opacity-60" />
+                                    </button>
+                                    {stageOpen && (
+                                        <div role="listbox" className="absolute z-30 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[420px] overflow-y-auto">
+                                            <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                                                Move to stage{leadDept !== "sales" ? ` · ${leadDept}` : ""}
+                                            </p>
+                                            {deptStages.map((s) => {
+                                                const active = s === stageValue;
+                                                return (
+                                                    <button
+                                                        key={s}
+                                                        type="button"
+                                                        role="option"
+                                                        aria-selected={active}
+                                                        onClick={() => changeStage(s)}
+                                                        className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 flex items-center justify-between gap-2 ${active ? "font-bold text-gray-900" : "text-gray-600"}`}
+                                                    >
+                                                        <span className="truncate">{s}</span>
+                                                        {active && <Check size={12} className="text-gray-900 shrink-0" />}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Visa applying for — the applicant's selected visa
-                            (interest/intent). Shown in the header beside the
-                            stage so staff see it at a glance; editable on the
-                            Personal Info tab (Current NZ Visa section). */}
-                        {backendLead.inz_visa_type && (
-                            <span
-                                className="inline-flex items-center gap-1 text-xs text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-md"
-                                title="Visa applying for"
-                            >
-                                <Globe size={12} className="opacity-70" />
-                                {backendLead.inz_visa_type}
-                            </span>
-                        )}
-
-                        <span className="text-xs text-blue-700 font-bold bg-blue-50 border border-blue-100 px-2 py-1 rounded-md uppercase tracking-wider">{lead.branch}</span>
-                        <span className="text-xs text-gray-600 font-medium bg-gray-100 px-2 py-1 rounded-md">ID: {lead.id}</span>
-
-                        {/* AI health badge (analyses on first open, cached 24h).
-                            Immigration cases get the procedural/compliance read;
-                            every other lead gets the engagement read. Mutually
-                            exclusive so a case never shows two badges. */}
-                        {backendLead.is_immigration_case
-                            ? <CaseHealthBadge caseId={lead.id} />
-                            : <LeadHealthBadge leadId={lead.id} />}
-
-                        {/* Source + AI score (moved out of the leads list table) */}
-                        {backendLead.source && (
-                            <span className="text-xs text-gray-700 font-medium bg-gray-50 border border-gray-200 px-2 py-1 rounded-md inline-flex items-center gap-1.5">
-                                <TrendingUp size={11} className="text-gray-400" />
-                                {backendLead.source}
-                            </span>
-                        )}
-                        {backendLead.ai_analysis?.overall_score != null && (
-                            <span
-                                className={`text-xs font-bold px-2 py-1 rounded-md inline-flex items-center gap-1.5 ${
-                                    backendLead.ai_analysis.overall_score >= 70
-                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                        : backendLead.ai_analysis.overall_score >= 40
-                                            ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                            : "bg-red-50 text-red-700 border border-red-200"
-                                }`}
-                                title={backendLead.ai_analysis?.recommended_pathway || ""}
-                            >
-                                AI {backendLead.ai_analysis.overall_score}/100
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Action toolbar — "Move to" stays as a primary control;
-                    every other action (edit / delete / tracker link / email /
-                    export) is consolidated behind a three-dot menu so the
-                    header stays compact. */}
-                <div className="flex items-end gap-3 flex-wrap">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Manage</span>
-                        <div className="flex items-center gap-2">
-                            <ConvertMenu lead={backendLead} canRevert={currentUser?.is_admin} />
-                            {/* "Seen" tracker badge stays inline — it's a
-                                passive signal, not an action, and event-desk
-                                staff want it visible at a glance. */}
-                            {lead.trackingCode && lead.lastSeenAt && (
-                                <span
-                                    title={`Lead last opened their tracker on ${new Date(lead.lastSeenAt).toLocaleString()}`}
-                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold"
-                                >
-                                    <Eye size={14} /> Seen {new Date(lead.lastSeenAt).toLocaleDateString()}
+                                <span className="text-[11.5px] font-mono text-gray-400">{lead.id}</span>
+                                <span className="text-[11.5px] text-gray-400">
+                                    · {backendLead.source || "added manually"} · {formatDate(backendLead.created_at)}
                                 </span>
-                            )}
-                            <LeadActionsMenu
-                                editAll={editAll}
-                                onToggleEdit={toggleEditAll}
-                                onArchive={archiveLead}
-                                trackingCode={lead.trackingCode}
-                                hasEmail={!! backendLead.email}
-                                onSendTrackerLink={() => router.post(`/admin/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
-                                onSendUpdate={() => setShowSendUpdate(true)}
-                                onCompose={() => setComposeOpen(true)}
-                            />
+                            </div>
+
+                            {/* Contact line — anything missing reads amber, because a
+                                blank here is what stalls the assessment. */}
+                            <div className="flex items-center gap-2 flex-wrap mt-1 text-[12.5px]">
+                                {backendLead.email
+                                    ? <a href={`mailto:${backendLead.email}`} className="text-gray-600 hover:text-gray-900 truncate">{backendLead.email}</a>
+                                    : <span className="text-amber-600">No email</span>}
+                                <span className="text-gray-300">·</span>
+                                {backendLead.phone
+                                    ? <span className="text-gray-600">{backendLead.phone}</span>
+                                    : <span className="text-amber-600">No phone number</span>}
+                                <span className="text-gray-300">·</span>
+                                {(backendLead.residence_city || backendLead.residence_country)
+                                    ? <span className="text-gray-600 truncate">{[backendLead.residence_city, backendLead.residence_country].filter(Boolean).join(", ")}</span>
+                                    : <span className="text-amber-600">No location</span>}
+                            </div>
                         </div>
                     </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setComposeOpen(true)}
+                            className="px-3.5 py-2 rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                            Message lead
+                        </button>
+                        <ConvertMenu lead={backendLead} canRevert={currentUser?.is_admin} />
+                        <LeadActionsMenu
+                            editAll={editAll}
+                            onToggleEdit={toggleEditAll}
+                            onArchive={archiveLead}
+                            trackingCode={lead.trackingCode}
+                            hasEmail={!! backendLead.email}
+                            onSendTrackerLink={() => router.post(`${writeBase}/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
+                            onSendUpdate={() => setShowSendUpdate(true)}
+                            onCompose={() => setComposeOpen(true)}
+                        />
+                    </div>
                 </div>
+
+                {/* Stage, owner, record readiness, programs, last contact —
+                    inside this card so identity and status read as one block. */}
+                <LeadStatStrip overview={overview} />
             </div>
 
             <SendUpdateModal
@@ -765,18 +912,21 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
             />
 
             {/* Tab strip */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex items-center border-b border-gray-100 px-4 overflow-x-auto">
-                    <TabButton active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} icon={<TrendingUp size={13} />}>
-                        Lead Stats
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className="flex items-center border-b border-gray-100 px-3 overflow-x-auto">
+                    <TabButton active={activeTab === 'stats'} onClick={() => setActiveTab('stats')}>
+                        Overview
                     </TabButton>
-                    <TabButton active={activeTab === 'personal'} onClick={() => setActiveTab('personal')} icon={<User size={13} />}>
-                        Personal Info
+                    <TabButton
+                        active={activeTab === 'personal'}
+                        onClick={() => setActiveTab('personal')}
+                        badge={overview?.readiness ? overview.readiness.filled : null}
+                    >
+                        Profile information
                     </TabButton>
                     <TabButton
                         active={activeTab === 'activity'}
                         onClick={() => setActiveTab('activity')}
-                        icon={<History size={13} />}
                         badge={activity.length > 0 ? activity.length : null}
                     >
                         Journey
@@ -784,14 +934,13 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                     <TabButton
                         active={activeTab === 'documents'}
                         onClick={() => setActiveTab('documents')}
-                        icon={<FolderOpen size={13} />}
+                        badge={documentsCount}
                     >
                         Documents
                     </TabButton>
                     <TabButton
                         active={activeTab === 'communications'}
                         onClick={() => setActiveTab('communications')}
-                        icon={<Mail size={13} />}
                     >
                         Communications
                     </TabButton>
@@ -849,18 +998,27 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
             />
 
             {/* ── Lead Stats tab — dashboard-style quick stats + AI hero ── */}
-            <div className={activeTab === 'stats' ? 'space-y-6' : 'hidden'}>
-                <StatsQuickRow lead={backendLead} tasks={tasks} tags={tags} notes={notes} />
-                <AICapabilityHero lead={backendLead} />
-                <ProposedProgramsCard proposal={proposal} leadId={backendLead.id} programOptions={programOptions} />
+            <div className={activeTab === 'stats' ? 'space-y-5' : 'hidden'}>
+                {/* Where this lead is — the six-step rail, with what is holding
+                    it up called out beside the heading. */}
+                <LeadProgressStrip overview={overview} />
 
-                {/* Tasks + Tags side-by-side — paired workspace row. */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Notes and tasks side by side — the two things staff act on. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                    <NotesPanel leadId={backendLead.id} notes={notes} currentUser={currentUser} staffOptions={staffOptions} />
                     <TasksPanel leadId={backendLead.id} tasks={tasks} staffOptions={staffOptions} currentUser={currentUser} />
-                    <TagsPanel leadId={backendLead.id} tags={tags} allTags={allTags} />
                 </div>
 
-                <NotesPanel leadId={backendLead.id} notes={notes} currentUser={currentUser} staffOptions={staffOptions} />
+                <ProposedProgramsCard proposal={proposal} leadId={backendLead.id} programOptions={programOptions} />
+                <AICapabilityHero lead={backendLead} />
+                <TagsPanel leadId={backendLead.id} tags={tags} allTags={allTags} />
+
+                <LeadActivityTimeline
+                    activity={activity}
+                    pending={overview?.steps?.filter((x) => x.state === 'todo').map((x) => ({
+                        key: x.key, label: x.label, caption: x.caption,
+                    })) || []}
+                />
             </div>
 
             {/* ── Personal Info tab — full profile sections below ── */}
@@ -1332,6 +1490,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
             </div>
             </div>
         </div>
+        </WriteBaseContext.Provider>
     );
 }
 
@@ -1502,8 +1661,10 @@ const ENGLISH_TEST_OPTIONS = ['IELTS', 'TOEFL', 'PTE', 'NZCEL', 'Cambridge', 'Du
 
 function Section({ leadId, sectionKey, currentEditKey, setCurrentEditKey, editAll = false,
                    title, icon, initial, children }) {
+    const writeBase = useWriteBase();
     // `editAll` (header "Edit Lead" button) opens every section at once;
-    // otherwise the single-section gate applies.
+    // otherwise the single-section gate applies. A read-only viewer never
+    // enters edit mode, which also hides this card's Edit / Save controls.
     const editing = editAll || currentEditKey === sectionKey;
     const [form, setForm] = useState(initial);
     const [errors, setErrors] = useState({});
@@ -1536,7 +1697,7 @@ function Section({ leadId, sectionKey, currentEditKey, setCurrentEditKey, editAl
         // doesn't edit name fields directly. Add it to the payload as a
         // pass-through guard.
         const payload = { ...form, first_name: form.first_name ?? initial.first_name };
-        router.post(`/admin/leads/${leadId}/personal`, payload, {
+        router.post(`${writeBase}/leads/${leadId}/personal`, payload, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => { if (! editAll) setCurrentEditKey(null); },
@@ -1848,6 +2009,7 @@ function ProfileGrid({ bag, fields }) {
 const INZ_STATUSES = ['Lodged', 'Info Requested', 'Decision Pending', 'Approved', 'Declined', 'Withdrawn'];
 
 function InzTrackingPanel({ lead }) {
+    const writeBase = useWriteBase();
     const [form, setForm] = useState({
         inz_visa_type:   lead.inz_visa_type   || '',
         inz_lodged_at:   lead.inz_lodged_at   ? String(lead.inz_lodged_at).slice(0, 10) : '',
@@ -1862,7 +2024,7 @@ function InzTrackingPanel({ lead }) {
     const submit = (e) => {
         e?.preventDefault?.();
         setSaving(true);
-        router.post(`/admin/leads/${lead.id}/inz`, form, {
+        router.post(`${writeBase}/leads/${lead.id}/inz`, form, {
             preserveScroll: true,
             preserveState: true,
             onFinish: () => setSaving(false),
@@ -2046,6 +2208,7 @@ const MENU_TONE = {
 };
 
 function ConvertMenu({ lead, canRevert }) {
+    const writeBase = useWriteBase();
     const [open, setOpen] = useState(false);
     const wrapRef = useRef(null);
 
@@ -2073,8 +2236,8 @@ function ConvertMenu({ lead, canRevert }) {
             icon: <GraduationCap size={14} />,
             tone: 'emerald',
             active: !!lead.is_student,
-            endpoint: `/admin/leads/${lead.id}/convert-to-student`,
-            revertEndpoint: `/admin/leads/${lead.id}/revert-student`,
+            endpoint: `${writeBase}/leads/${lead.id}/convert-to-student`,
+            revertEndpoint: `${writeBase}/leads/${lead.id}/revert-student`,
             confirmText: 'Convert to a student? They stay on the same record — all documents, notes and history come with them.',
         },
         {
@@ -2084,8 +2247,8 @@ function ConvertMenu({ lead, canRevert }) {
             icon: <Globe size={14} />,
             tone: 'amber',
             active: !!lead.is_immigration_case,
-            endpoint: `/admin/leads/${lead.id}/convert-to-case`,
-            revertEndpoint: `/admin/leads/${lead.id}/revert-case`,
+            endpoint: `${writeBase}/leads/${lead.id}/convert-to-case`,
+            revertEndpoint: `${writeBase}/leads/${lead.id}/revert-case`,
             confirmText: "Open as an immigration case? Lands them in Immigration's Cases queue with full document folder access.",
         },
         {
@@ -2095,8 +2258,8 @@ function ConvertMenu({ lead, canRevert }) {
             icon: <Home size={14} />,
             tone: 'cyan',
             active: !!lead.is_accommodation_client,
-            endpoint: `/admin/leads/${lead.id}/convert-to-accommodation`,
-            revertEndpoint: `/admin/leads/${lead.id}/revert-accommodation`,
+            endpoint: `${writeBase}/leads/${lead.id}/convert-to-accommodation`,
+            revertEndpoint: `${writeBase}/leads/${lead.id}/revert-accommodation`,
             confirmText: "Open as an accommodation client? They appear in the Accommodation team's queue.",
         },
         {
@@ -2106,8 +2269,8 @@ function ConvertMenu({ lead, canRevert }) {
             icon: <Globe size={14} />,
             tone: 'purple',
             active: !!lead.is_english_student,
-            endpoint: `/admin/leads/${lead.id}/convert-to-english`,
-            revertEndpoint: `/admin/leads/${lead.id}/revert-english`,
+            endpoint: `${writeBase}/leads/${lead.id}/convert-to-english`,
+            revertEndpoint: `${writeBase}/leads/${lead.id}/revert-english`,
             confirmText: "Convert to an English student? Lands them in the English team's queue (PTE / DIY / mocktest pipeline).",
         },
     ];
@@ -2207,16 +2370,15 @@ function TabButton({ active, onClick, icon, badge, children }) {
         <button
             type="button"
             onClick={onClick}
-            className={`px-4 py-3 text-xs font-bold tracking-wider uppercase transition-colors border-b-2 -mb-px inline-flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3.5 py-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px inline-flex items-center gap-1.5 whitespace-nowrap ${
                 active
                     ? 'text-gray-900 border-gray-900'
                     : 'text-gray-400 border-transparent hover:text-gray-700'
             }`}
         >
-            {icon}
             {children}
             {badge != null && (
-                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 tabular-nums">
+                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-500 tabular-nums">
                     {badge}
                 </span>
             )}
@@ -2667,6 +2829,7 @@ function StageTimeline({ timeline = [] }) {
 // on the Journey tab so the two key dates pop as the lead's engagement
 // timeline. Posts directly to the journey endpoint with just the dates.
 function KeyMilestonesPanel({ lead }) {
+    const writeBase = useWriteBase();
     const dateOnly = (v) => (v ? String(v).slice(0, 10) : '');
     const [dates, setDates] = useState({
         date_of_first_contact: dateOnly(lead?.date_of_first_contact),
@@ -2677,7 +2840,7 @@ function KeyMilestonesPanel({ lead }) {
     const save = (next) => {
         setDates(next);
         setSaving(true);
-        router.post(`/admin/leads/${lead.id}/journey`, next, {
+        router.post(`${writeBase}/leads/${lead.id}/journey`, next, {
             preserveScroll: true,
             preserveState: true,
             onFinish: () => setSaving(false),
@@ -3073,6 +3236,7 @@ const PRIORITY_STYLE = {
 };
 
 function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
+    const writeBase = useWriteBase();
     const [title, setTitle] = useState('');
     const [showOptions, setShowOptions] = useState(false);
     const [dueAt, setDueAt] = useState('');
@@ -3088,7 +3252,7 @@ function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
         e?.preventDefault?.();
         if (!title.trim()) return;
         setSubmitting(true);
-        router.post(`/admin/leads/${leadId}/tasks`, {
+        router.post(`${writeBase}/leads/${leadId}/tasks`, {
             title: title.trim(),
             due_at: dueAt || null,
             priority,
@@ -3106,14 +3270,14 @@ function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
     };
 
     const toggleComplete = (task) => {
-        router.post(`/admin/leads/${leadId}/tasks/${task.id}`,
+        router.post(`${writeBase}/leads/${leadId}/tasks/${task.id}`,
             { completed: !task.completed },
             { preserveScroll: true, preserveState: true });
     };
 
     const remove = (task) => {
         confirm('Delete this task?')
-            ? router.delete(`/admin/leads/${leadId}/tasks/${task.id}`, { preserveScroll: true, preserveState: true })
+            ? router.delete(`${writeBase}/leads/${leadId}/tasks/${task.id}`, { preserveScroll: true, preserveState: true })
             : null;
     };
 
@@ -3124,35 +3288,31 @@ function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
     const donePct = tasks.length > 0 ? Math.round((done.length / tasks.length) * 100) : 0;
 
     return (
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-            {/* Header — title + open/done split + completion bar */}
-            <div className="px-5 py-3.5 border-b border-gray-100 bg-gradient-to-br from-amber-50/40 to-white">
-                <div className="flex items-center justify-between mb-2.5">
-                    <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
-                            <Clock size={14} />
-                        </div>
-                        <h2 className="text-xs font-bold uppercase tracking-wider text-gray-800">Tasks</h2>
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest tabular-nums">
-                        {overdueCount > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700">{overdueCount} overdue</span>
-                        )}
-                        <span className="text-amber-700">{open.length} open</span>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-gray-400">{done.length} done</span>
-                    </div>
-                </div>
-                <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                        className="h-full bg-emerald-400 rounded-full transition-all duration-700"
-                        style={{ width: `${donePct}%` }}
-                    />
-                </div>
+        // Same shell as the Case Profile's task panel: a flat white card with its
+        // heading inline, rather than a tinted header band.
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-[14px] font-bold text-gray-900">
+                    Tasks on this lead{' '}
+                    <span className="text-[11px] font-normal text-gray-400">
+                        {open.length} open · {done.length} done · from the task board
+                    </span>
+                </h2>
+                {overdueCount > 0 && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-50 text-red-700 shrink-0">
+                        {overdueCount} overdue
+                    </span>
+                )}
+            </div>
+            <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden mb-3">
+                <div
+                    className="h-full bg-teal-500 rounded-full transition-all duration-700"
+                    style={{ width: `${donePct}%` }}
+                />
             </div>
 
             {/* Always-visible inline compose — expands to show options on focus */}
-            <form onSubmit={submit} className="px-5 py-3 border-b border-gray-100 bg-gray-50/40">
+            <form onSubmit={submit} className="rounded-xl border border-gray-200 bg-gray-50/40 px-3 py-2.5 mb-3">
                 <div className="flex items-center gap-2">
                     <Check size={14} className="text-gray-300 flex-shrink-0" />
                     <input
@@ -3217,11 +3377,9 @@ function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
 
             {/* List */}
             {tasks.length === 0 ? (
-                <div className="px-5 py-8 text-center text-xs text-gray-400">
-                    No tasks yet — set a follow-up so this lead doesn&apos;t go cold.
-                </div>
+                <p className="text-[12px] text-gray-400">No tasks linked to this lead yet.</p>
             ) : (
-                <ul className="divide-y divide-gray-100">
+                <ul className="space-y-2">
                     {ordered.map((t) => {
                         const canDelete = currentUser && (currentUser.is_admin || currentUser.id === t.created_by);
                         const priorityStyle = PRIORITY_STYLE[t.priority] || PRIORITY_STYLE.normal;
@@ -3229,14 +3387,14 @@ function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
                         return (
                             <li
                                 key={t.id}
-                                className={`group px-5 py-2.5 transition-colors hover:bg-gray-50/50 ${t.completed ? 'opacity-50' : ''} ${t.overdue ? 'bg-red-50/30' : ''}`}
+                                className={`group rounded-xl border px-3 py-2.5 transition-colors ${t.completed ? 'border-gray-100 bg-white opacity-60' : t.overdue ? 'border-red-100 bg-red-50/40' : 'border-gray-100 bg-white hover:border-gray-200'}`}
                             >
                                 <div className="flex items-center gap-3">
                                     {/* Checkbox */}
                                     <button
                                         type="button"
                                         onClick={() => toggleComplete(t)}
-                                        className={`w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${t.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 hover:border-gray-900'}`}
+                                        className={`w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${t.completed ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 hover:border-gray-900'}`}
                                         title={t.completed ? 'Mark incomplete' : 'Mark complete'}
                                     >
                                         {t.completed && <Check size={11} strokeWidth={3} />}
@@ -3366,6 +3524,7 @@ const TAG_COLOR_STYLE = {
 const tagColor = (c) => TAG_COLOR_STYLE[c] || TAG_COLOR_STYLE.gray;
 
 function TagsPanel({ leadId, tags, allTags }) {
+    const writeBase = useWriteBase();
     const [input, setInput] = useState('');
     const [focused, setFocused] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -3381,7 +3540,7 @@ function TagsPanel({ leadId, tags, allTags }) {
         const clean = (name || '').trim();
         if (!clean) return;
         setSubmitting(true);
-        router.post(`/admin/leads/${leadId}/tags`, { name: clean }, {
+        router.post(`${writeBase}/leads/${leadId}/tags`, { name: clean }, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => setInput(''),
@@ -3389,7 +3548,7 @@ function TagsPanel({ leadId, tags, allTags }) {
         });
     };
 
-    const detach = (tag) => router.delete(`/admin/leads/${leadId}/tags/${tag.id}`, { preserveScroll: true, preserveState: true });
+    const detach = (tag) => router.delete(`${writeBase}/leads/${leadId}/tags/${tag.id}`, { preserveScroll: true, preserveState: true });
 
     const onKey = (e) => {
         e.key === 'Enter'
@@ -3622,6 +3781,7 @@ function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {},
 // Attachment, Status and Notes columns all work inline without leaving the
 // table.
 function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack, onRemoveCustom, onDuplicateCustom, threads = [], currentUser = null, staffOptions = [] }) {
+    const writeBase = useWriteBase();
     const [uploading, setUploading] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [variantOpen, setVariantOpen] = useState(false);
@@ -3646,7 +3806,7 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
         setGenerating(true);
         const form = new FormData();
         if (variant) form.append('variant', variant);
-        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/generate`, form, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/checklist/${item.id}/generate`, form, {
             preserveScroll: true,
             preserveState: true,
             forceFormData: true,
@@ -3661,7 +3821,7 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
         const form = new FormData();
         picked.forEach((f) => form.append('files[]', f));
         setUploading(true);
-        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/upload`, form, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/checklist/${item.id}/upload`, form, {
             preserveScroll: true,
             preserveState: true,
             forceFormData: true,
@@ -3847,7 +4007,7 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                                         anchor={docAnchor}
                                         childrenOf={childrenOf}
                                         caseStaff={staffOptions}
-                                        basePath="/admin/leads"
+                                        basePath={`${writeBase}/leads`}
                                     />
                                 ))}
                             </div>
@@ -3858,7 +4018,7 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                             plain
                             caseStaff={staffOptions}
                             placeholder="Write a note about this document…"
-                            basePath="/admin/leads"
+                            basePath={`${writeBase}/leads`}
                         />
                     </div>
                 </td>
@@ -3873,7 +4033,7 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                 threads={rootThreads}
                 childrenOf={childrenOf}
                 anchor={docAnchor}
-                basePath="/admin/leads"
+                basePath={`${writeBase}/leads`}
                 onClose={() => setPreviewDoc(null)}
             />
         )}
@@ -3899,6 +4059,7 @@ function ChecklistNotesCell({ value, onSave }) {
 }
 
 function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser = null, threads = [], staffOptions = [] }) {
+    const writeBase = useWriteBase();
     // Bucket document threads by the checklist item they're anchored to
     // (anchor_key = checklist_key), so each row can render its own discussion.
     const threadsByKey = React.useMemo(() => {
@@ -3925,7 +4086,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         const next = new Set(hiddenKeys);
         keys.forEach((k) => hidden ? next.add(k) : next.delete(k));
         setHiddenKeys(next);
-        router.post(`/admin/leads/${lead.id}/documents/track-visibility`, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/track-visibility`, {
             checklist_keys: keys,
             hidden,
         }, { preserveScroll: true, preserveState: true });
@@ -3934,7 +4095,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
     const saveSectionStatus = (sectionKey, status, notes = null) => {
         const next = { ...verifications, [sectionKey]: { ...(verifications[sectionKey] || {}), status, ...(notes !== null ? { notes } : {}) } };
         setVerifications(next);
-        router.post(`/admin/leads/${lead.id}/documents/section-verification`, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/section-verification`, {
             section_key: sectionKey,
             status,
             notes,
@@ -3945,7 +4106,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         const next = { ...state, [itemId]: { ...(state[itemId] || {}), ...patch } };
         setState(next);
 
-        router.post(`/admin/leads/${lead.id}/documents/checklist`, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/checklist`, {
             key:    itemId,
             status: next[itemId].status ?? null,
             date:   next[itemId].date   ?? null,
@@ -4012,7 +4173,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         const name = newDocName.trim();
         if (! name) return;
         setAddingDoc(true);
-        router.post(`/admin/leads/${lead.id}/documents/custom`, { name, section: newDocSection }, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/custom`, { name, section: newDocSection }, {
             preserveScroll: true, preserveState: true,
             onSuccess: () => { setAddOpen(false); setNewDocName(''); },
             onFinish: () => setAddingDoc(false),
@@ -4020,12 +4181,12 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
     };
     const removeCustomDocument = (item) => {
         if (! window.confirm(`Remove "${item.name}" from this lead's documents? Any files already uploaded to it are kept.`)) return;
-        router.delete(`/admin/leads/${lead.id}/documents/custom/${item.id}`, {
+        router.delete(`${writeBase}/leads/${lead.id}/documents/custom/${item.id}`, {
             preserveScroll: true, preserveState: true,
         });
     };
     const duplicateCustomDocument = (item) => {
-        router.post(`/admin/leads/${lead.id}/documents/custom`, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/custom`, {
             name: item.name,
             section: item.section || '',
         }, { preserveScroll: true, preserveState: true });
@@ -4095,7 +4256,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         const ids = uploadedDocs.filter((d) => selectedDocIds.has(d.id)).map((d) => d.id);
         // The endpoint streams a ZIP as an attachment, so navigating triggers a
         // download without leaving the page.
-        window.location.href = `/admin/leads/${lead.id}/documents/download-all?ids=${ids.join(',')}`;
+        window.location.href = `${writeBase}/leads/${lead.id}/documents/download-all?ids=${ids.join(',')}`;
         setDownloadOpen(false);
     };
 
@@ -4685,6 +4846,7 @@ function ChecklistSection({ section, lead, state, onSave, checklistFiles = {}, c
 }
 
 function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = null }) {
+    const writeBase = useWriteBase();
     const [notesDraft, setNotesDraft] = useState(entry.notes || "");
     const [statusOpen, setStatusOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -4706,7 +4868,7 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
         setGenerating(true);
         const form = new FormData();
         if (variant) form.append('variant', variant);
-        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/generate`, form, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/checklist/${item.id}/generate`, form, {
             preserveScroll: true,
             preserveState: true,
             forceFormData: true,
@@ -4745,7 +4907,7 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
         const form = new FormData();
         picked.forEach((f) => form.append('files[]', f));
         setUploading(true);
-        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/upload`, form, {
+        router.post(`${writeBase}/leads/${lead.id}/documents/checklist/${item.id}/upload`, form, {
             preserveScroll: true,
             preserveState: true,
             forceFormData: true,
@@ -4758,7 +4920,7 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
 
     const removeFile = (file) => {
         if (!confirm(`Delete ${file.original_name}?`)) return;
-        router.delete(`/admin/leads/${lead.id}/documents/${file.id}`, { preserveScroll: true, preserveState: true });
+        router.delete(`${writeBase}/leads/${lead.id}/documents/${file.id}`, { preserveScroll: true, preserveState: true });
     };
 
     const fmtSize = (b) => {
@@ -5083,6 +5245,7 @@ const GOAL_STATUS_OPTS = ['Consultation Done', 'For Proposal', 'Proposal Sent', 
 const PRESCREEN_ROLES = ['sales', 'education', 'admin'];
 
 function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
+    const writeBase = useWriteBase();
     const [body, setBody] = useState('');
     const [pinned, setPinned] = useState(false);
     const [kind, setKind] = useState('general');
@@ -5128,7 +5291,7 @@ function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
             goal_setting_status: kind === 'goal_setting' ? (goalStatus    || null) : null,
             goal_setting_by:     kind === 'goal_setting' ? (goalBy        || null) : null,
         };
-        router.post(`/admin/leads/${leadId}/notes`, payload, {
+        router.post(`${writeBase}/leads/${leadId}/notes`, payload, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: reset,
@@ -5136,20 +5299,20 @@ function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
         });
     };
 
-    const togglePin = (note) => router.post(`/admin/leads/${leadId}/notes/${note.id}`,
+    const togglePin = (note) => router.post(`${writeBase}/leads/${leadId}/notes/${note.id}`,
         { pinned: !note.pinned },
         { preserveScroll: true, preserveState: true });
 
     const saveEdit = (note) => {
         if (!editBody.trim()) return;
-        router.post(`/admin/leads/${leadId}/notes/${note.id}`,
+        router.post(`${writeBase}/leads/${leadId}/notes/${note.id}`,
             { body: editBody.trim() },
             { preserveScroll: true, preserveState: true, onSuccess: () => setEditingId(null) });
     };
 
     const remove = (note) => {
         confirm('Delete this note?')
-            ? router.delete(`/admin/leads/${leadId}/notes/${note.id}`, { preserveScroll: true, preserveState: true })
+            ? router.delete(`${writeBase}/leads/${leadId}/notes/${note.id}`, { preserveScroll: true, preserveState: true })
             : null;
     };
 
@@ -5158,22 +5321,21 @@ function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
         : '';
 
     return (
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                    <Edit size={15} className="text-gray-400" />
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-gray-700">Internal notes</h2>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <h2 className="text-[14px] font-bold text-gray-900">
+                    Internal notes
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 ml-1.5">Team only</span>
+                </h2>
+                <span className="text-[11px] font-normal text-gray-400 shrink-0">
                     {notes.length} note{notes.length === 1 ? "" : "s"}
                 </span>
             </div>
 
-            {/* Compose */}
-            <form onSubmit={submit} className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 space-y-4">
+            {/* Compose — one bordered block, controls on the footer row. */}
+            <form onSubmit={submit} className="rounded-xl border border-gray-200 bg-gray-50/40 p-2.5 space-y-2.5">
                 {/* Kind selector */}
                 <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mr-1">Type</p>
                     {Object.entries(NOTE_KIND_META).map(([k, meta]) => (
                         <button
                             key={k}
@@ -5301,41 +5463,38 @@ function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
                     onChange={(e) => setBody(e.target.value)}
                     placeholder="Type here"
                     rows={2}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors resize-none overflow-hidden"
-                    style={{ minHeight: '3rem' }}
+                    className="w-full text-[13px] bg-transparent outline-none resize-none overflow-hidden placeholder-gray-400"
+                    style={{ minHeight: '2.5rem' }}
                 />
-                <div className="flex items-center justify-between">
-                    <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={pinned}
-                            onChange={(e) => setPinned(e.target.checked)}
-                            className="rounded border-gray-300"
-                        />
-                        Pin to top
-                    </label>
+                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100">
+                    <button
+                        type="button"
+                        onClick={() => setPinned((v) => !v)}
+                        title="Pin to top"
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors ${pinned ? 'text-amber-600 bg-amber-50' : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'}`}
+                    >
+                        <Pin size={13} />
+                    </button>
                     <button
                         type="submit"
                         disabled={submitting || !body.trim()}
-                        className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="px-3.5 py-1.5 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                        {submitting ? 'Saving' : 'Add note'}
+                        {submitting ? 'Posting…' : 'Post'}
                     </button>
                 </div>
             </form>
 
             {/* List */}
             {notes.length === 0 ? (
-                <div className="px-5 py-10 text-center text-xs text-gray-400">
-                    No notes yet. Capture call context, family situation, blockers — anything that helps the next teammate.
-                </div>
+                <p className="text-[12px] text-gray-400 mt-3">No notes yet.</p>
             ) : (
-                <ul className="divide-y divide-gray-100">
+                <ul className="mt-4 space-y-3">
                     {notes.map((n) => {
                         const canEdit = currentUser && (currentUser.is_admin || currentUser.id === n.user_id);
                         const isEditing = editingId === n.id;
                         return (
-                            <li key={n.id} className={`px-5 py-4 ${n.pinned ? 'bg-amber-50/40' : ''}`}>
+                            <li key={n.id} className={`rounded-xl border p-3 ${n.kind === 'risk' ? 'border-red-100 bg-red-50/40' : n.pinned ? 'border-teal-100 bg-teal-50/40' : 'border-gray-100 bg-white'}`}>
                                 <div className="flex items-center justify-between gap-3 mb-2">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <div className="w-6 h-6 rounded-full bg-gray-900 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">

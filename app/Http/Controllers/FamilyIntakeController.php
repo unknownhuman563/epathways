@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
 use App\Http\Controllers\Concerns\HandlesIntakeDocuments;
+use App\Http\Controllers\Concerns\SyncsIntakeToCase;
 use App\Models\Assessment;
 use App\Models\FamilyIntake;
 use App\Support\IntakeVisaTypeMap;
@@ -19,6 +20,7 @@ class FamilyIntakeController extends Controller
 {
     use FiresEnquiryAutomation;
     use HandlesIntakeDocuments;
+    use SyncsIntakeToCase;
 
     public function showForm()
     {
@@ -51,10 +53,18 @@ class FamilyIntakeController extends Controller
             ]));
 
             // Ensure the Family Visa type exists so the Assessment can attach.
-            \App\Models\VisaType::firstOrCreate(
+            // withTrashed(): VisaType soft-deletes, and a trashed FAMILY row still
+            // occupies the unique `code` slot — a plain firstOrCreate can't see it
+            // (soft-delete scope hides it from the SELECT) yet collides with it on
+            // INSERT (SQLSTATE 1062). Look it up including trashed, and restore it
+            // if an admin had deleted it, so every submit finds a live row.
+            $familyType = \App\Models\VisaType::withTrashed()->firstOrCreate(
                 ['code' => 'FAMILY'],
                 ['name' => 'Family Visa (Partner / Child)', 'category' => 'Partnership', 'active' => true],
             );
+            if ($familyType->trashed()) {
+                $familyType->restore();
+            }
 
             // Tracking Assessment row (payment/booking dormant like the others).
             $visaType = IntakeVisaTypeMap::resolve(FamilyIntake::class);
@@ -67,6 +77,8 @@ class FamilyIntakeController extends Controller
             DB::commit();
 
             $this->fireEnquiryCaptured($intake, 'Family Visa (Partner / Child)');
+
+            $this->syncIntakeToExistingCase($intake, 'Family Visa (Partner / Child)');
 
             return back()->with('intake_submitted', 'Family Visa (Partner / Child)');
         } catch (\Throwable $e) {

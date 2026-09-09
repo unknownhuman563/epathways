@@ -33,7 +33,7 @@ class LeadPortalController extends Controller
         }
 
         return inertia('portal/lead/Submissions', [
-            'lead'        => $this->leadPayload($lead),
+            'lead' => $this->leadPayload($lead),
             'submissions' => $this->submissionsTimeline($lead),
         ]);
     }
@@ -47,10 +47,10 @@ class LeadPortalController extends Controller
         }
 
         return inertia('portal/lead/Activities', [
-            'lead'             => $this->leadPayload($lead),
-            'upcoming'         => $this->upcomingEvents(20),
-            'past'             => $this->pastEvents(10),
-            'registeredEventId'=> $lead->event_id,
+            'lead' => $this->leadPayload($lead),
+            'upcoming' => $this->upcomingEvents(20),
+            'past' => $this->pastEvents(10),
+            'registeredEventId' => $lead->event_id,
         ]);
     }
 
@@ -63,9 +63,9 @@ class LeadPortalController extends Controller
         }
 
         return inertia('portal/lead/Announcements', [
-            'lead'           => $this->leadPayload($lead),
-            'facebookLives'  => $this->facebookLives(8),
-            'news'           => NewsFeedService::latest(6),
+            'lead' => $this->leadPayload($lead),
+            'facebookLives' => $this->facebookLives(8),
+            'news' => NewsFeedService::latest(6),
         ]);
     }
 
@@ -73,14 +73,16 @@ class LeadPortalController extends Controller
     public function journey()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
 
         return inertia('portal/lead/Journey', [
-            'lead'         => $this->leadPayload($lead),
-            'roadmap'      => LeadPhaseService::roadmap($lead->status),
+            'lead' => $this->leadPayload($lead),
+            'roadmap' => LeadPhaseService::roadmap($lead->status),
             'currentPhase' => LeadPhaseService::phaseFor($lead->status),
-            'preEngagement'=> LeadPhaseService::isPreEngagement($lead->status),
-            'submissions'  => $this->submissionsTimeline($lead),
+            'preEngagement' => LeadPhaseService::isPreEngagement($lead->status),
+            'submissions' => $this->submissionsTimeline($lead),
         ]);
     }
 
@@ -88,12 +90,16 @@ class LeadPortalController extends Controller
     public function checklist()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
 
         return inertia('portal/lead/Checklist', [
-            'lead'                 => $this->leadPayload($lead),
-            'documentChecklist'    => $lead->document_checklist ?? [],
+            'lead' => $this->leadPayload($lead),
+            'documentChecklist' => $lead->document_checklist ?? [],
             'sectionVerifications' => $lead->section_verifications ?? [],
+            // Documents the adviser has shared with the client (RFI letters etc.).
+            'sharedDocuments' => $this->sharedDocumentsFor($lead),
         ]);
     }
 
@@ -684,40 +690,78 @@ class LeadPortalController extends Controller
         ]);
     }
 
+    /**
+     * Documents the adviser has SHARED with this client (RFI letters, outcome
+     * letters, any staff→client share) — separate from the client's own upload
+     * checklist. Surfaced on the dashboard + Documents page so the client can
+     * view/download them. Respects the same tracker-visibility toggle staff use.
+     */
+    private function sharedDocumentsFor(Lead $lead): array
+    {
+        $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+
+        return $lead->documents()
+            ->where('status', LeadDocument::STATUS_STAFF_SHARED)
+            ->orderByDesc('created_at')
+            ->get()
+            ->reject(fn (LeadDocument $d) => $d->checklist_key && in_array($d->checklist_key, $hidden, true))
+            ->map(fn (LeadDocument $d) => [
+                'id' => $d->id,
+                'title' => $d->original_name,
+                'size' => $d->size,
+                'created_at' => $d->created_at?->toIso8601String(),
+                'view_url' => "/portal/lead/documents/{$d->id}/download?inline=1",
+                'download_url' => "/portal/lead/documents/{$d->id}/download",
+            ])
+            ->values()
+            ->all();
+    }
+
     /** Appointments — upcoming + past, derived from Bookings on email match. */
     public function appointments()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
 
         $bookings = Booking::where('email', $lead->email)->orderByDesc('appointment_date')->get();
         $now = now()->toDateString();
 
         return inertia('portal/lead/Appointments', [
-            'lead'     => $this->leadPayload($lead),
+            'lead' => $this->leadPayload($lead),
             'upcoming' => $bookings->filter(fn ($b) => $b->appointment_date && $b->appointment_date->toDateString() >= $now)->values()->map(fn ($b) => $this->bookingRow($b)),
-            'past'     => $bookings->filter(fn ($b) => ! $b->appointment_date || $b->appointment_date->toDateString() < $now)->values()->map(fn ($b) => $this->bookingRow($b)),
+            'past' => $bookings->filter(fn ($b) => ! $b->appointment_date || $b->appointment_date->toDateString() < $now)->values()->map(fn ($b) => $this->bookingRow($b)),
         ]);
     }
 
     public function proposals()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
         return inertia('portal/lead/Proposals', ['lead' => $this->leadPayload($lead)]);
     }
 
     public function agreements()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
         return inertia('portal/lead/Agreements', ['lead' => $this->leadPayload($lead)]);
     }
 
     public function payments()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
         return inertia('portal/lead/Payments', ['lead' => $this->leadPayload($lead)]);
     }
 
@@ -730,7 +774,9 @@ class LeadPortalController extends Controller
     public function messages()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
 
         $messages = \App\Models\MessageLog::where('recipient_type', 'lead')
             ->where('recipient_id', $lead->id)
@@ -739,15 +785,15 @@ class LeadPortalController extends Controller
             ->latest()
             ->paginate(20)
             ->through(fn (\App\Models\MessageLog $m) => [
-                'id'         => $m->id,
-                'subject'    => $m->subject,
-                'body'       => $m->body,
-                'from'       => $m->triggeredBy?->name ?? 'ePathways',
+                'id' => $m->id,
+                'subject' => $m->subject,
+                'body' => $m->body,
+                'from' => $m->triggeredBy?->name ?? 'ePathways',
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);
 
         return inertia('portal/lead/Messages', [
-            'lead'     => $this->leadPayload($lead),
+            'lead' => $this->leadPayload($lead),
             'messages' => $messages,
         ]);
     }
@@ -755,7 +801,10 @@ class LeadPortalController extends Controller
     public function settings()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
         return inertia('portal/lead/Settings', ['lead' => $this->leadPayload($lead)]);
     }
 
@@ -794,20 +843,23 @@ class LeadPortalController extends Controller
             ->first();
 
         return inertia('portal/lead/Dashboard', [
-            'lead'               => $this->leadPayload($lead),
-            'submissionsCounts'  => $counts,
-            'documentSummary'    => $docSummary,
+            'lead' => $this->leadPayload($lead),
+            'submissionsCounts' => $counts,
+            'documentSummary' => $docSummary,
             // Documents the adviser has requested that the client still needs to
             // act on — surfaced on the dashboard so it's the first thing they see.
             'requestedDocuments' => $this->requestedDocumentsSummary($lead),
-            'nextActivity'       => $this->upcomingEvents(1)->first(),
+            // Documents the adviser has SHARED with the client (RFI letters,
+            // outcome letters…) — viewable/downloadable straight from here.
+            'sharedDocuments' => $this->sharedDocumentsFor($lead),
+            'nextActivity' => $this->upcomingEvents(1)->first(),
             'latestAnnouncement' => $this->announcementFeed(1)->first(),
-            'roadmap'            => $roadmap,
-            'currentPhase'       => $currentPhase,
-            'preEngagement'      => LeadPhaseService::isPreEngagement($lead->status),
-            'family'             => $family,
-            'nextAppointment'    => $nextBooking ? $this->bookingRow($nextBooking) : null,
-            'analytics'          => $this->dashboardAnalytics($roadmap, $currentPhase, $docSummary, $family, $counts),
+            'roadmap' => $roadmap,
+            'currentPhase' => $currentPhase,
+            'preEngagement' => LeadPhaseService::isPreEngagement($lead->status),
+            'family' => $family,
+            'nextAppointment' => $nextBooking ? $this->bookingRow($nextBooking) : null,
+            'analytics' => $this->dashboardAnalytics($roadmap, $currentPhase, $docSummary, $family, $counts),
         ]);
     }
 
@@ -829,13 +881,13 @@ class LeadPortalController extends Controller
                 $p = $data['progress'];
 
                 return [
-                    'id'           => $d->id,
-                    'full_name'    => $d->fullName(),
+                    'id' => $d->id,
+                    'full_name' => $d->fullName(),
                     'relationship' => $d->relationship,
-                    'photo_url'    => $photo ? "/portal/lead/family/{$d->id}/documents/{$photo['document']['id']}" : null,
-                    'progress'     => $p,
-                    'linked'       => $data['linked'] ?? false,
-                    'complete'     => $p['required_total'] > 0 && $p['required_done'] >= $p['required_total'],
+                    'photo_url' => $photo ? "/portal/lead/family/{$d->id}/documents/{$photo['document']['id']}" : null,
+                    'progress' => $p,
+                    'linked' => $data['linked'] ?? false,
+                    'complete' => $p['required_total'] > 0 && $p['required_done'] >= $p['required_total'],
                 ];
             })->all();
     }
@@ -850,17 +902,17 @@ class LeadPortalController extends Controller
         $famReqDone = collect($family)->sum(fn ($f) => $f['progress']['required_done']);
 
         return [
-            'journey_pct'       => $journeyTotal ? (int) round($journeyStep / $journeyTotal * 100) : 0,
-            'journey_step'      => $journeyStep,
-            'journey_total'     => $journeyTotal,
-            'docs_total'        => $docSummary['total'],
-            'docs_approved'     => $docSummary['approved'],
-            'docs_pending'      => $docSummary['pending'],
-            'family_count'      => count($family),
+            'journey_pct' => $journeyTotal ? (int) round($journeyStep / $journeyTotal * 100) : 0,
+            'journey_step' => $journeyStep,
+            'journey_total' => $journeyTotal,
+            'docs_total' => $docSummary['total'],
+            'docs_approved' => $docSummary['approved'],
+            'docs_pending' => $docSummary['pending'],
+            'family_count' => count($family),
             'family_docs_total' => $famReqTotal,
-            'family_docs_done'  => $famReqDone,
-            'family_pct'        => $famReqTotal ? (int) round($famReqDone / $famReqTotal * 100) : 0,
-            'bookings'          => $counts['bookings'],
+            'family_docs_done' => $famReqDone,
+            'family_pct' => $famReqTotal ? (int) round($famReqDone / $famReqTotal * 100) : 0,
+            'bookings' => $counts['bookings'],
         ];
     }
 
@@ -902,7 +954,9 @@ class LeadPortalController extends Controller
     public function updatePassword(\Illuminate\Http\Request $request)
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
 
         $data = $request->validate([
             'current_password' => ['required', 'current_password'],
@@ -921,15 +975,15 @@ class LeadPortalController extends Controller
     private function bookingRow(Booking $b): array
     {
         return [
-            'id'               => $b->id,
-            'service_type'     => $b->service_type,
-            'consultant_name'  => $b->consultant_name,
-            'platform'         => $b->platform,
-            'status'           => $b->status ?: 'Pending',
+            'id' => $b->id,
+            'service_type' => $b->service_type,
+            'consultant_name' => $b->consultant_name,
+            'platform' => $b->platform,
+            'status' => $b->status ?: 'Pending',
             'appointment_date' => $b->appointment_date ? \Illuminate\Support\Carbon::parse($b->appointment_date)->toDateString() : null,
             'appointment_time' => $b->appointment_time,
-            'message'          => $b->message,
-            'created_at'       => $b->created_at,
+            'message' => $b->message,
+            'created_at' => $b->created_at,
         ];
     }
 
@@ -992,15 +1046,15 @@ class LeadPortalController extends Controller
     private function leadPayload(Lead $lead): array
     {
         return [
-            'lead_id'           => $lead->lead_id,
-            'first_name'        => $lead->first_name,
-            'last_name'         => $lead->last_name,
-            'email'             => $lead->email,
-            'phone'             => $lead->phone,
+            'lead_id' => $lead->lead_id,
+            'first_name' => $lead->first_name,
+            'last_name' => $lead->last_name,
+            'email' => $lead->email,
+            'phone' => $lead->phone,
             'residence_country' => $lead->residence_country,
-            'stage'             => $lead->stage,
-            'status'            => $lead->status,
-            'created_at'        => $lead->created_at,
+            'stage' => $lead->stage,
+            'status' => $lead->status,
+            'created_at' => $lead->created_at,
         ];
     }
 
@@ -1012,18 +1066,19 @@ class LeadPortalController extends Controller
 
         return [
             'assessment_submitted' => $assessmentSubmitted,
-            'ai_status'            => $lead->ai_analysis_status,
-            'bookings'             => Booking::where('email', $lead->email)->count(),
-            'event_registered'     => (bool) $lead->event_id,
+            'ai_status' => $lead->ai_analysis_status,
+            'bookings' => Booking::where('email', $lead->email)->count(),
+            'event_registered' => (bool) $lead->event_id,
         ];
     }
 
     private function documentSummary(Lead $lead): array
     {
         $docs = LeadDocument::where('lead_id', $lead->id)->get();
+
         return [
-            'total'    => $docs->count(),
-            'pending'  => $docs->where('status', 'Submitted')->count(),
+            'total' => $docs->count(),
+            'pending' => $docs->where('status', 'Submitted')->count(),
             'approved' => $docs->where('status', 'Approved')->count(),
             'rejected' => $docs->where('status', 'Rejected')->count(),
         ];
@@ -1048,14 +1103,14 @@ class LeadPortalController extends Controller
         })->values();
 
         return [
-            'total'       => $requests->count(),
+            'total' => $requests->count(),
             'outstanding' => $outstanding->count(),
-            'items'       => $outstanding->take(6)->map(fn (LeadDocumentRequest $r) => [
-                'id'           => $r->id,
-                'label'        => $r->label,
+            'items' => $outstanding->take(6)->map(fn (LeadDocumentRequest $r) => [
+                'id' => $r->id,
+                'label' => $r->label,
                 'requested_at' => optional($r->requested_at)->toIso8601String(),
                 // null = not uploaded yet; 'Rejected' = adviser asked for a new file.
-                'status'       => $r->latestDocument?->status,
+                'status' => $r->latestDocument?->status,
             ])->all(),
         ];
     }
@@ -1068,15 +1123,15 @@ class LeadPortalController extends Controller
         // Free Assessment — implied by lead_id prefix or source tag.
         if (str_starts_with((string) $lead->lead_id, 'FA-') || $lead->source === 'free-assessment') {
             $items->push([
-                'type'        => 'free_assessment',
-                'title'       => 'Free Assessment Submitted',
-                'subtitle'    => 'Eligibility profile · '.($lead->stage ?: 'Evaluation'),
-                'status'      => $lead->ai_analysis_status === 'completed' ? 'Reviewed' : 'In review',
+                'type' => 'free_assessment',
+                'title' => 'Free Assessment Submitted',
+                'subtitle' => 'Eligibility profile · '.($lead->stage ?: 'Evaluation'),
+                'status' => $lead->ai_analysis_status === 'completed' ? 'Reviewed' : 'In review',
                 'status_tone' => $lead->ai_analysis_status === 'completed' ? 'success' : 'pending',
-                'reference'   => $lead->lead_id,
-                'date'        => optional($lead->created_at)->toIso8601String(),
-                'cta_label'   => $lead->ai_analysis_status === 'completed' ? 'View result' : null,
-                'cta_href'    => $lead->ai_analysis_status === 'completed'
+                'reference' => $lead->lead_id,
+                'date' => optional($lead->created_at)->toIso8601String(),
+                'cta_label' => $lead->ai_analysis_status === 'completed' ? 'View result' : null,
+                'cta_href' => $lead->ai_analysis_status === 'completed'
                     ? route('assessment-result', ['lead_id' => $lead->lead_id])
                     : null,
             ]);
@@ -1088,18 +1143,18 @@ class LeadPortalController extends Controller
             ->get()
             ->each(function (Booking $b) use ($items) {
                 $items->push([
-                    'type'        => 'booking',
-                    'title'       => '1:1 Consultation Booked',
-                    'subtitle'    => trim(($b->service_type ?: 'Consultation').' · '.($b->consultant_name ?: 'Adviser TBD')),
-                    'status'      => $b->status ?: 'Pending',
+                    'type' => 'booking',
+                    'title' => '1:1 Consultation Booked',
+                    'subtitle' => trim(($b->service_type ?: 'Consultation').' · '.($b->consultant_name ?: 'Adviser TBD')),
+                    'status' => $b->status ?: 'Pending',
                     'status_tone' => match ($b->status) {
                         'Confirmed' => 'success', 'Completed' => 'success',
                         'Cancelled' => 'muted',
-                        default     => 'pending',
+                        default => 'pending',
                     },
-                    'reference'   => 'BK-'.$b->id,
-                    'date'        => optional($b->created_at)->toIso8601String(),
-                    'detail'      => $b->appointment_date
+                    'reference' => 'BK-'.$b->id,
+                    'date' => optional($b->created_at)->toIso8601String(),
+                    'detail' => $b->appointment_date
                         ? 'Appointment: '.\Illuminate\Support\Carbon::parse($b->appointment_date)->toFormattedDateString()
                             .($b->appointment_time ? ' · '.$b->appointment_time : '')
                         : null,
@@ -1110,14 +1165,14 @@ class LeadPortalController extends Controller
         if ($lead->event_id && $lead->event) {
             $event = $lead->event;
             $items->push([
-                'type'        => 'event_registration',
-                'title'       => 'Registered for '.$event->name,
-                'subtitle'    => trim(($event->type ?: 'Event').' · '.($event->mode ?: 'In-person')),
-                'status'      => 'Registered',
+                'type' => 'event_registration',
+                'title' => 'Registered for '.$event->name,
+                'subtitle' => trim(($event->type ?: 'Event').' · '.($event->mode ?: 'In-person')),
+                'status' => 'Registered',
                 'status_tone' => 'success',
-                'reference'   => $event->event_code,
-                'date'        => optional($lead->created_at)->toIso8601String(),
-                'detail'      => $event->date_from ? 'On '.$event->date_from->toFormattedDateString() : null,
+                'reference' => $event->event_code,
+                'date' => optional($lead->created_at)->toIso8601String(),
+                'detail' => $event->date_from ? 'On '.$event->date_from->toFormattedDateString() : null,
             ]);
         }
 
@@ -1149,16 +1204,16 @@ class LeadPortalController extends Controller
     private function eventPayload(Event $e): array
     {
         return [
-            'id'           => $e->id,
-            'event_code'   => $e->event_code,
-            'name'         => $e->name,
-            'description'  => $e->description,
-            'type'         => $e->type,
-            'mode'         => $e->mode,
-            'date_from'    => optional($e->date_from)->toIso8601String(),
-            'date_to'      => optional($e->date_to)->toIso8601String(),
-            'banner_url'   => $e->banner_image ? Storage::disk('public')->url($e->banner_image) : null,
-            'register_href'=> $e->registration_link ?: ($e->event_code ? "/register/{$e->event_code}" : null),
+            'id' => $e->id,
+            'event_code' => $e->event_code,
+            'name' => $e->name,
+            'description' => $e->description,
+            'type' => $e->type,
+            'mode' => $e->mode,
+            'date_from' => optional($e->date_from)->toIso8601String(),
+            'date_to' => optional($e->date_to)->toIso8601String(),
+            'banner_url' => $e->banner_image ? Storage::disk('public')->url($e->banner_image) : null,
+            'register_href' => $e->registration_link ?: ($e->event_code ? "/register/{$e->event_code}" : null),
         ];
     }
 
@@ -1168,13 +1223,13 @@ class LeadPortalController extends Controller
             ->limit($limit)
             ->get()
             ->map(fn (FacebookLiveSession $s) => [
-                'id'           => $s->id,
-                'title'        => $s->title,
-                'description'  => $s->description,
-                'fb_link'      => $s->fb_link,
-                'image_url'    => $s->image_url,
+                'id' => $s->id,
+                'title' => $s->title,
+                'description' => $s->description,
+                'fb_link' => $s->fb_link,
+                'image_url' => $s->image_url,
                 'session_date' => optional($s->session_date)->toIso8601String(),
-                'is_upcoming'  => $s->session_date && $s->session_date->gte(now()->startOfDay()),
+                'is_upcoming' => $s->session_date && $s->session_date->gte(now()->startOfDay()),
             ]);
     }
 
@@ -1183,19 +1238,19 @@ class LeadPortalController extends Controller
     private function announcementFeed(int $limit)
     {
         $live = $this->facebookLives(2)->take(1)->map(fn ($s) => [
-            'kind'    => 'facebook_live',
-            'title'   => $s['title'],
-            'subtitle'=> $s['is_upcoming'] ? 'Upcoming Facebook Live' : 'Recent Facebook Live',
-            'date'    => $s['session_date'],
-            'href'    => $s['fb_link'] ?: '/portal/lead/announcements',
+            'kind' => 'facebook_live',
+            'title' => $s['title'],
+            'subtitle' => $s['is_upcoming'] ? 'Upcoming Facebook Live' : 'Recent Facebook Live',
+            'date' => $s['session_date'],
+            'href' => $s['fb_link'] ?: '/portal/lead/announcements',
         ]);
 
         $news = collect(NewsFeedService::latest(1))->map(fn ($n) => [
-            'kind'    => 'news',
-            'title'   => $n['title'],
-            'subtitle'=> $n['source'] ?: 'NZ migration news',
-            'date'    => $n['published_at'],
-            'href'    => $n['link'],
+            'kind' => 'news',
+            'title' => $n['title'],
+            'subtitle' => $n['source'] ?: 'NZ migration news',
+            'date' => $n['published_at'],
+            'href' => $n['link'],
         ]);
 
         return $live->concat($news)->take($limit);

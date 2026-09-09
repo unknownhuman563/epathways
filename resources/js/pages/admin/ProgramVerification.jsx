@@ -238,8 +238,24 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
                 </div>
             </div>
 
+            {/* Changes-requested banner — visible regardless of the active tab. */}
+            {p.changes_requested?.message && (
+                <div className="mx-6 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+                    <div className="flex items-start gap-2">
+                        <AlertCircle size={15} className="mt-0.5 shrink-0 text-rose-500" />
+                        <div className="min-w-0">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Changes requested</div>
+                            <p className="text-[12.5px] text-gray-800 leading-snug mt-0.5 whitespace-pre-wrap">{p.changes_requested.message}</p>
+                            {p.changes_requested.at && (
+                                <div className="text-[10.5px] text-rose-700/80 mt-1">{fmtDateTime(p.changes_requested.at)}</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Tabs */}
-            <div className="px-6 border-b border-gray-100 flex items-center gap-1">
+            <div className="px-6 border-b border-gray-100 flex items-center gap-1 mt-4">
                 <Tab active={tab === "programs"} onClick={() => setTab("programs")}>Programs ({p.programs_count})</Tab>
                 <Tab active={tab === "documents"} onClick={() => setTab("documents")}>Documents ({p.documents_count})</Tab>
                 <Tab active={tab === "activity"} onClick={() => setTab("activity")}>Activity</Tab>

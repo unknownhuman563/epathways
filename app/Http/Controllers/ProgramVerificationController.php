@@ -375,7 +375,19 @@ class ProgramVerificationController extends Controller
 
         if ($sendEmail) {
             try {
-                app(\App\Http\Controllers\LeadDocumentController::class)->sendProposalReadyEmail($lead->fresh());
+                // Fire the Education "Proposal verified & approved" automation
+                // (client / agent / education-team messages, each off until an
+                // admin configures it). Its return says whether a CLIENT message
+                // was sent, so the built-in client email falls back only when the
+                // admin hasn't set one — no double client email.
+                $ids = is_array($lead->proposed_program_ids) ? array_map('intval', $lead->proposed_program_ids) : [];
+                $titles = \App\Models\Program::whereIn('id', $ids)->orderBy('title')->pluck('title')->all();
+                $firedClient = app(\App\Services\EmailAutomationService::class)->fire('education.proposal.approved', $lead->fresh(), [
+                    'program_list' => implode(', ', $titles),
+                    'program_count' => count($ids),
+                ]);
+
+                app(\App\Http\Controllers\LeadDocumentController::class)->sendProposalReadyEmail($lead->fresh(), ! $firedClient);
             } catch (\Throwable $e) {
                 Log::warning('Proposal approval email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
             }

@@ -15,6 +15,11 @@ const STAY_LENGTH = ['Less than 59 days', 'More than 6 months', 'More than 12 mo
 const DRAFT_KEY = 'epathways_visitor_intake_draft';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Every step in the form. The submit sweep and the error-clearing effect
+// both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
+// silently never run.
+const TOTAL_STEPS = 9;
+
 const FIELD_TO_STEP = {
     terms_accepted: 1,
     family_name: 2, first_name: 2, other_names: 2, gender: 2, dob: 2,
@@ -37,7 +42,7 @@ const FIELD_TO_STEP = {
     multi_entry_plans: 6, has_leave_permit: 6,
     travel_funds_description: 7, can_provide_statements: 7,
     has_other_assets: 7, other_assets_details: 7,
-    declaration_accepted: 8, signature_name: 8, signature_date: 8,
+    declaration_accepted: 9, signature_name: 9, signature_date: 9,
 };
 
 const FIELD_LABELS = {
@@ -171,7 +176,7 @@ export default function VisitorInterestPage() {
                 if (!data.travel_funds_description?.trim()) errs.travel_funds_description = 'Funds description is required';
                 if (!data.can_provide_statements) errs.can_provide_statements = 'Please answer';
                 break;
-            case 8:
+            case 9:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }
@@ -183,7 +188,7 @@ export default function VisitorInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 9; n++) {
+        for (let n = 1; n <= TOTAL_STEPS; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -233,7 +238,7 @@ export default function VisitorInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 9; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= TOTAL_STEPS; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
@@ -459,6 +464,7 @@ export default function VisitorInterestPage() {
                 submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
+                draftEndpoint="/visa-interest/visitor/draft"
                 step={step}
                 setStep={setStep}
                 visitedSteps={visitedSteps}

@@ -643,38 +643,14 @@ class LeadDocumentController extends Controller
             $overrides = $this->feeOverridesFromRequest($request);
 
             if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)) {
-                if ($type === 'consultancy_onshore') {
-                    $generator->onshoreEngagement($lead, $overrides);
-                } elseif ($type === 'consultancy_offshore_zero') {
-                    // Same offshore document, all fees waived (NZ$0).
-                    $generator->consultancyOffshore($lead, array_merge($overrides, ['zero_fees' => true]));
-                } elseif ($type === 'consultancy_offshore') {
-                    $generator->consultancyOffshore($lead, $overrides);
-                } else {
-                    $generator->consultancy($lead, $consultancyScenario, $overrides);
-                }
-                $friendly = 'Consultancy Agreement';
+                // Consultancy agreements go through verification BEFORE any PDF
+                // exists: submitting only snapshots the scenario + fees + bank
+                // details onto the lead. The reviewer previews it live; the PDF
+                // is generated and attached only on approval, then posted to the
+                // client's tracking link.
+                \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
 
-                // Generating the agreement emails the client the
-                // `consultancy_agreement` template and advances the pipeline to
-                // "Consultancy Agreement Sent". Opt-out via notify=false; a
-                // lead already further along is not regressed. Non-fatal.
-                $notify = $request->has('notify') ? $request->boolean('notify') : true;
-                if ($notify && ! empty($lead->email)) {
-                    try {
-                        app(\App\Services\CommunicationService::class)->sendTemplated('consultancy_agreement', $lead);
-
-                        $stages = \App\Models\Lead::STAGES;
-                        $curIdx = array_search($lead->status, $stages, true);
-                        $tgtIdx = array_search('Consultancy Agreement Sent', $stages, true);
-                        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
-                            $lead->status = 'Consultancy Agreement Sent';
-                            $lead->save();
-                        }
-                    } catch (\Throwable $e) {
-                        Log::warning('consultancy_agreement email on generate failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
-                    }
-                }
+                return back()->with('success', "Consultancy Agreement submitted for verification — {$lead->first_name} {$lead->last_name}.");
             } elseif ($type === 'english_engagement') {
                 $generator->englishEngagement($lead, $overrides['currency'] ?? 'php');
                 $friendly = 'English Engagement';
@@ -1609,6 +1585,17 @@ class LeadDocumentController extends Controller
             }
 
             $count = count($ids);
+
+            // Notify via the Education "Proposal submitted for verification"
+            // automation (a no-op unless an admin has enabled a message for it).
+            if ($count > 0) {
+                $titles = \App\Models\Program::whereIn('id', $ids)->orderBy('title')->pluck('title')->all();
+                app(\App\Services\EmailAutomationService::class)->fire('education.proposal.submitted', $lead->fresh(), [
+                    'program_list' => implode(', ', $titles),
+                    'program_count' => $count,
+                ]);
+            }
+
             $msg = $count === 0
                 ? "Proposal cleared for {$lead->first_name} {$lead->last_name}."
                 : "Submitted {$count} program".($count === 1 ? '' : 's').' for verification — the client sees them once approved.';
@@ -1716,7 +1703,7 @@ class LeadDocumentController extends Controller
      * to "Proposal Sent". Shared by the Notify button and the Program
      * Verification approval step. Safe no-op when the lead has no email.
      */
-    public function sendProposalReadyEmail(Lead $lead): bool
+    public function sendProposalReadyEmail(Lead $lead, bool $sendMail = true): bool
     {
         if (empty($lead->email)) {
             return false;
@@ -1730,12 +1717,45 @@ class LeadDocumentController extends Controller
             $lead->save();
         }
 
+        // A configured client automation may already own the "proposal ready"
+        // email — in that case advance the pipeline but skip the built-in send
+        // so the client isn't emailed twice.
+        if (! $sendMail) {
+            return true;
+        }
+
         $res = app(\App\Services\CommunicationService::class)
             ->sendTemplated('program_proposal', $lead, $this->proposalProgramVars($lead));
 
         if (! ($res['email'] ?? null)) {
             Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'proposal'));
         }
+
+        return true;
+    }
+
+    /**
+     * Send the client the consultancy-agreement email and advance the pipeline
+     * to "Consultancy Agreement Sent". Called when a consultancy agreement is
+     * APPROVED in verification (was previously fired on generate). `$sendMail`
+     * false advances the status but skips the built-in send (so a configured
+     * client automation can own the email without a double-send).
+     */
+    public function sendConsultancyAgreementEmail(Lead $lead, bool $sendMail = true): bool
+    {
+        $stages = \App\Models\Lead::STAGES;
+        $curIdx = array_search($lead->status, $stages, true);
+        $tgtIdx = array_search('Consultancy Agreement Sent', $stages, true);
+        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+            $lead->status = 'Consultancy Agreement Sent';
+            $lead->save();
+        }
+
+        if (! $sendMail || empty($lead->email)) {
+            return false;
+        }
+
+        app(\App\Services\CommunicationService::class)->sendTemplated('consultancy_agreement', $lead);
 
         return true;
     }
@@ -2109,6 +2129,96 @@ class LeadDocumentController extends Controller
     }
 
     // ── DOWNLOAD — role-gated ───────────────────────────────────────────────
+
+    /**
+     * Save an inline staff note on a generated document (the Notes column on
+     * the Proposal & Agreements → Agreements table). Blank clears it.
+     */
+    public function updateDocumentNote(Request $request, $docId)
+    {
+        $data = $request->validate(['note' => 'nullable|string|max:2000']);
+        $doc = LeadDocument::findOrFail($docId);
+        $doc->note = trim((string) ($data['note'] ?? '')) ?: null;
+        $doc->save();
+
+        return back()->with('success', 'Note saved.');
+    }
+
+    /**
+     * Threaded staff notes on a generated document (Proposal & Agreements →
+     * Agreements Notes column) — add a note, reply to one, or toggle its
+     * "actioned" flag. Mirrors the per-programme note thread on the Proposals
+     * tab, so generation and verification staff can discuss an agreement.
+     */
+    public function addDocumentNote(Request $request, $docId)
+    {
+        $data = $request->validate(['body' => 'required|string|max:2000', 'tag' => 'nullable|in:note,change_requested']);
+        $u = $request->user();
+        $this->mutateDocNotes($docId, function (array &$notes) use ($u, $data) {
+            $notes[] = [
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'tag' => $data['tag'] ?? 'note',
+                'body' => $data['body'],
+                'author' => $u->name,
+                'author_id' => $u->id,
+                'role' => $u->role,
+                'created_at' => now()->toIso8601String(),
+                'actioned_at' => null,
+                'actioned_by' => null,
+                'replies' => [],
+            ];
+        });
+
+        return back()->with('success', 'Note added.');
+    }
+
+    public function replyDocumentNote(Request $request, $docId, $noteId)
+    {
+        $data = $request->validate(['body' => 'required|string|max:2000']);
+        $u = $request->user();
+        $this->mutateDocNotes($docId, function (array &$notes) use ($u, $data, $noteId) {
+            foreach ($notes as &$n) {
+                if (($n['id'] ?? null) === $noteId) {
+                    $n['replies'][] = [
+                        'id' => (string) \Illuminate\Support\Str::uuid(),
+                        'body' => $data['body'],
+                        'author' => $u->name,
+                        'author_id' => $u->id,
+                        'role' => $u->role,
+                        'created_at' => now()->toIso8601String(),
+                    ];
+                }
+            }
+        });
+
+        return back()->with('success', 'Reply added.');
+    }
+
+    public function toggleDocumentNoteActioned(Request $request, $docId, $noteId)
+    {
+        $u = $request->user();
+        $this->mutateDocNotes($docId, function (array &$notes) use ($u, $noteId) {
+            foreach ($notes as &$n) {
+                if (($n['id'] ?? null) === $noteId) {
+                    $done = ! empty($n['actioned_at']);
+                    $n['actioned_at'] = $done ? null : now()->toIso8601String();
+                    $n['actioned_by'] = $done ? null : $u->id;
+                }
+            }
+        });
+
+        return back();
+    }
+
+    /** Load a document's notes thread, mutate it, and persist. */
+    private function mutateDocNotes($docId, callable $fn): void
+    {
+        $doc = LeadDocument::findOrFail($docId);
+        $notes = is_array($doc->notes) ? $doc->notes : [];
+        $fn($notes);
+        $doc->notes = $notes;
+        $doc->save();
+    }
 
     public function download(Request $request, $docId)
     {

@@ -221,7 +221,7 @@ const EDUCATION_STAGES = [
 
 // Subset of EDUCATION_STAGES that hand the lead off to Immigration.
 // Mirrors Lead::EDUCATION_STAGES_IMMIGRATION server-side. Set, not
-// array, so departmentOf() is an O(1) lookup per row.
+// array, so departmentsOf() is an O(1) lookup per row.
 const IMMIGRATION_EDUCATION_STAGES = new Set([
     "Endorsed to Immigration",
     "Visa Lodged",
@@ -334,9 +334,22 @@ const priorityDot = (p) => PRIORITY_OPTIONS.find((o) => o.value === p)?.dot || "
  */
 const portalBase = () => {
     const path = typeof window === "undefined" ? "" : window.location.pathname;
-    const match = path.match(/^\/portal\/(sales|education|immigration)\b/);
+    // agent / sub-agent included so the "view lead" links stay inside the
+    // portal the staffer opened this screen from.
+    const match = path.match(/^\/portal\/(sales|education|immigration|sub-agent|agent)\b/);
     return match ? `/portal/${match[1]}` : "/portal/education";
 };
+
+/**
+ * Whether this screen is being viewed by a portal that cannot write to it.
+ *
+ * The recruiting portals (agent / sub-agent) render the same Students screen to
+ * follow their own referrals through, but every write here belongs to education
+ * or sales and none of those endpoints exist under their prefix — so the
+ * controls come off rather than 403 on click. Decided server-side.
+ */
+const ReadOnlyContext = React.createContext(false);
+const useReadOnly = () => React.useContext(ReadOnlyContext);
 
 // Shared "Request portal access" row-menu item (same flow as the Sales Leads
 // page). Shows the request action while the client has no active invitation;
@@ -359,6 +372,7 @@ const portalRequestItem = (row, onRequest) => {
 };
 
 function StudentPriority({ student }) {
+    const readOnly = useReadOnly();
     const [saving, setSaving] = useState(false);
     const value = student.priority || "";
     const change = (e) => {
@@ -374,6 +388,11 @@ function StudentPriority({ student }) {
     return (
         <span className="inline-flex items-center gap-1" title="Priority" onClick={(e) => e.stopPropagation()}>
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priorityDot(value)}`} />
+            {readOnly ? (
+                <span className="text-[10px] font-semibold text-gray-500">
+                    {PRIORITY_OPTIONS.find((o) => o.value === value)?.label || "Priority"}
+                </span>
+            ) : (
             <select
                 value={value}
                 onChange={change}
@@ -383,6 +402,7 @@ function StudentPriority({ student }) {
                 <option value="">Priority</option>
                 {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            )}
         </span>
     );
 }
@@ -410,7 +430,7 @@ const fmtIntake = (val) => {
     return val;
 };
 
-export default function EducationStudents({ students = [], schoolOptions = [], programOptions = [], agentOptions = [] }) {
+export default function EducationStudents({ students = [], schoolOptions = [], programOptions = [], agentOptions = [], readOnly = false }) {
     // Add / edit student modal — null = closed, {} = new, object = edit.
     const [editingStudent, setEditingStudent] = useState(null);
     const [studentModalOpen, setStudentModalOpen] = useState(false);
@@ -451,26 +471,33 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     const [view, setView] = useState("education");
     const [stageFilter, setStageFilter] = useState("All");
 
-    // Which department "owns" this lead right now. Mirrors the rule
-    // encoded server-side in Lead::scopeImmigrationCase(). Precedence:
-    //   1. Any immigration_stage set, or is_immigration_case=true, or
-    //      an Education stage in the immigration handoff set.
-    //   2. Any english_stage set, or the global pipeline stage = "English Pro".
-    //   3. Default to Education.
-    const departmentOf = (s) => {
-        if (s.is_immigration_case)                              return "immigration";
-        if (s.immigration_stage)                                return "immigration";
-        if (IMMIGRATION_EDUCATION_STAGES.has(s.education_stage)) return "immigration";
-        if (s.english_stage)                                    return "english";
-        if (s.stage === "English Pro")                          return "english";
-        return "education";
+    // Which department tabs this lead belongs to. A lead can be under MORE THAN
+    // ONE at once — e.g. a student the Immigration team has also taken on stays
+    // visible under Education (they are still a student) AND appears under
+    // Immigration. Membership, not single-owner precedence:
+    //   - Immigration: is_immigration_case, an immigration_stage, or an
+    //     Education stage in the immigration-handoff set.
+    //   - English:     an english_stage, or the pipeline stage = "English Pro".
+    //   - Education:    an explicit student (is_student), or a lead that isn't
+    //     owned by either other department (so pure-education leads still land
+    //     here).
+    const departmentsOf = (s) => {
+        const set = new Set();
+        const inImmigration = s.is_immigration_case
+            || !! s.immigration_stage
+            || IMMIGRATION_EDUCATION_STAGES.has(s.education_stage);
+        const inEnglish = !! s.english_stage || s.stage === "English Pro";
+        if (inImmigration) set.add("immigration");
+        if (inEnglish) set.add("english");
+        if (s.is_student || (! inImmigration && ! inEnglish)) set.add("education");
+        return set;
     };
 
     // Count badges on the tabs — total leads per department, regardless
-    // of stage-pill filter or search.
+    // of stage-pill filter or search. A dual-department lead counts in each.
     const deptCounts = useMemo(() => {
         const c = { education: 0, english: 0, immigration: 0 };
-        students.forEach((s) => { c[departmentOf(s)]++; });
+        students.forEach((s) => departmentsOf(s).forEach((d) => { c[d]++; }));
         return c;
     }, [students]);
     const [sortKey, setSortKey] = useState("date_engaged");
@@ -489,10 +516,10 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         const rows = students.filter((s) => {
-            // Department tab — strict precedence so leads only ever appear
-            // under one. A lead "moved" to another department disappears
-            // from this tab as soon as the flag/stage flips server-side.
-            if (departmentOf(s) !== view) return false;
+            // Department tab — membership, not single-owner. A student the
+            // Immigration team also handles stays under Education (and shows
+            // under Immigration too) rather than dropping off this tab.
+            if (! departmentsOf(s).has(view)) return false;
             // Stage pill — matches against the tab's own stage column.
             if (stageFilter !== "All") {
                 const stage = s[tabConfig.field];
@@ -561,6 +588,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     }, [students]);
 
     return (
+        <ReadOnlyContext.Provider value={readOnly}>
         <div className="space-y-4 max-w-[1600px] mx-auto">
             <Head title="Students — Education" />
 
@@ -926,14 +954,14 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                             href: s.gdrive_link,
                                                             external: true,
                                                         },
-                                                        portalRequestItem(s, requestPortal),
-                                                        {
+                                                        readOnly ? null : portalRequestItem(s, requestPortal),
+                                                        readOnly ? null : {
                                                             key: 'edit',
                                                             label: 'Edit student',
                                                             icon: Pencil,
                                                             onClick: () => openEditStudent(s),
                                                         },
-                                                        {
+                                                        readOnly ? null : {
                                                             key: 'delete',
                                                             label: 'Delete student',
                                                             icon: Trash2,
@@ -1008,6 +1036,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                 />
             )}
         </div>
+        </ReadOnlyContext.Provider>
     );
 }
 
@@ -1798,6 +1827,7 @@ function StagePicker({ leadId, field, stages, styler, heading, value, fallbackLa
 // /portal/education/students/{id}/dashboard-field and refreshes the page so
 // the latest props come back from the server.
 function EditableField({ leadId, fieldKey, icon: Icon, label, value, placeholder, multiline = false, isLink = false }) {
+    const readOnly = useReadOnly();
     const [editing, setEditing] = useState(false);
     const [draft, setDraft]     = useState(value || "");
     const [saving, setSaving]   = useState(false);

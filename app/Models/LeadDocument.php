@@ -31,7 +31,7 @@ class LeadDocument extends Model
     protected $fillable = [
         'lead_id', 'dependent_id', 'request_id', 'checklist_key',
         'original_name', 'file_path', 'mime', 'size',
-        'status', 'source', 'source_variant', 'note', 'inz_form_version_id',
+        'status', 'source', 'source_variant', 'note', 'notes', 'inz_form_version_id',
         'uploaded_by', 'reviewed_by', 'reviewed_at',
         'engagement_signer_id', 'client_signature_path',
         'client_signed_at', 'client_signer_name', 'client_signer_ip',
@@ -44,6 +44,7 @@ class LeadDocument extends Model
         'reviewed_at' => 'datetime',
         'client_signed_at' => 'datetime',
         'size' => 'integer',
+        'notes' => 'array',
     ];
 
     /**

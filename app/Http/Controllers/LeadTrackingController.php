@@ -633,11 +633,25 @@ class LeadTrackingController extends Controller
 
                 try {
                     $program = \App\Models\Program::find($newId);
-                    app(\App\Services\CommunicationService::class)->sendTemplated('program_selected', $lead, [
+                    $context = [
                         'program_name' => $program?->title ?? '',
                         'program_level' => $program && $program->level ? 'Level '.$program->level : '',
                         'program_location' => $program?->location ?? '',
-                    ]);
+                    ];
+
+                    // Admin-configurable automation first (Admin → Email
+                    // Automation → "Client chose a program"). It reports whether
+                    // it actually reached the CLIENT, so the built-in
+                    // program_selected template only goes out when no client
+                    // message is configured — otherwise the applicant would get
+                    // two emails for the same click.
+                    $firedClient = app(\App\Services\EmailAutomationService::class)
+                        ->fire('education.program.chosen', $lead->fresh(), $context);
+
+                    if (! $firedClient) {
+                        app(\App\Services\CommunicationService::class)
+                            ->sendTemplated('program_selected', $lead, $context);
+                    }
                 } catch (\Throwable $e) {
                     Log::warning('program_selected email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
                 }
@@ -850,6 +864,15 @@ class LeadTrackingController extends Controller
             'is_student' => (bool) $lead->is_student,
             'is_immigration_case' => (bool) $lead->is_immigration_case,
             'is_accommodation_client' => (bool) $lead->is_accommodation_client,
+            // Drives the "Start Free Assessment" CTA on the tracker.
+            // `has_free_assessment` is the reliable signal — the lead has
+            // actually submitted the free-assessment form (which creates
+            // educationExps / studyPlans rows). `ai_analysis_status` alone
+            // is unreliable: manually-added leads can still carry a default
+            // status value even though no assessment was submitted.
+            'ai_analysis_status' => $lead->ai_analysis_status,
+            'has_free_assessment' => $lead->educationExps()->exists()
+                || $lead->studyPlans()->exists(),
         ];
     }
 

@@ -79,11 +79,18 @@ class EmailEventRegistry
     {
         $stageEvents = [];
         foreach (Lead::IMMIGRATION_STAGES as $stage) {
+            $vars = ['first_name', 'stage', 'adviser_name', 'tracker_url'];
+            // The RFI move captures a response deadline + note, passed to the
+            // email — advertise them so admins can use them in the template.
+            if ($stage === 'Request for Information') {
+                $vars[] = 'rfi_deadline';
+                $vars[] = 'status_detail';
+            }
             $stageEvents[] = [
                 'key' => 'immigration.stage.'.Str::slug($stage, '_'),
                 'label' => 'Moved to '.$stage,
                 'when' => 'When the case stage changes to “'.$stage.'”',
-                'vars' => ['first_name', 'stage', 'adviser_name', 'tracker_url'],
+                'vars' => $vars,
             ];
         }
 
@@ -133,6 +140,11 @@ class EmailEventRegistry
     private function education(): array
     {
         return [
+            ['group' => 'Proposals', 'events' => [
+                ['key' => 'education.proposal.submitted', 'label' => 'Proposal submitted for verification', 'when' => 'When staff submit a study proposal for verification', 'vars' => ['first_name', 'program_list', 'program_count', 'tracker_url']],
+                ['key' => 'education.proposal.approved', 'label' => 'Proposal verified & approved', 'when' => 'When staff verify & approve all programmes in Program Verification', 'vars' => ['first_name', 'program_list', 'program_count', 'tracker_url']],
+                ['key' => 'education.program.chosen', 'label' => 'Client chose a program', 'when' => 'When the client picks one programme from their shortlist on the tracking link', 'vars' => ['first_name', 'program_name', 'program_level', 'program_location', 'tracker_url']],
+            ]],
             ['group' => 'Students', 'events' => [
                 ['key' => 'education.student.converted', 'label' => 'Converted to student', 'when' => 'When a lead becomes a student', 'vars' => ['first_name']],
                 ['key' => 'education.offer.ready', 'label' => 'Offer letter ready', 'when' => 'When an offer is uploaded', 'vars' => ['first_name', 'school']],

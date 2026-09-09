@@ -136,7 +136,8 @@ export default function ImmigrationAssessments({ intakes = [] }) {
             const ra = READINESS[a.readiness]?.rank ?? 0;
             const rb = READINESS[b.readiness]?.rank ?? 0;
             if (rb !== ra) return rb - ra;
-            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+            // Last activity where we have it (drafts autosave), else arrival.
+            return new Date(b.saved_at || b.created_at || 0) - new Date(a.saved_at || a.created_at || 0);
         });
     }, [intakes, activeVisa, statusFilter, readinessFilter, search]);
 
@@ -336,7 +337,7 @@ function StatusPill({ label, count, active, onClick, icon, tone = "gray" }) {
  * In-app confirmation dialog — replaces the browser's native confirm() so the
  * prompt matches the app's styling. Click the backdrop or Cancel to dismiss.
  */
-function ConfirmModal({ open, title, message, confirmLabel = "Confirm", onConfirm, onCancel }) {
+function ConfirmModal({ open, title, message, confirmLabel = "Confirm", onConfirm, onCancel, danger = false }) {
     if (! open) return null;
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4" onClick={onCancel}>
@@ -347,8 +348,8 @@ function ConfirmModal({ open, title, message, confirmLabel = "Confirm", onConfir
                     <button type="button" onClick={onCancel}
                         className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
                     <button type="button" onClick={onConfirm}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#009688] text-white text-sm font-semibold hover:bg-[#00796b]">
-                        <ArrowRightCircle size={15} /> {confirmLabel}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-semibold ${danger ? "bg-rose-600 hover:bg-rose-700" : "bg-[#009688] hover:bg-[#00796b]"}`}>
+                        {danger ? <Trash2 size={15} /> : <ArrowRightCircle size={15} />} {confirmLabel}
                     </button>
                 </div>
             </div>
@@ -364,6 +365,7 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [convertOpen, setConvertOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     const runConvert = () => {
         setConvertOpen(false);
@@ -372,6 +374,17 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
         // Assessment id from the url, which converted the wrong case.
         const id = i.assessment_id ?? i.id;
         router.post(`/portal/immigration/assessments/${id}/convert-to-case`, { intake_type: i.visa_type, intake_id: i.id }, { preserveScroll: true });
+    };
+
+    const runDelete = () => {
+        setDeleteOpen(false);
+        router.delete("/portal/immigration/assessments", {
+            // `record` tells the server which table the id belongs to — visa
+            // drafts and free assessments are Lead rows, real submissions are
+            // intake rows. Defaults to "intake" for older payloads.
+            data: { record: i.record || "intake", intake_type: i.visa_type, intake_id: i.id },
+            preserveScroll: true,
+        });
     };
 
     const openModal = () => {
@@ -460,7 +473,7 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                                 {fresh && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500 text-white">New</span>}
                             </span>
                             <span className="text-[10.5px] text-gray-500 tabular-nums">
-                                {stage === "draft" ? `Saved ${timeAgo(i.created_at)}` : timeAgo(i.created_at)}
+                                {stage === "draft" ? `Saved ${timeAgo(i.saved_at || i.created_at)}` : timeAgo(i.created_at)}
                             </span>
                         </div>
                     );
@@ -505,13 +518,7 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                     </button>
                     <button
                         type="button"
-                        onClick={() => {
-                            if (! confirm(`Delete ${i.name || "this"} assessment? This permanently removes the submission.`)) return;
-                            router.delete("/portal/immigration/assessments", {
-                                data: { intake_type: i.visa_type, intake_id: i.id },
-                                preserveScroll: true,
-                            });
-                        }}
+                        onClick={(e) => { e.stopPropagation(); setDeleteOpen(true); }}
                         title="Delete this assessment"
                         className="inline-flex items-center justify-center p-1.5 rounded-md border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
                     >
@@ -532,6 +539,16 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
             confirmLabel="Convert to case"
             onConfirm={runConvert}
             onCancel={() => setConvertOpen(false)}
+        />
+
+        <ConfirmModal
+            open={deleteOpen}
+            danger
+            title="Delete assessment"
+            message={`Delete ${i.name || "this"} assessment? This permanently removes the submission and can't be undone.`}
+            confirmLabel="Delete"
+            onConfirm={runDelete}
+            onCancel={() => setDeleteOpen(false)}
         />
 
         {expanded && (

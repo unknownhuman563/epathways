@@ -17,6 +17,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // map sends the applicant straight to whichever step holds the bad field.
 // Step 1 is the shared Privacy & Terms step; all real form fields start at
 // step 2 and onward.
+// Every step in the form. The submit sweep and the error-clearing effect
+// both walk 1..TOTAL_STEPS, so a validator on a step beyond this would
+// silently never run.
+const TOTAL_STEPS = 9;
+
 const FIELD_TO_STEP = {
     terms_accepted: 1,
     family_name: 2, first_name: 2, other_names: 2, gender: 2, dob: 2,
@@ -35,7 +40,7 @@ const FIELD_TO_STEP = {
     current_employer_phone: 6, current_employer_email: 6,
     military_compulsory: 7, military_undertaken: 7, military_details: 7,
     travelled_internationally: 7,
-    declaration_accepted: 8, signature_name: 8, signature_date: 8,
+    declaration_accepted: 9, signature_name: 9, signature_date: 9,
 };
 
 const FIELD_LABELS = {
@@ -217,7 +222,7 @@ export default function WorkInterestPage() {
                 if (!data.military_undertaken) errs.military_undertaken = 'Please answer';
                 if (!data.travelled_internationally) errs.travelled_internationally = 'Please answer';
                 break;
-            case 8:
+            case 9:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }
@@ -232,7 +237,7 @@ export default function WorkInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 9; n++) {
+        for (let n = 1; n <= TOTAL_STEPS; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -284,7 +289,7 @@ export default function WorkInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 9; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= TOTAL_STEPS; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
@@ -542,6 +547,7 @@ export default function WorkInterestPage() {
                 submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
+                draftEndpoint="/visa-interest/work/draft"
                 step={step}
                 setStep={setStep}
                 visitedSteps={visitedSteps}

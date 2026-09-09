@@ -1580,6 +1580,113 @@ class ImmigrationController extends Controller
     }
 
     /**
+     * Move a case to "Request for Information" — INZ has asked for more. Captures
+     * the response DEADLINE, attaches the RFI PDF(s) (shared to the case + the
+     * client portal), records an optional note, and fires the configured RFI
+     * stage automation with the deadline as {{rfi_deadline}} and the PDFs
+     * attached to the email. Mirrors recordOutcome() with those additions.
+     */
+    public function requestForInformation(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'deadline' => ['required', 'date'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'documents' => ['nullable', 'array', 'max:20'],
+            'documents.*' => ['file', 'mimes:pdf', 'max:10240'],
+            'notify' => ['nullable', 'boolean'],
+        ]);
+
+        $stage = 'Request for Information';
+        $note = trim((string) ($data['note'] ?? ''));
+        $deadline = \Illuminate\Support\Carbon::parse($data['deadline'])->startOfDay();
+
+        // Set the stage (chain jump when on the process chain, else legacy write).
+        $steps = app(\App\Services\Immigration\CaseStepService::class);
+        $movedViaChain = $steps->hasChain($lead) && $steps->jumpToStage($lead, $stage, auth()->user());
+        if (! $movedViaChain && ($lead->immigration_stage ?? null) !== $stage) {
+            $lead->immigration_stage = $stage;
+            $lead->stage_updated_at = now();
+            $lead->stage_updated_by = auth()->id();
+            $lead->pushStageHistory('immigration', $stage, $lead->immigration_assignee);
+        }
+
+        // Store the deadline ON the RFI stage-history entry (both stage paths push
+        // one) rather than a new column — the leads god table is at its row-size
+        // limit. `$lead->rfi_deadline` reads it back. If the case was already on
+        // this stage (no fresh entry), push one so the deadline has a home.
+        $history = $lead->stage_history ?? [];
+        $idx = null;
+        for ($i = count($history) - 1; $i >= 0; $i--) {
+            if (($history[$i]['stage'] ?? null) === $stage) {
+                $idx = $i;
+                break;
+            }
+        }
+        if ($idx === null) {
+            $lead->pushStageHistory('immigration', $stage, $lead->immigration_assignee);
+            $history = $lead->stage_history;
+            $idx = count($history) - 1;
+        }
+        $history[$idx]['rfi_deadline'] = $deadline->toDateString();
+        $lead->stage_history = $history;
+        $lead->save();
+
+        // Store each RFI PDF (StaffShared so it shows on the Documents tab and the
+        // client portal), and collect them as email attachments.
+        $attachments = [];
+        foreach ((array) $request->file('documents', []) as $file) {
+            if (! $file instanceof \Illuminate\Http\UploadedFile) {
+                continue;
+            }
+            $path = $file->store("lead-documents/{$lead->id}", 'local');
+            $name = $file->getClientOriginalName() ?: 'RFI document.pdf';
+            \App\Models\LeadDocument::create([
+                'lead_id' => $lead->id,
+                'checklist_key' => null,
+                'original_name' => $name,
+                'file_path' => $path,
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'source' => 'upload',
+                'source_variant' => 'rfi',
+                'status' => \App\Models\LeadDocument::STATUS_STAFF_SHARED,
+                'uploaded_by' => auth()->id(),
+                'note' => $note ?: null,
+            ]);
+            $attachments[] = ['path' => $path, 'name' => $name];
+        }
+
+        // Record the note (with the deadline) on the case timeline.
+        $user = auth()->user();
+        \App\Models\LeadNote::create([
+            'lead_id' => $lead->id,
+            'user_id' => $user?->id,
+            'author_name' => $user?->name,
+            'author_role' => $user?->role,
+            'kind' => 'note',
+            'body' => "Stage → {$stage} (respond by {$deadline->format('j M Y')})".($note !== '' ? ": {$note}" : ''),
+        ]);
+
+        // Email via the configured RFI automation. {{rfi_deadline}} + the PDFs are
+        // passed through; skipped when the "notify" toggle is off.
+        if (! empty($data['notify'])) {
+            app(\App\Services\EmailAutomationService::class)->fire(
+                'immigration.stage.'.\Illuminate\Support\Str::slug($stage, '_'),
+                $lead,
+                ['stage' => $stage, 'status_detail' => $note, 'rfi_deadline' => $deadline->format('j M Y')],
+                $attachments,
+            );
+        }
+
+        $lead->recordStaffActivity("Moved to {$stage} (respond by {$deadline->format('j M Y')})".($attachments ? ' + '.count($attachments).' document(s)' : ''));
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', "Case moved to {$stage}.");
+    }
+
+    /**
      * Inline priority update from the Cases table's expanded row.
      */
     public function updateCasePriority(\Illuminate\Http\Request $request, $id)
@@ -2036,10 +2143,29 @@ class ImmigrationController extends Controller
         ];
 
         $data = $request->validate([
-            'intake_type' => ['required', \Illuminate\Validation\Rule::in(array_keys($typeMap))],
+            // Which table the id belongs to. Visa drafts and free assessments
+            // are Lead rows, not intake rows — the frontend marks them 'lead' so
+            // we delete the right record. An intake id and a lead id can collide
+            // (separate auto-increment tables), so we must NOT guess by trying
+            // one then the other. Defaults to 'intake' for older callers.
+            'record' => ['nullable', \Illuminate\Validation\Rule::in(['intake', 'lead'])],
+            'intake_type' => ['required', 'string'],
             'intake_id' => ['required', 'integer'],
         ]);
 
+        // Lead-backed rows: in-progress visa drafts (SavesIntakeDraft) and free
+        // assessments. There is no intake row to remove — delete the Lead.
+        if (($data['record'] ?? 'intake') === 'lead') {
+            $lead = Lead::findOrFail($data['intake_id']);
+            if ($lead->is_immigration_case) {
+                return back()->with('error', 'This is already a case — delete or unconvert the case first.');
+            }
+            $lead->delete();
+
+            return back()->with('success', 'Assessment deleted.');
+        }
+
+        abort_unless(isset($typeMap[$data['intake_type']]), 404);
         $cls = $typeMap[$data['intake_type']];
         $intake = $cls::findOrFail($data['intake_id']);
         $assessment = Assessment::where('intakeable_type', $cls)->where('intakeable_id', $intake->id)->first();
@@ -2090,7 +2216,19 @@ class ImmigrationController extends Controller
                 ->pluck('assessment_id')
                 ->flip();
 
-            $normalize = function ($intake, string $visaType, $assessment, $review = null) use ($convertedAssessmentIds): array {
+            // Identity keys (lower(email)|dob) of every immigration case, so a
+            // fresh submission from someone who is ALREADY a case shows as
+            // belonging to that case instead of a convertible duplicate — the
+            // public funnels sync it in (see SyncsIntakeToCase). Email+DOB (not
+            // email alone) keeps family members who share an email distinct.
+            $caseIdentities = Lead::query()
+                ->where('is_immigration_case', true)
+                ->get(['email', 'dob'])
+                ->map(fn ($c) => \App\Http\Controllers\Concerns\SyncsIntakeToCase::caseSyncIdentityKey($c->email, $c->dob))
+                ->filter()
+                ->flip();
+
+            $normalize = function ($intake, string $visaType, $assessment, $review = null) use ($convertedAssessmentIds, $caseIdentities): array {
                 $first = (string) ($intake->first_name ?? '');
                 $last = (string) ($intake->last_name ?? $intake->family_name ?? '');
                 $hasAssessment = (bool) $assessment;
@@ -2107,13 +2245,19 @@ class ImmigrationController extends Controller
                 $isTriaged = $intake->status !== null
                     && ! in_array($intake->status, $defaultStatuses, true);
 
-                // Converted — this exact assessment is linked to a case, or
-                // the intake itself has been marked "Engaged" post-convert.
+                // Converted — this exact assessment is linked to a case, the
+                // intake was marked "Engaged" post-convert, OR the submitter is
+                // already a case (same email + DOB): their fresh form was synced
+                // into that case, so it isn't a new lead to convert.
+                $identityKey = \App\Http\Controllers\Concerns\SyncsIntakeToCase::caseSyncIdentityKey($intake->email, $intake->dob);
+                $belongsToCase = $identityKey !== null && isset($caseIdentities[$identityKey]);
                 $isConverted = ($assessment && isset($convertedAssessmentIds[$assessment->id]))
-                    || $intake->status === 'Engaged';
+                    || $intake->status === 'Engaged'
+                    || $belongsToCase;
 
                 return [
                     'id' => $intake->id,
+                    'record' => 'intake', // deletes from the intake table
                     'assessment_id' => $assessment?->id,
                     'intake_id' => $intake->intake_id,
                     'visa_type' => $visaType, // resident | work | student | visitor
@@ -2204,11 +2348,37 @@ class ImmigrationController extends Controller
             // Free-assessment submissions live on the Lead (FA-…) with the whole
             // immigration questionnaire stored as JSON columns — surface them here
             // too so an adviser reviews them alongside the visa intakes.
+            // Ordered by LAST SAVE, not creation. A returning applicant keeps
+            // their original lead row, so a draft filled in today can carry a
+            // months-old created_at — ordering by that pushed live drafts to the
+            // bottom and, past 200 rows, out of the list entirely.
             $free = Lead::whereIn('source', ['free-assessment', 'education-enrolment'])
-                ->latest()->limit(200)->get();
+                ->latest('updated_at')->limit(200)->get();
             $rows = $rows->concat($free->map(fn ($l) => $this->freeAssessmentRow($l)));
 
-            $intakes = $rows->sortByDesc('created_at')->values();
+            // In-progress visa intakes. The five public forms auto-save here as
+            // Draft leads (see SavesIntakeDraft) — they have no row in the
+            // intake tables yet, so they would otherwise be invisible until the
+            // applicant submits. Dropped once they do submit, because the real
+            // intake row then represents them under the same visa tab.
+            $submittedEmails = $rows->pluck('email')->filter()
+                ->map(fn ($e) => mb_strtolower(trim((string) $e)))->flip();
+
+            $drafts = Lead::whereIn('source', array_values(\App\Support\VisaIntakeDraft::SOURCES))
+                ->where('status', 'Draft')
+                ->latest('updated_at')->limit(200)->get();
+
+            $rows = $rows->concat(
+                $drafts
+                    ->reject(fn (Lead $l) => isset($submittedEmails[mb_strtolower(trim((string) $l->email))]))
+                    ->map(fn (Lead $l) => $this->visaDraftRow($l))
+                    ->filter()
+            );
+
+            // Sort on last activity where we have it (free assessments), falling
+            // back to arrival time for the visa intakes, whose updated_at moves
+            // whenever staff triage them and would reshuffle the queue.
+            $intakes = $rows->sortByDesc(fn ($r) => $r['saved_at'] ?? $r['created_at'])->values();
 
             return ['intakes' => $intakes];
         } catch (\Throwable $e) {
@@ -2226,6 +2396,57 @@ class ImmigrationController extends Controller
      * every visa type. The frontend reads the intake row + its paired
      * Assessment + Booking and renders a clean property-row layout.
      */
+    /**
+     * Assessments-list row for an in-progress visa intake (a Draft lead saved
+     * by one of the five public forms). Shaped exactly like a real intake row
+     * so it sorts and filters alongside them, but with no assessment, no
+     * convert action and no detail page — there is no intake record yet.
+     */
+    private function visaDraftRow(Lead $l): ?array
+    {
+        $visaType = \App\Support\VisaIntakeDraft::visaTypeForSource($l->source);
+        if (! $visaType) {
+            return null;
+        }
+
+        [$filled, $total, $pct] = \App\Support\VisaIntakeDraft::readiness(
+            is_array($l->ai_analysis) ? $l->ai_analysis : []
+        );
+        $tier = $pct >= 80 ? 'ready' : ($pct >= 55 ? 'minor' : 'needs_info');
+
+        return [
+            'id' => $l->id,
+            'record' => 'lead', // draft lives on the Lead, not an intake row
+            'assessment_id' => null,
+            'intake_id' => $l->lead_id,
+            'visa_type' => $visaType,
+            'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+            'email' => $l->email,
+            'phone' => $l->phone,
+            'status' => 'Draft',
+            'created_at' => $l->created_at,
+            // Last autosave — what "Saved 4 Sep" means on a draft, and what the
+            // list sorts on so a form being filled in right now surfaces.
+            'saved_at' => $l->updated_at,
+            'readiness' => $tier,
+            'readiness_pct' => $pct,
+            'readiness_reviewed' => false,
+            'extra' => "{$filled} of {$total} answers so far",
+            // Nothing to convert or open yet: the applicant has not submitted,
+            // so no intake row exists. The lead record is all there is.
+            'can_convert' => false,
+            'detail_url' => "/admin/leads/{$l->id}",
+            'data_url' => null,
+            'journey' => [
+                'submitted' => false,
+                'submitted_at' => null,
+                'triaged' => false,
+                'converted' => false,
+                'assessment_status' => null,
+            ],
+        ];
+    }
+
     /** Assessments-list row for a free-assessment Lead (visa_type "free"). */
     private function freeAssessmentRow(Lead $l): array
     {
@@ -2243,6 +2464,7 @@ class ImmigrationController extends Controller
 
         return [
             'id' => $l->id,
+            'record' => 'lead', // free assessment lives on the Lead
             'assessment_id' => null,
             'intake_id' => $l->lead_id,
             'visa_type' => 'free',
@@ -2251,6 +2473,15 @@ class ImmigrationController extends Controller
             'phone' => $l->phone,
             'status' => $l->status,
             'created_at' => $l->created_at,
+            // Drafts only. A draft is rewritten on every autosave, so this —
+            // not created_at — is what "Saved 4 Sep" means, and it is what the
+            // list sorts on so a form someone is filling in today surfaces.
+            //
+            // Deliberately null once submitted: updated_at then moves on every
+            // staff edit, which would creep an old submission forward to
+            // "just now". Submitted rows keep sorting and displaying by
+            // created_at, which in practice is within minutes of the submit.
+            'saved_at' => $isDraft ? $l->updated_at : null,
             'readiness' => $tier,
             'readiness_pct' => $pct,
             'readiness_reviewed' => false,

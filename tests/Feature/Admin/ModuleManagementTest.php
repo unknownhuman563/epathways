@@ -67,11 +67,12 @@ class ModuleManagementTest extends TestCase
 
         // super-only restricted modules stay hidden until granted…
         $this->assertFalse($admin->canSeeModule('agents'));
-        $this->assertFalse($admin->canSeeModule('program_verification'));
         $this->assertNotContains('agents', $admin->grantedModules());
 
-        // …but admin_default modules (DTR, Portal Invitations) are always visible.
+        // …but admin_default modules (DTR, Portal Invitations, Program
+        // Verification) are always visible to admins.
         $this->assertTrue($admin->canSeeModule('dtr'));
         $this->assertTrue($admin->canSeeModule('portal_invitation'));
+        $this->assertTrue($admin->canSeeModule('program_verification'));
     }
 }

@@ -257,7 +257,13 @@ class EducationController extends Controller
      * Students — engaged leads with a study plan or in any post-engagement
      * stage. The Leads page covers prospecting; this is the "in-flight" view.
      */
-    public function students()
+    /**
+     * @param  callable|null  $scope  Optional extra row filter applied to the
+     *                                student query. The recruiting portals (agent / sub-agent) pass one to
+     *                                narrow the list to their own referrals — `portal:` is role-level only
+     *                                and would otherwise show them every student in the business.
+     */
+    public function students(?callable $scope = null)
     {
         try {
             // Students are leads explicitly flipped via "Convert to Student"
@@ -292,6 +298,7 @@ class EducationController extends Controller
                         ->orWhereNotNull('english_stage')
                         ->orWhereNotNull('immigration_stage');
                 })
+                ->when($scope, $scope)
                 ->orderByDesc('student_converted_at')
                 ->limit(200)
                 ->get()
@@ -408,6 +415,10 @@ class EducationController extends Controller
 
             return inertia($component, [
                 'portal' => $portal,
+                // Recruiting agents and sub-agents view their own referrals'
+                // progress; every write on this screen belongs to education /
+                // sales, and none of those endpoints exist under their prefix.
+                'readOnly' => in_array($portal, ['agent', 'sub-agent'], true),
                 'students' => $students,
                 'schoolOptions' => $schoolOptions,
                 'programOptions' => $programOptions,
@@ -418,7 +429,11 @@ class EducationController extends Controller
 
             [$component, $portal] = $this->studentsComponent();
 
-            return inertia($component, ['portal' => $portal, 'students' => collect()]);
+            return inertia($component, [
+                'portal' => $portal,
+                'readOnly' => in_array($portal, ['agent', 'sub-agent'], true),
+                'students' => collect(),
+            ]);
         }
     }
 
@@ -436,6 +451,9 @@ class EducationController extends Controller
             request()->is('portal/sales/*') => ['portal/sales/Students', 'sales'],
             request()->is('portal/immigration-adviser/*') => ['portal/immigration-adviser/Students', 'immigration-adviser'],
             request()->is('portal/immigration/*') => ['portal/immigration/Students', 'immigration'],
+            // Recruiting portals — same screen, read-only (see `readOnly` below).
+            request()->is('portal/sub-agent/*') => ['portal/sub-agent/Students', 'sub-agent'],
+            request()->is('portal/agent/*') => ['portal/agent/Students', 'agent'],
             default => ['portal/education/Students', 'education'],
         };
     }
@@ -529,15 +547,11 @@ class EducationController extends Controller
             $lead->immigration_converted_by = auth()->id();
         }
 
-        // Handoff also retires the student from the Education team's
-        // active queue. Without this, the lead-detail "Move To" widget
-        // shows both Study and Case as ACTIVE — confusing now that
-        // Immigration owns the case. Their record still appears in the
-        // Students list (it's joined on is_immigration_case OR is_student),
-        // just under the Immigration tab instead of Education's.
-        if ($movedToImmigrationStage && $lead->is_student) {
-            $lead->is_student = false;
-        }
+        // A student handed to Immigration STAYS a student — the same person is
+        // legitimately under both departments, so is_student is preserved. They
+        // remain visible on the Students screen's Education tab (they are still a
+        // student) while also appearing under Immigration. (Previously is_student
+        // was cleared here, which dropped them off Education entirely.)
 
         $lead->save();
 

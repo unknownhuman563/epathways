@@ -261,6 +261,16 @@ Route::post('/visitor-interest', [VisitorIntakeController::class, 'store']);
 Route::get('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'showForm'])->name('family-interest');
 Route::post('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'store']);
 
+// Auto-save for the five visa intakes. Each form posts its in-progress answers
+// here every few seconds once a name + email are in; the draft is stored as a
+// Lead with status 'Draft' so staff see it in Visa Assessment before the
+// applicant ever submits. Throttled because it is a public, unauthenticated
+// endpoint that writes.
+Route::post('/visa-interest/{visa}/draft', [\App\Http\Controllers\VisaIntakeDraftController::class, 'store'])
+    ->whereIn('visa', ['resident', 'work', 'student', 'visitor', 'family'])
+    ->middleware('throttle:30,1')
+    ->name('visa-interest.draft');
+
 // Token-based edit links (no auth — the opaque token is the bearer credential).
 Route::get('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'showEditForm'])->name('resident-interest.edit');
 Route::post('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'updateFromEditLink']);
@@ -529,10 +539,11 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.agents.agreement.download');
     });
 
-    // Program Verification module — restricted (default super-admin-only,
-    // grantable per user via Module Management, e.g. to Dinah). Gated only by
-    // the module so it's reachable from any portal the grantee is in.
-    Route::middleware('module:program_verification')->group(function () {
+    // Verification module — restricted (default super-admin-only + admins,
+    // grantable per user via Module Management, e.g. to Dinah). Two parts, each
+    // its own grantable feature: Proposal (programmes) and Consultancy Agreement.
+    // Gated only by the module so it's reachable from any portal the grantee is in.
+    Route::middleware('module:program_verification.proposal')->group(function () {
         Route::get('/program-verification', [\App\Http\Controllers\ProgramVerificationController::class, 'index'])
             ->name('program-verification.index');
         Route::post('/program-verification/{lead}/programs', [\App\Http\Controllers\ProgramVerificationController::class, 'updatePrograms'])
@@ -545,6 +556,31 @@ Route::middleware(['auth'])->group(function () {
             ->name('program-verification.verify');
         Route::post('/program-verification/{lead}/approve', [\App\Http\Controllers\ProgramVerificationController::class, 'approve'])
             ->name('program-verification.approve');
+    });
+
+    // Consultancy Agreement Verification — the consultancy counterpart, gated by
+    // the same module's `consultancy` feature.
+    Route::middleware('module:program_verification.consultancy')->group(function () {
+        Route::get('/consultancy-verification', [\App\Http\Controllers\ConsultancyVerificationController::class, 'index'])
+            ->name('consultancy-verification.index');
+        Route::get('/consultancy-verification/{lead}/preview', [\App\Http\Controllers\ConsultancyVerificationController::class, 'preview'])
+            ->name('consultancy-verification.preview');
+        Route::post('/consultancy-verification/{lead}/meta', [\App\Http\Controllers\ConsultancyVerificationController::class, 'updateMeta'])
+            ->name('consultancy-verification.meta');
+        Route::post('/consultancy-verification/{lead}/request-changes', [\App\Http\Controllers\ConsultancyVerificationController::class, 'requestChanges'])
+            ->name('consultancy-verification.request-changes');
+        Route::post('/consultancy-verification/{lead}/verify', [\App\Http\Controllers\ConsultancyVerificationController::class, 'verify'])
+            ->name('consultancy-verification.verify');
+        Route::post('/consultancy-verification/{lead}/draft', [\App\Http\Controllers\ConsultancyVerificationController::class, 'draft'])
+            ->name('consultancy-verification.draft');
+        Route::post('/consultancy-verification/{lead}/approve', [\App\Http\Controllers\ConsultancyVerificationController::class, 'approve'])
+            ->name('consultancy-verification.approve');
+        Route::post('/consultancy-verification/{lead}/notes/{item}', [\App\Http\Controllers\ConsultancyVerificationController::class, 'addNote'])
+            ->name('consultancy-verification.notes.add');
+        Route::post('/consultancy-verification/{lead}/notes/{item}/{noteId}/reply', [\App\Http\Controllers\ConsultancyVerificationController::class, 'replyNote'])
+            ->name('consultancy-verification.notes.reply');
+        Route::post('/consultancy-verification/{lead}/notes/{item}/{noteId}/actioned', [\App\Http\Controllers\ConsultancyVerificationController::class, 'toggleActioned'])
+            ->name('consultancy-verification.notes.actioned');
     });
 
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
@@ -812,6 +848,9 @@ Route::middleware(['auth'])->group(function () {
         // "bulk-*" segments aren't captured as an {id}.
         Route::post('/admin/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('admin.leads.bulk-agent');
         Route::post('/admin/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('admin.leads.bulk-delete');
+        // Assign / clear the recruiting agent on a single lead from the Edit
+        // Lead modal (declared before /admin/leads/{id} so "{id}/agent" resolves).
+        Route::post('/admin/leads/{id}/agent', [SalesController::class, 'updateLeadAgent'])->name('admin.leads.agent');
 
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
@@ -875,6 +914,9 @@ Route::middleware(['auth'])->group(function () {
         // Inline edit of the proposed-program shortlist from the Lead Stats
         // "Programs offered" card (no proposal-version churn).
         Route::post('/admin/leads/{id}/shortlist', [LeadController::class, 'updateProposedShortlist'])->name('admin.leads.shortlist');
+        // Per-program review from the "Programs offered" card: verified/rejected +
+        // remarks + editable amount, saved onto leads.proposed_program_meta.
+        Route::post('/admin/leads/{id}/programs/{program}/review', [LeadController::class, 'reviewProposedProgram'])->name('admin.leads.program-review');
 
         // Internal notes — any staff role can add, only author or admin can edit/delete.
         Route::get('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'index'])
@@ -1017,6 +1059,16 @@ Route::middleware(['auth'])->group(function () {
         // Staff download — same controller, role-gated inside.
         Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
             ->name('admin.documents.download');
+        // Inline note on a generated agreement (Proposal & Agreements table).
+        Route::post('/admin/documents/{docId}/note', [LeadDocumentController::class, 'updateDocumentNote'])
+            ->name('admin.documents.note');
+        // Threaded staff notes on a generated document (add / reply / actioned).
+        Route::post('/admin/documents/{docId}/notes', [LeadDocumentController::class, 'addDocumentNote'])
+            ->name('admin.documents.notes.add');
+        Route::post('/admin/documents/{docId}/notes/{noteId}/reply', [LeadDocumentController::class, 'replyDocumentNote'])
+            ->name('admin.documents.notes.reply');
+        Route::post('/admin/documents/{docId}/notes/{noteId}/actioned', [LeadDocumentController::class, 'toggleDocumentNoteActioned'])
+            ->name('admin.documents.notes.actioned');
         // Bundle all of a lead's documents into a single ZIP.
         Route::get('/admin/leads/{leadId}/documents/download-all', [LeadDocumentController::class, 'downloadAll'])
             ->name('admin.leads.documents.download-all');
@@ -1243,6 +1295,18 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'leads'])->name('leads');
             Route::post('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
+            // Backs the shared Leads screen's Edit modal. Ownership-checked, and
+            // limited to personal facts — no stage, priority or conversion.
+            Route::get('/leads/{id}/edit-data', [\App\Http\Controllers\Portal\AgentController::class, 'leadEditData'])->name('leads.edit-data');
+            Route::post('/leads/{id}/personal', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadPersonal'])->name('leads.personal');
+            // Full lead profile under the Agent sidebar. Row-scoped to the
+            // agent's own leads inside showLead(); declared after the static
+            // /leads/* segments above so those keep winning.
+            Route::get('/leads/{id}', [\App\Http\Controllers\Portal\AgentController::class, 'showLead'])->name('leads.show');
+            // Students, read-only — this agent's own referrals who have since
+            // been converted. Scoped inside students(); no write routes exist.
+            Route::get('/students', [\App\Http\Controllers\Portal\AgentController::class, 'students'])
+                ->middleware('module:referral_students')->name('students');
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
             Route::get('/agreement', [\App\Http\Controllers\Portal\AgentController::class, 'agreement'])->name('agreement');
             Route::post('/agreement/details', [\App\Http\Controllers\Portal\AgentController::class, 'updateAgreementDetails'])->name('agreement.details');
@@ -1275,14 +1339,111 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}/profile', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateLeadProfile'])->name('leads.profile');
             Route::post('/leads/{id}/mark', [\App\Http\Controllers\Portal\SubAgentController::class, 'markLead'])->name('leads.mark');
             Route::post('/leads/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateLead'])->name('leads.update');
+            // Full lead profile under the Sub-agent sidebar. Row-scoped to the
+            // parent agent's referrals inside showLead().
+            Route::get('/leads/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'showLead'])->name('leads.show');
             // Follow-ups — the same `lead_tasks` rows the Task Board works with,
             // presented as a cadence. Scoped to the parent agent's leads (plus
             // the sub-agent's own unlinked tasks) inside the controller.
             Route::get('/follow-ups', [\App\Http\Controllers\Portal\SubAgentController::class, 'followUps'])->name('follow-ups');
             Route::post('/follow-ups', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeFollowUp'])->name('follow-ups.store');
             Route::post('/follow-ups/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateFollowUp'])->name('follow-ups.update');
+            // Students, read-only — the parent agent's referrals who have since
+            // been converted. Scoped inside students(); no write routes exist.
+            Route::get('/students', [\App\Http\Controllers\Portal\SubAgentController::class, 'students'])
+                ->middleware('module:referral_students')->name('students');
             Route::get('/profile', [\App\Http\Controllers\Portal\SubAgentController::class, 'profile'])->name('profile');
         });
+
+        /*
+        |------------------------------------------------------------------
+        | Lead profile — recruiting portals
+        |------------------------------------------------------------------
+        | The Agent and Sub-agent portals render the SAME lead profile screen
+        | as sales, so they need the same write endpoints behind it. Rather
+        | than fork thirty controller actions, the identical routes are
+        | re-registered under each portal prefix, pointed at the very same
+        | controllers, and fronted by `lead.scope` — which refuses any lead
+        | outside the caller's own referrals before the controller runs.
+        |
+        | This is why the profile's URLs are portal-relative: posting to
+        | /admin/... would both 403 (those groups exclude these roles) and,
+        | on a redirect, drop the user into another portal's chrome.
+        */
+        $leadProfileRoutes = function () {
+            $lead = \App\Http\Controllers\LeadController::class;
+            $notes = \App\Http\Controllers\LeadNoteController::class;
+            $tags = \App\Http\Controllers\LeadTagController::class;
+            $tasks = \App\Http\Controllers\LeadTaskController::class;
+            $docs = \App\Http\Controllers\LeadDocumentController::class;
+
+            // ── Core record ───────────────────────────────────────────────
+            Route::get('/leads/{id}/edit-data', [$lead, 'editData']);
+            Route::post('/leads/{id}/personal', [$lead, 'updatePersonal']);
+            Route::post('/leads/{id}/journey', [$lead, 'updateJourney']);
+            Route::post('/leads/{id}/stage', [$lead, 'updateStage']);
+            // The leads TABLE changes stage through this one (the profile uses
+            // /stage above). Registered last for sub-agent, whose own scoped
+            // handler is declared earlier in its group and therefore wins.
+            Route::post('/leads/{id}', [$lead, 'updateLeadStatus']);
+            Route::post('/leads/{id}/priority', [$lead, 'updatePriority']);
+            Route::post('/leads/{id}/visa', [$lead, 'updateLeadVisa']);
+            Route::post('/leads/{id}/inz', [$lead, 'updateInz']);
+            // NOT mirrored: /leads/{id}/shortlist. Which programs go in front of
+            // a client is staff's recommendation — recruiting agents read the
+            // shortlist on the profile, they do not set it. The card hides the
+            // controls; leaving the route off means a crafted request fails too.
+            Route::post('/leads/{id}/send-tracker-link', [$lead, 'sendTrackerLink']);
+            Route::delete('/leads/{id}', [$lead, 'destroy']);
+
+            // ── Conversions (each reversible) ─────────────────────────────
+            foreach (['student', 'case', 'accommodation', 'english'] as $target) {
+                $verb = 'convertTo'.str($target)->studly();
+                Route::post("/leads/{id}/convert-to-{$target}", [$lead, (string) $verb]);
+                Route::post("/leads/{id}/revert-{$target}", [$lead, 'revert'.str($target)->studly()]);
+            }
+
+            // ── Notes / tags / tasks ──────────────────────────────────────
+            Route::get('/leads/{id}/notes', [$notes, 'index']);
+            Route::post('/leads/{id}/notes', [$notes, 'store']);
+            Route::post('/leads/{leadId}/notes/{noteId}', [$notes, 'update']);
+            Route::delete('/leads/{leadId}/notes/{noteId}', [$notes, 'destroy']);
+            Route::get('/leads/{leadId}/notes/{noteId}/attachments/{index}', [$notes, 'attachment']);
+            Route::post('/leads/{id}/tags', [$tags, 'attach']);
+            Route::delete('/leads/{leadId}/tags/{tagId}', [$tags, 'detach']);
+            Route::post('/leads/{id}/tasks', [$tasks, 'store']);
+            Route::post('/leads/{leadId}/tasks/{taskId}', [$tasks, 'update']);
+            Route::delete('/leads/{leadId}/tasks/{taskId}', [$tasks, 'destroy']);
+
+            // ── Document threads (comments on a checklist item) ───────────
+            Route::post('/leads/{id}/threads', [$lead, 'storeDocThread']);
+            Route::post('/leads/{id}/threads/{thread}/resolve', [$lead, 'resolveDocThread']);
+            Route::patch('/leads/{id}/threads/{thread}', [$lead, 'updateDocThread']);
+
+            // ── Documents ─────────────────────────────────────────────────
+            Route::get('/leads/{id}/documents', [$docs, 'staffIndex']);
+            Route::get('/leads/{leadId}/documents/json', [$docs, 'documentsJson']);
+            Route::get('/leads/{leadId}/documents/download-all', [$docs, 'downloadAll']);
+            Route::post('/leads/{id}/documents/checklist', [$lead, 'updateDocumentChecklist']);
+            Route::post('/leads/{id}/documents/section-verification', [$lead, 'updateSectionVerification']);
+            Route::post('/leads/{id}/documents/checklist/{key}/upload', [$docs, 'staffChecklistUpload']);
+            Route::post('/leads/{id}/documents/checklist/{key}/generate', [$docs, 'generateAgreement']);
+            Route::post('/leads/{id}/documents/custom', [$docs, 'addCustomDocument']);
+            Route::delete('/leads/{id}/documents/custom/{key}', [$docs, 'removeCustomDocument']);
+            Route::post('/leads/{id}/documents/requests', [$docs, 'requestStore']);
+            Route::delete('/leads/{leadId}/documents/requests/{requestId}', [$docs, 'destroyRequest']);
+            Route::post('/leads/{leadId}/documents/requests/{requestId}/resend', [$docs, 'resendRequest']);
+            Route::post('/leads/{leadId}/documents/{docId}/status', [$docs, 'updateStatus']);
+            Route::post('/leads/{leadId}/documents/{docId}/send-to-client', [$docs, 'sendToClient']);
+            Route::post('/leads/{id}/documents/share', [$docs, 'shareWithLead']);
+            Route::post('/leads/{leadId}/documents/track-visibility', [$docs, 'toggleTrackVisibility']);
+            Route::delete('/leads/{leadId}/documents/{docId}', [$docs, 'destroyDocument']);
+        };
+
+        Route::middleware(['portal:agent', 'lead.scope'])->prefix('agent')
+            ->name('portal.agent.profile.')->group($leadProfileRoutes);
+        Route::middleware(['portal:sub_agent', 'lead.scope'])->prefix('sub-agent')
+            ->name('portal.sub-agent.profile.')->group($leadProfileRoutes);
 
         // Other portals — each has its own controller + dedicated dashboard
         // page. Admins satisfy every portal:* check via canAccessPortal(), so
@@ -1561,6 +1722,10 @@ Route::middleware(['auth'])->group(function () {
             // Approved in Principle) — same modal as decline: shared document +
             // optional note; the client email is the configured stage automation.
             Route::post('/cases/{id}/outcome', [ImmigrationController::class, 'recordOutcome'])->name('cases.outcome');
+            // Request for Information — moves to "Request for Information" with a
+            // response deadline, attached RFI PDF(s) shared to the case, and the
+            // configured RFI stage automation (PDFs attached to the email).
+            Route::post('/cases/{id}/rfi', [ImmigrationController::class, 'requestForInformation'])->name('cases.rfi');
             // Inline visa-type update from the Cases table.
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
             // Inline priority update from the Cases table's expanded row.

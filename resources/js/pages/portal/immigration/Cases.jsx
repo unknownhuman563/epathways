@@ -1492,6 +1492,8 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
     const [noteStage, setNoteStage] = useState(null);
     // Positive/interim outcomes open the same attach-document + note modal.
     const [outcomeStage, setOutcomeStage] = useState(null);
+    // "Request for Information" opens a modal for the deadline + RFI PDFs.
+    const [rfiOpen, setRfiOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
@@ -1557,6 +1559,13 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
         if (["Approved Visa", "Interim Visa Issued", "Approved in Principle"].includes(stage)) {
             onClose();
             setOutcomeStage(stage);
+            return;
+        }
+        // Request for Information — capture a response deadline + attach the RFI
+        // PDF(s), then the configured RFI automation emails the client.
+        if (stage === "Request for Information") {
+            onClose();
+            setRfiOpen(true);
             return;
         }
         setSaving(true);
@@ -1641,6 +1650,10 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
 
             {outcomeStage && (
                 <OutcomeModal caseId={caseId} stage={outcomeStage} onClose={() => setOutcomeStage(null)} />
+            )}
+
+            {rfiOpen && (
+                <RequestInfoModal caseId={caseId} onClose={() => setRfiOpen(false)} />
             )}
         </>
     );
@@ -1919,6 +1932,136 @@ function OutcomeModal({ caseId, stage, onClose }) {
                     >
                         {saving ? <Loader2 size={12} className="animate-spin" /> : null}
                         Move to {stage}
+                    </button>
+                </footer>
+            </div>
+        </div>,
+        document.body
+    );
+}
+
+// ─── Request for Information modal ──────────────────────────────────────
+// Opens when a case is moved to "Request for Information" (INZ asked for more).
+// Captures the response DEADLINE, attaches the RFI PDF(s) (shared to the case +
+// client portal), an optional note, and fires the configured RFI stage
+// automation (PDFs attached to the email) when "notify" is ticked.
+function RequestInfoModal({ caseId, onClose }) {
+    const STAGE = "Request for Information";
+    const today = new Date().toISOString().slice(0, 10);
+    const [files, setFiles] = useState([]);
+    const [deadline, setDeadline] = useState("");
+    const [note, setNote] = useState("");
+    const [notify, setNotify] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+
+    const submit = () => {
+        if (saving) return;
+        if (!deadline) { toast.error("Set a response deadline."); return; }
+        setSaving(true);
+        router.post(
+            `/portal/immigration/cases/${caseId}/rfi`,
+            { deadline, note, notify: notify ? 1 : 0, documents: files },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => { toast.success(`Case moved to ${STAGE}`); onClose(); },
+                onError: (e) => toast.error(Object.values(e)[0] || "Could not save"),
+                onFinish: () => setSaving(false),
+            }
+        );
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+                <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${STAGE_COLORS[STAGE] || 'bg-amber-500'}`} /> Request for Information
+                        </h2>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Set the response deadline and attach INZ&apos;s RFI letter(s).</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+                </header>
+
+                <div className="px-5 py-4 space-y-4">
+                    {/* Deadline */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Response deadline <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            <input
+                                type="date"
+                                value={deadline}
+                                min={today}
+                                onChange={(e) => setDeadline(e.target.value)}
+                                className="w-full text-sm pl-9 pr-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900"
+                            />
+                        </div>
+                    </div>
+
+                    {/* RFI PDFs (multiple) */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">RFI document(s) — PDF</label>
+                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-400 text-[12px] text-gray-600">
+                            <Paperclip size={14} className="text-gray-400" />
+                            <span className="truncate">{files.length ? `${files.length} file${files.length > 1 ? "s" : ""} selected` : "Choose PDF file(s)"}</span>
+                            <input
+                                type="file"
+                                accept="application/pdf"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                            />
+                        </label>
+                        {files.length > 0 && (
+                            <ul className="mt-1.5 space-y-0.5">
+                                {files.map((f, i) => (
+                                    <li key={i} className="text-[11px] text-emerald-600 font-medium truncate">• {f.name}</li>
+                                ))}
+                            </ul>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-1">Shared to the client&apos;s portal, shown on the Documents tab, and attached to the email.</p>
+                    </div>
+
+                    {/* Note */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Note (optional)</label>
+                        <textarea
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            rows={3}
+                            maxLength={2000}
+                            placeholder="What INZ is asking for…"
+                            className="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900 resize-none"
+                        />
+                    </div>
+
+                    {/* Email toggle */}
+                    <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="rounded border-gray-300" />
+                        <Mail size={13} className="text-gray-400" /> Email the client (uses the RFI stage automation)
+                    </label>
+                </div>
+
+                <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                    <button
+                        type="button"
+                        onClick={submit}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold bg-gray-900 text-white hover:bg-black disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 size={12} className="animate-spin" /> : null}
+                        Move to {STAGE}
                     </button>
                 </footer>
             </div>

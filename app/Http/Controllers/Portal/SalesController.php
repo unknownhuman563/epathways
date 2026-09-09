@@ -626,6 +626,18 @@ class SalesController extends Controller
                         'original_name' => $d->original_name,
                         'size' => $d->size,
                         'created_at' => optional($d->created_at)->toIso8601String(),
+                        'note' => trim((string) ($d->note ?? '')) ?: null,
+                        'notes' => collect(is_array($d->notes) ? $d->notes : [])
+                            ->map(fn ($n) => [
+                                'id' => $n['id'] ?? (string) \Illuminate\Support\Str::uuid(),
+                                'tag' => $n['tag'] ?? 'note',
+                                'body' => $n['body'] ?? '',
+                                'author' => $n['author'] ?? 'Staff',
+                                'role' => $n['role'] ?? null,
+                                'created_at' => $n['created_at'] ?? null,
+                                'actioned_at' => $n['actioned_at'] ?? null,
+                                'replies' => array_values(is_array($n['replies'] ?? null) ? $n['replies'] : []),
+                            ])->values(),
                         'uploader' => $d->uploader ? [
                             'id' => $d->uploader->id,
                             'name' => $d->uploader->name,
@@ -792,7 +804,7 @@ class SalesController extends Controller
                         // Reviewer's "request changes" note + the specific
                         // programmes flagged for revision (from Program
                         // Verification). Null when nothing was requested.
-                        'changes_requested' => (function () use ($l) {
+                        'changes_requested' => (function () use ($l, $ownerNames) {
                             $r = is_array($l->proposal_review) ? $l->proposal_review : [];
                             $cr = $r['changes_requested'] ?? null;
 
@@ -800,6 +812,7 @@ class SalesController extends Controller
                                 'message' => $cr['message'] ?? null,
                                 'program_ids' => array_map('intval', $cr['program_ids'] ?? []),
                                 'at' => $cr['at'] ?? null,
+                                'by' => isset($cr['by']) ? ($ownerNames[$cr['by']] ?? null) : null,
                             ] : null;
                         })(),
                         // Review-inbox grouping: action sits with staff (needs_you)
@@ -872,10 +885,23 @@ class SalesController extends Controller
                 ->filter()
                 ->values();
 
-            // Roster for the "+ New" picker — every pipeline lead so staff
-            // can generate a proposal/agreement for someone who doesn't
-            // have one yet.
-            $picker = Lead::inLeadPipeline()
+            // Roster for the "+ New" picker — leads staff can generate a
+            // proposal/agreement for. Pipeline leads, PLUS students and
+            // free-assessment / education-enrolment leads: those progress out of
+            // the raw pipeline (a free-assessment enquiry becomes a student or a
+            // case) but staff still generate documents for them, and
+            // inLeadPipeline() alone wrongly hid them — so a free-assessment
+            // lead's name couldn't be searched here.
+            $picker = Lead::where(function ($q) {
+                $q->where(function ($p) {
+                    $p->where('is_student', false)
+                        ->where('is_immigration_case', false)
+                        ->where('is_accommodation_client', false)
+                        ->where('is_english_student', false);
+                })
+                    ->orWhere('is_student', true)
+                    ->orWhereIn('source', ['free-assessment', 'education-enrolment']);
+            })
                 ->orderBy('first_name')
                 ->limit(500)
                 ->get(['id', 'lead_id', 'first_name', 'last_name', 'email'])
