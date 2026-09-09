@@ -34,7 +34,7 @@ class CommunicationService
      *
      * @return array{email: ?MessageLog, sms: ?MessageLog}
      */
-    public function sendTemplated(string $key, Lead $lead, array $extraContext = [], ?string $department = null, ?string $extraCc = null): array
+    public function sendTemplated(string $key, Lead $lead, array $extraContext = [], ?string $department = null, ?string $extraCc = null, array $attachments = []): array
     {
         $template = MessageTemplate::resolve($key, $department);
         if (! $template) {
@@ -45,7 +45,7 @@ class CommunicationService
             return ['email' => null, 'sms' => null];
         }
 
-        return $this->dispatch($template, $lead, $extraContext, [], $extraCc);
+        return $this->dispatch($template, $lead, $extraContext, $attachments, $extraCc);
     }
 
     /**

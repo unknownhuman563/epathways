@@ -31,7 +31,7 @@ class EmailAutomationService
      * the template variables (fees, dates, names — never generated, always
      * passed from the calling action).
      */
-    public function fire(string $eventKey, Lead $lead, array $context = []): bool
+    public function fire(string $eventKey, Lead $lead, array $context = [], array $attachments = []): bool
     {
         $firedClient = false;
         try {
@@ -50,7 +50,7 @@ class EmailAutomationService
                 if (empty($msg->template_key)) {
                     continue;
                 }
-                if ($this->deliver($msg, $lead, $context, $department)) {
+                if ($this->deliver($msg, $lead, $context, $department, $attachments)) {
                     $firedClient = true;
                 }
             }
@@ -63,7 +63,7 @@ class EmailAutomationService
 
     /** Returns true when a message was sent to the CLIENT (so a caller can skip a
      *  built-in client email and avoid double-sending). Staff notices return false. */
-    private function deliver(EmailAutomationMessage $msg, Lead $lead, array $context, string $department): bool
+    private function deliver(EmailAutomationMessage $msg, Lead $lead, array $context, string $department, array $attachments = []): bool
     {
         // When configured, keep the lead's own recruiting agent in the loop by
         // CC-ing them — resolved per-lead, so each client's agent is used.
@@ -73,7 +73,7 @@ class EmailAutomationService
             // The client is the lead — CommunicationService handles email/SMS
             // routing and message logging for us.
             if (! empty($lead->email) || ! empty($lead->phone)) {
-                $this->comms->sendTemplated($msg->template_key, $lead, $context, $department, $agentCc);
+                $this->comms->sendTemplated($msg->template_key, $lead, $context, $department, $agentCc, $attachments);
 
                 return true;
             }
@@ -109,7 +109,7 @@ class EmailAutomationService
             array_values(array_unique($emails)),
             $subject !== '' ? $subject : 'Case update',
             $body,
-            [],
+            $attachments,
             true,
             $lead->id,
             $template->to_extra,
