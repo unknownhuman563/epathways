@@ -643,25 +643,14 @@ class LeadDocumentController extends Controller
             $overrides = $this->feeOverridesFromRequest($request);
 
             if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)) {
-                if ($type === 'consultancy_onshore') {
-                    $generator->onshoreEngagement($lead, $overrides);
-                } elseif ($type === 'consultancy_offshore_zero') {
-                    // Same offshore document, all fees waived (NZ$0).
-                    $generator->consultancyOffshore($lead, array_merge($overrides, ['zero_fees' => true]));
-                } elseif ($type === 'consultancy_offshore') {
-                    $generator->consultancyOffshore($lead, $overrides);
-                } else {
-                    $generator->consultancy($lead, $consultancyScenario, $overrides);
-                }
-                $friendly = 'Consultancy Agreement';
-
-                // Consultancy agreements now go through verification (the
-                // Consultancy Agreement Verification module) before they reach
-                // the client: generating one snapshots its fees and submits it as
-                // PENDING — the client is emailed only once it's approved.
+                // Consultancy agreements go through verification BEFORE any PDF
+                // exists: submitting only snapshots the scenario + fees + bank
+                // details onto the lead. The reviewer previews it live; the PDF
+                // is generated and attached only on approval, then posted to the
+                // client's tracking link.
                 \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
 
-                return back()->with('success', "Consultancy Agreement generated for {$lead->first_name} {$lead->last_name} — submitted for verification.");
+                return back()->with('success', "Consultancy Agreement submitted for verification — {$lead->first_name} {$lead->last_name}.");
             } elseif ($type === 'english_engagement') {
                 $generator->englishEngagement($lead, $overrides['currency'] ?? 'php');
                 $friendly = 'English Engagement';
@@ -2140,6 +2129,96 @@ class LeadDocumentController extends Controller
     }
 
     // ── DOWNLOAD — role-gated ───────────────────────────────────────────────
+
+    /**
+     * Save an inline staff note on a generated document (the Notes column on
+     * the Proposal & Agreements → Agreements table). Blank clears it.
+     */
+    public function updateDocumentNote(Request $request, $docId)
+    {
+        $data = $request->validate(['note' => 'nullable|string|max:2000']);
+        $doc = LeadDocument::findOrFail($docId);
+        $doc->note = trim((string) ($data['note'] ?? '')) ?: null;
+        $doc->save();
+
+        return back()->with('success', 'Note saved.');
+    }
+
+    /**
+     * Threaded staff notes on a generated document (Proposal & Agreements →
+     * Agreements Notes column) — add a note, reply to one, or toggle its
+     * "actioned" flag. Mirrors the per-programme note thread on the Proposals
+     * tab, so generation and verification staff can discuss an agreement.
+     */
+    public function addDocumentNote(Request $request, $docId)
+    {
+        $data = $request->validate(['body' => 'required|string|max:2000', 'tag' => 'nullable|in:note,change_requested']);
+        $u = $request->user();
+        $this->mutateDocNotes($docId, function (array &$notes) use ($u, $data) {
+            $notes[] = [
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'tag' => $data['tag'] ?? 'note',
+                'body' => $data['body'],
+                'author' => $u->name,
+                'author_id' => $u->id,
+                'role' => $u->role,
+                'created_at' => now()->toIso8601String(),
+                'actioned_at' => null,
+                'actioned_by' => null,
+                'replies' => [],
+            ];
+        });
+
+        return back()->with('success', 'Note added.');
+    }
+
+    public function replyDocumentNote(Request $request, $docId, $noteId)
+    {
+        $data = $request->validate(['body' => 'required|string|max:2000']);
+        $u = $request->user();
+        $this->mutateDocNotes($docId, function (array &$notes) use ($u, $data, $noteId) {
+            foreach ($notes as &$n) {
+                if (($n['id'] ?? null) === $noteId) {
+                    $n['replies'][] = [
+                        'id' => (string) \Illuminate\Support\Str::uuid(),
+                        'body' => $data['body'],
+                        'author' => $u->name,
+                        'author_id' => $u->id,
+                        'role' => $u->role,
+                        'created_at' => now()->toIso8601String(),
+                    ];
+                }
+            }
+        });
+
+        return back()->with('success', 'Reply added.');
+    }
+
+    public function toggleDocumentNoteActioned(Request $request, $docId, $noteId)
+    {
+        $u = $request->user();
+        $this->mutateDocNotes($docId, function (array &$notes) use ($u, $noteId) {
+            foreach ($notes as &$n) {
+                if (($n['id'] ?? null) === $noteId) {
+                    $done = ! empty($n['actioned_at']);
+                    $n['actioned_at'] = $done ? null : now()->toIso8601String();
+                    $n['actioned_by'] = $done ? null : $u->id;
+                }
+            }
+        });
+
+        return back();
+    }
+
+    /** Load a document's notes thread, mutate it, and persist. */
+    private function mutateDocNotes($docId, callable $fn): void
+    {
+        $doc = LeadDocument::findOrFail($docId);
+        $notes = is_array($doc->notes) ? $doc->notes : [];
+        $fn($notes);
+        $doc->notes = $notes;
+        $doc->save();
+    }
 
     public function download(Request $request, $docId)
     {

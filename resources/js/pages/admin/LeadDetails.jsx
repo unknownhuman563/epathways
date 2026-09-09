@@ -11,7 +11,8 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare, Search, Pin,
+    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare, Search, Pin, Loader2,
+    Building2,
 } from 'lucide-react';
 import { LeadStatStrip, LeadProgressStrip, LeadActivityTimeline } from '@/components/leads/LeadOverviewStrips';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
@@ -174,6 +175,7 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
     const chosen = programs.find((p) => p.id === chosenId) || null;
     const currentIds = programs.map((p) => p.id);
     const MAX = 5;
+    const [reviewing, setReviewing] = useState(null);
 
     // Inline shortlist edit — persists to leads.proposed_program_ids without
     // spawning a proposal version (that's the Proposal & Agreements flow).
@@ -281,7 +283,15 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                                         )}
                                         {p.category && <span className="text-[10px] font-medium text-gray-500 capitalize">{p.category}</span>}
                                     </div>
-                                    <h3 className="text-[13px] font-bold text-gray-900 leading-snug mb-2">{p.title}</h3>
+                                    <h3 className="text-[13px] font-bold text-gray-900 leading-snug mb-1">{p.title}</h3>
+                                    {/* Two providers can offer the same qualification, so the
+                                        school is what tells one shortlist card from another. */}
+                                    {p.school && (
+                                        <p className="text-[11px] font-medium text-gray-500 leading-snug mb-2 flex items-start gap-1.5">
+                                            <Building2 size={11} className="text-gray-400 mt-0.5 shrink-0" /> {p.school}
+                                        </p>
+                                    )}
+                                    {p.review_status && <ReviewBadge status={p.review_status} />}
                                     <ul className="text-[11px] text-gray-600 space-y-1 mb-3">
                                         {p.location && (
                                             <li className="inline-flex items-center gap-1.5"><MapPin size={11} className="text-gray-400" /> {p.location}</li>
@@ -293,15 +303,28 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                                             <li className="inline-flex items-center gap-1.5"><Calendar size={11} className="text-gray-400" /> Intake: {p.intake_months}</li>
                                         )}
                                     </ul>
-                                    {p.price_text && <p className="text-[11px] font-semibold text-gray-700 mb-3">{p.price_text}</p>}
-                                    <div className="mt-auto">
+                                    {(p.fee != null || p.price_text) && (
+                                        <p className="text-[11px] font-semibold text-gray-700 mb-3">
+                                            {p.fee != null ? Number(p.fee).toLocaleString() : p.price_text}
+                                        </p>
+                                    )}
+                                    <div className="mt-auto flex items-center gap-3">
+                                        {canShortlist && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setReviewing(p)}
+                                                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#436235] hover:text-[#2f4725] transition-colors"
+                                            >
+                                                <Eye size={12} /> View
+                                            </button>
+                                        )}
                                         <a
                                             href={p.public_url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 hover:text-[#436235] transition-colors"
+                                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 hover:text-[#436235] transition-colors"
                                         >
-                                            <Eye size={12} /> View program
+                                            View program
                                         </a>
                                     </div>
                                 </div>
@@ -310,7 +333,120 @@ function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
                     })}
                 </div>
             )}
+
+            {reviewing && (
+                <ProgramReviewModal
+                    program={reviewing}
+                    leadId={leadId}
+                    writeBase={writeBase}
+                    onClose={() => setReviewing(null)}
+                />
+            )}
         </div>
+    );
+}
+
+// Small status chip on a proposed-program card.
+function ReviewBadge({ status }) {
+    const map = {
+        verified: ['bg-emerald-50 text-emerald-700 border-emerald-200', 'Verified'],
+        rejected: ['bg-rose-50 text-rose-600 border-rose-200', 'Rejected'],
+        needs_check: ['bg-amber-50 text-amber-700 border-amber-200', 'Needs check'],
+    };
+    const [cls, label] = map[status] || ['bg-gray-50 text-gray-600 border-gray-200', status];
+    return (
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border mb-2 ${cls}`}>
+            {label}
+        </span>
+    );
+}
+
+// Review a shortlisted program: verified / rejected, remarks, and the amount.
+function ProgramReviewModal({ program, leadId, writeBase, onClose }) {
+    const [status, setStatus] = useState(program.review_status || null);
+    const [remarks, setRemarks] = useState(program.remarks || '');
+    const [amount, setAmount] = useState(program.fee != null ? String(program.fee) : '');
+    const [saving, setSaving] = useState(false);
+
+    const save = () => {
+        setSaving(true);
+        router.post(`${writeBase}/leads/${leadId}/programs/${program.id}/review`, {
+            status,
+            remarks,
+            amount: amount === '' ? null : amount,
+        }, {
+            preserveScroll: true,
+            preserveState: false,
+            onSuccess: () => { toast.success('Program review saved.'); onClose(); },
+            onError: (e) => toast.error(Object.values(e || {})[0] || 'Could not save the review.'),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <>
+            <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+                <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">Review program</p>
+                            <h3 className="text-[15px] font-bold text-gray-900 leading-snug">{program.title}</h3>
+                            {program.school && (
+                                <p className="text-[11px] font-medium text-gray-500 leading-snug">{program.school}</p>
+                            )}
+                            <a href={program.public_url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#436235] hover:underline mt-0.5">
+                                <Eye size={11} /> View full program
+                            </a>
+                        </div>
+                        <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 shrink-0"><X size={18} /></button>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">Decision</div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => setStatus('verified')}
+                                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-bold transition-colors ${
+                                        status === 'verified' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                                    }`}>
+                                    <Check size={13} /> Verified
+                                </button>
+                                <button type="button" onClick={() => setStatus('rejected')}
+                                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-bold transition-colors ${
+                                        status === 'rejected' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'
+                                    }`}>
+                                    <X size={13} /> Reject
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">Amount</div>
+                            <input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)}
+                                placeholder={program.price_text || 'Set amount'}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-gray-900" />
+                        </div>
+
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">Remarks / notes</div>
+                            <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)}
+                                placeholder="Internal remarks about this program…"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-gray-900 resize-y" />
+                        </div>
+                    </div>
+
+                    <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                        <button type="button" onClick={onClose} className="text-[13px] font-semibold text-gray-500 hover:text-gray-800">Cancel</button>
+                        <button type="button" onClick={save} disabled={saving}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[13px] font-bold hover:bg-black disabled:opacity-40">
+                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save review
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
     );
 }
 

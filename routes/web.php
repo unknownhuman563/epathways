@@ -563,12 +563,16 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('module:program_verification.consultancy')->group(function () {
         Route::get('/consultancy-verification', [\App\Http\Controllers\ConsultancyVerificationController::class, 'index'])
             ->name('consultancy-verification.index');
+        Route::get('/consultancy-verification/{lead}/preview', [\App\Http\Controllers\ConsultancyVerificationController::class, 'preview'])
+            ->name('consultancy-verification.preview');
         Route::post('/consultancy-verification/{lead}/meta', [\App\Http\Controllers\ConsultancyVerificationController::class, 'updateMeta'])
             ->name('consultancy-verification.meta');
         Route::post('/consultancy-verification/{lead}/request-changes', [\App\Http\Controllers\ConsultancyVerificationController::class, 'requestChanges'])
             ->name('consultancy-verification.request-changes');
         Route::post('/consultancy-verification/{lead}/verify', [\App\Http\Controllers\ConsultancyVerificationController::class, 'verify'])
             ->name('consultancy-verification.verify');
+        Route::post('/consultancy-verification/{lead}/draft', [\App\Http\Controllers\ConsultancyVerificationController::class, 'draft'])
+            ->name('consultancy-verification.draft');
         Route::post('/consultancy-verification/{lead}/approve', [\App\Http\Controllers\ConsultancyVerificationController::class, 'approve'])
             ->name('consultancy-verification.approve');
         Route::post('/consultancy-verification/{lead}/notes/{item}', [\App\Http\Controllers\ConsultancyVerificationController::class, 'addNote'])
@@ -910,6 +914,9 @@ Route::middleware(['auth'])->group(function () {
         // Inline edit of the proposed-program shortlist from the Lead Stats
         // "Programs offered" card (no proposal-version churn).
         Route::post('/admin/leads/{id}/shortlist', [LeadController::class, 'updateProposedShortlist'])->name('admin.leads.shortlist');
+        // Per-program review from the "Programs offered" card: verified/rejected +
+        // remarks + editable amount, saved onto leads.proposed_program_meta.
+        Route::post('/admin/leads/{id}/programs/{program}/review', [LeadController::class, 'reviewProposedProgram'])->name('admin.leads.program-review');
 
         // Internal notes — any staff role can add, only author or admin can edit/delete.
         Route::get('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'index'])
@@ -1052,6 +1059,16 @@ Route::middleware(['auth'])->group(function () {
         // Staff download — same controller, role-gated inside.
         Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
             ->name('admin.documents.download');
+        // Inline note on a generated agreement (Proposal & Agreements table).
+        Route::post('/admin/documents/{docId}/note', [LeadDocumentController::class, 'updateDocumentNote'])
+            ->name('admin.documents.note');
+        // Threaded staff notes on a generated document (add / reply / actioned).
+        Route::post('/admin/documents/{docId}/notes', [LeadDocumentController::class, 'addDocumentNote'])
+            ->name('admin.documents.notes.add');
+        Route::post('/admin/documents/{docId}/notes/{noteId}/reply', [LeadDocumentController::class, 'replyDocumentNote'])
+            ->name('admin.documents.notes.reply');
+        Route::post('/admin/documents/{docId}/notes/{noteId}/actioned', [LeadDocumentController::class, 'toggleDocumentNoteActioned'])
+            ->name('admin.documents.notes.actioned');
         // Bundle all of a lead's documents into a single ZIP.
         Route::get('/admin/leads/{leadId}/documents/download-all', [LeadDocumentController::class, 'downloadAll'])
             ->name('admin.leads.documents.download-all');
