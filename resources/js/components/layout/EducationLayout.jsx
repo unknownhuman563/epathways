@@ -32,9 +32,19 @@ export default function EducationLayout({ children }) {
         { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },
         { name: "Documents", href: "/portal/education/documents", icon: <FolderOpen size={20} />, badge: badges.docs_pending_review, badgeTone: "warning" },
-        // Restricted module — only shows when granted (e.g. to Dinah).
-        ...(modules.includes("program_verification")
-            ? [{ name: "Program Verification", href: "/program-verification", icon: <BadgeCheck size={20} /> }]
+        // Restricted module — only shows when granted (e.g. to Dinah). Two
+        // parts, each its own grantable feature.
+        ...((modules.includes("program_verification.proposal") || modules.includes("program_verification.consultancy"))
+            ? [{
+                name: "Verification",
+                icon: <BadgeCheck size={20} />,
+                children: [
+                    ...(modules.includes("program_verification.proposal")
+                        ? [{ name: "Proposal", href: "/program-verification", icon: <FileText size={16} /> }] : []),
+                    ...(modules.includes("program_verification.consultancy")
+                        ? [{ name: "Consultancy Agreement", href: "/consultancy-verification", icon: <ClipboardCheck size={16} /> }] : []),
+                ],
+            }]
             : []),
         { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
 

@@ -655,26 +655,13 @@ class LeadDocumentController extends Controller
                 }
                 $friendly = 'Consultancy Agreement';
 
-                // Generating the agreement emails the client the
-                // `consultancy_agreement` template and advances the pipeline to
-                // "Consultancy Agreement Sent". Opt-out via notify=false; a
-                // lead already further along is not regressed. Non-fatal.
-                $notify = $request->has('notify') ? $request->boolean('notify') : true;
-                if ($notify && ! empty($lead->email)) {
-                    try {
-                        app(\App\Services\CommunicationService::class)->sendTemplated('consultancy_agreement', $lead);
+                // Consultancy agreements now go through verification (the
+                // Consultancy Agreement Verification module) before they reach
+                // the client: generating one snapshots its fees and submits it as
+                // PENDING — the client is emailed only once it's approved.
+                \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
 
-                        $stages = \App\Models\Lead::STAGES;
-                        $curIdx = array_search($lead->status, $stages, true);
-                        $tgtIdx = array_search('Consultancy Agreement Sent', $stages, true);
-                        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
-                            $lead->status = 'Consultancy Agreement Sent';
-                            $lead->save();
-                        }
-                    } catch (\Throwable $e) {
-                        Log::warning('consultancy_agreement email on generate failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
-                    }
-                }
+                return back()->with('success', "Consultancy Agreement generated for {$lead->first_name} {$lead->last_name} — submitted for verification.");
             } elseif ($type === 'english_engagement') {
                 $generator->englishEngagement($lead, $overrides['currency'] ?? 'php');
                 $friendly = 'English Engagement';
@@ -1754,6 +1741,32 @@ class LeadDocumentController extends Controller
         if (! ($res['email'] ?? null)) {
             Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'proposal'));
         }
+
+        return true;
+    }
+
+    /**
+     * Send the client the consultancy-agreement email and advance the pipeline
+     * to "Consultancy Agreement Sent". Called when a consultancy agreement is
+     * APPROVED in verification (was previously fired on generate). `$sendMail`
+     * false advances the status but skips the built-in send (so a configured
+     * client automation can own the email without a double-send).
+     */
+    public function sendConsultancyAgreementEmail(Lead $lead, bool $sendMail = true): bool
+    {
+        $stages = \App\Models\Lead::STAGES;
+        $curIdx = array_search($lead->status, $stages, true);
+        $tgtIdx = array_search('Consultancy Agreement Sent', $stages, true);
+        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+            $lead->status = 'Consultancy Agreement Sent';
+            $lead->save();
+        }
+
+        if (! $sendMail || empty($lead->email)) {
+            return false;
+        }
+
+        app(\App\Services\CommunicationService::class)->sendTemplated('consultancy_agreement', $lead);
 
         return true;
     }

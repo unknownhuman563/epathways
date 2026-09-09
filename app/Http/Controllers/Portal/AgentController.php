@@ -73,6 +73,25 @@ class AgentController extends Controller
         ]);
     }
 
+    /**
+     * Students, read-only — the leads this agent recruited who have since been
+     * converted to a student, an English learner or an immigration case.
+     *
+     * Renders the shared Education "Students" screen with the query narrowed to
+     * `agent_id = me`. `portal:agent` only proves the role; without this scope
+     * an agent would see every student in the business. The screen's write
+     * actions are switched off server-side (see `readOnly` in the payload) —
+     * an agent tracks their referrals' progress, they don't administer them.
+     */
+    public function students()
+    {
+        $me = Auth::id();
+
+        return app(EducationController::class)->students(
+            fn ($q) => $q->where('agent_id', $me)
+        );
+    }
+
     /** Agent's own account page — mirrors the pattern used by sales /
      *  education / immigration portals. The referral link is exposed too
      *  so the agent can copy it from here as well as the dashboard. */

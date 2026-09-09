@@ -1026,6 +1026,26 @@ class SubAgentController extends Controller
         return array_slice($out, 0, 7);
     }
 
+    /**
+     * Students, read-only — the parent agent's referrals who have since been
+     * converted to a student, an English learner or an immigration case.
+     *
+     * Same shared Education screen, narrowed to `agent_id = parent_agent_id`,
+     * which is the row filter every other read here uses. Writes are switched
+     * off server-side (`readOnly` in the payload): a sub-agent follows their
+     * agent's students through, they don't administer them.
+     */
+    public function students()
+    {
+        $agentId = $this->parentAgentId();
+
+        return app(EducationController::class)->students(
+            // No parent agent yet → no referrals, so match nothing rather than
+            // fall through to an unscoped list.
+            fn ($q) => $q->where('agent_id', $agentId ?: 0)
+        );
+    }
+
     public function profile()
     {
         $user = Auth::user();

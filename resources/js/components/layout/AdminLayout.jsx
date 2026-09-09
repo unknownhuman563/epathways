@@ -68,7 +68,14 @@ const ADMIN_NAV = [
     { name: "Visa Approved", href: "/admin/visa-approvals", icon: <Award size={20} /> },
     // Restricted module — hidden unless granted (default super-admin-only).
     { name: "Agents", href: "/admin/agents", icon: <UserCheck size={20} />, module: "agents" },
-    { name: "Program Verification", href: "/program-verification", icon: <BadgeCheck size={20} />, module: "program_verification" },
+    {
+        name: "Verification",
+        icon: <BadgeCheck size={20} />,
+        children: [
+            { name: "Proposal", href: "/program-verification", icon: <FileText size={16} />, module: "program_verification.proposal" },
+            { name: "Consultancy Agreement", href: "/consultancy-verification", icon: <Wallet size={16} />, module: "program_verification.consultancy" },
+        ],
+    },
     {
         name: "Social",
         icon: <Radio size={20} />,
