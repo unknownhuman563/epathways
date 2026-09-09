@@ -1675,6 +1675,10 @@ Route::middleware(['auth'])->group(function () {
             // Approved in Principle) — same modal as decline: shared document +
             // optional note; the client email is the configured stage automation.
             Route::post('/cases/{id}/outcome', [ImmigrationController::class, 'recordOutcome'])->name('cases.outcome');
+            // Request for Information — moves to "Request for Information" with a
+            // response deadline, attached RFI PDF(s) shared to the case, and the
+            // configured RFI stage automation (PDFs attached to the email).
+            Route::post('/cases/{id}/rfi', [ImmigrationController::class, 'requestForInformation'])->name('cases.rfi');
             // Inline visa-type update from the Cases table.
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
             // Inline priority update from the Cases table's expanded row.

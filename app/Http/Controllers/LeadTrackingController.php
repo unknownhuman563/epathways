@@ -633,11 +633,25 @@ class LeadTrackingController extends Controller
 
                 try {
                     $program = \App\Models\Program::find($newId);
-                    app(\App\Services\CommunicationService::class)->sendTemplated('program_selected', $lead, [
+                    $context = [
                         'program_name' => $program?->title ?? '',
                         'program_level' => $program && $program->level ? 'Level '.$program->level : '',
                         'program_location' => $program?->location ?? '',
-                    ]);
+                    ];
+
+                    // Admin-configurable automation first (Admin → Email
+                    // Automation → "Client chose a program"). It reports whether
+                    // it actually reached the CLIENT, so the built-in
+                    // program_selected template only goes out when no client
+                    // message is configured — otherwise the applicant would get
+                    // two emails for the same click.
+                    $firedClient = app(\App\Services\EmailAutomationService::class)
+                        ->fire('education.program.chosen', $lead->fresh(), $context);
+
+                    if (! $firedClient) {
+                        app(\App\Services\CommunicationService::class)
+                            ->sendTemplated('program_selected', $lead, $context);
+                    }
                 } catch (\Throwable $e) {
                     Log::warning('program_selected email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
                 }

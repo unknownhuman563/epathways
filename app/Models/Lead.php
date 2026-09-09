@@ -198,6 +198,24 @@ class Lead extends Model
     }
 
     /**
+     * The RFI response deadline lives on the most recent "Request for
+     * Information" stage-history entry (set by ImmigrationController::
+     * requestForInformation) rather than a dedicated column — the `leads` god
+     * table is already at InnoDB's row-size limit. Read-only; write it through
+     * that action, which annotates the stage entry.
+     */
+    public function getRfiDeadlineAttribute(): ?\Illuminate\Support\Carbon
+    {
+        foreach (array_reverse($this->stage_history ?? []) as $entry) {
+            if (($entry['stage'] ?? null) === 'Request for Information' && ! empty($entry['rfi_deadline'])) {
+                return \Illuminate\Support\Carbon::parse($entry['rfi_deadline']);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Move the immigration case forward to `$to`, but only from one of the
      * `$from` stages (an unset stage always qualifies) — so an automatic
      * transition never downgrades a case that's already further along or clobbers

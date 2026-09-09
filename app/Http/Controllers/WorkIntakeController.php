@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiresEnquiryAutomation;
+use App\Http\Controllers\Concerns\SyncsIntakeToCase;
 use App\Models\Assessment;
 use App\Models\WorkIntake;
 use App\Support\IntakeVisaTypeMap;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 class WorkIntakeController extends Controller
 {
     use FiresEnquiryAutomation;
+    use SyncsIntakeToCase;
 
     public function showForm()
     {
@@ -103,6 +105,8 @@ class WorkIntakeController extends Controller
             DB::commit();
 
             $this->fireEnquiryCaptured($intake, 'Work Visa (AEWV)');
+
+            $this->syncIntakeToExistingCase($intake, 'Work Visa (AEWV)');
 
             // return redirect()->route('assessment.pay', $assessment->token);
             // Stay on the form page and flip it to the persistent
