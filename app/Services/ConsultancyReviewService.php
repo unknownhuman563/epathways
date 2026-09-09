@@ -82,6 +82,8 @@ class ConsultancyReviewService
         $items = static::feeItems($type, $overrides);
 
         // Fresh per-item meta (amount + status + note thread), keyed by item key.
+        // Everything lives INSIDE consultancy_review (a single JSON column — the
+        // leads row-size limit forbids a second one).
         $meta = [];
         foreach ($items as $it) {
             $meta[$it['key']] = [
@@ -94,7 +96,6 @@ class ConsultancyReviewService
             ];
         }
 
-        $lead->consultancy_meta = $meta ?: null;
         $lead->consultancy_review = [
             'status' => 'pending',
             'submitted_at' => now()->toIso8601String(),
@@ -104,6 +105,7 @@ class ConsultancyReviewService
             'applicant_mode' => $overrides['applicant_mode'] ?? 'single',
             'currency' => $overrides['currency'] ?? 'php',
             'item_keys' => array_map(fn ($it) => $it['key'], $items),
+            'items' => $meta,
             'emailed' => false,
         ];
         $lead->save();

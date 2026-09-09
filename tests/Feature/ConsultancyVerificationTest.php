@@ -39,9 +39,9 @@ class ConsultancyVerificationTest extends TestCase
 
         $this->assertSame('pending', $lead->consultancy_review['status']);
         $this->assertSame(['school_enrolment', 'english_proficiency'], $lead->consultancy_review['item_keys']);
-        $this->assertSame(120000, $lead->consultancy_meta['school_enrolment']['amount']);
-        $this->assertSame(14500, $lead->consultancy_meta['english_proficiency']['amount']);
-        $this->assertSame('needs_check', $lead->consultancy_meta['school_enrolment']['status']);
+        $this->assertSame(120000, $lead->consultancy_review['items']['school_enrolment']['amount']);
+        $this->assertSame(14500, $lead->consultancy_review['items']['english_proficiency']['amount']);
+        $this->assertSame('needs_check', $lead->consultancy_review['items']['school_enrolment']['status']);
     }
 
     public function test_index_returns_queue_with_items(): void
@@ -72,7 +72,7 @@ class ConsultancyVerificationTest extends TestCase
                 'meta' => ['school_enrolment' => ['amount' => 99000, 'status' => 'verified']],
             ])->assertRedirect();
 
-        $m = $lead->refresh()->consultancy_meta['school_enrolment'];
+        $m = $lead->refresh()->consultancy_review['items']['school_enrolment'];
         $this->assertSame(99000, $m['amount']);
         $this->assertSame('verified', $m['status']);
         $this->assertTrue($m['edited']);
@@ -108,7 +108,7 @@ class ConsultancyVerificationTest extends TestCase
         $lead->refresh();
         $this->assertSame('approved', $lead->consultancy_review['status']);
         foreach (['school_enrolment', 'english_proficiency'] as $k) {
-            $this->assertSame('verified', $lead->consultancy_meta[$k]['status']);
+            $this->assertSame('verified', $lead->consultancy_review['items'][$k]['status']);
         }
     }
 
@@ -124,7 +124,7 @@ class ConsultancyVerificationTest extends TestCase
         $review = $lead->refresh()->consultancy_review;
         $this->assertSame('pending', $review['status']);
         $this->assertSame(['english_proficiency'], $review['changes_requested']['item_keys']);
-        $notes = $lead->consultancy_meta['english_proficiency']['notes'];
+        $notes = $lead->consultancy_review['items']['english_proficiency']['notes'];
         $this->assertCount(1, $notes);
         $this->assertSame('change_requested', $notes[0]['tag']);
     }
@@ -135,12 +135,12 @@ class ConsultancyVerificationTest extends TestCase
         $reviewer = $this->reviewer();
 
         $this->actingAs($reviewer)->post("/consultancy-verification/{$lead->id}/notes/school_enrolment", ['body' => 'Confirm with finance'])->assertRedirect();
-        $noteId = $lead->refresh()->consultancy_meta['school_enrolment']['notes'][0]['id'];
+        $noteId = $lead->refresh()->consultancy_review['items']['school_enrolment']['notes'][0]['id'];
 
         $this->actingAs($reviewer)->post("/consultancy-verification/{$lead->id}/notes/school_enrolment/{$noteId}/reply", ['body' => 'Done'])->assertRedirect();
         $this->actingAs($reviewer)->post("/consultancy-verification/{$lead->id}/notes/school_enrolment/{$noteId}/actioned")->assertRedirect();
 
-        $note = $lead->refresh()->consultancy_meta['school_enrolment']['notes'][0];
+        $note = $lead->refresh()->consultancy_review['items']['school_enrolment']['notes'][0];
         $this->assertCount(1, $note['replies']);
         $this->assertNotNull($note['actioned_at']);
     }

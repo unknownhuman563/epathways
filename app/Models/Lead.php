@@ -333,7 +333,6 @@ class Lead extends Model
         // keyed by program id — drives the Program Verification table.
         'proposed_program_meta',
         'consultancy_review',
-        'consultancy_meta',
         // Study-proposal verification workflow (pending → verified → approved).
         'proposal_review',
         // Lead's chosen program (FK to programs.id) from that shortlist,
@@ -468,7 +467,6 @@ class Lead extends Model
         'proposed_program_meta' => 'array',
         'proposal_review' => 'array',
         'consultancy_review' => 'array',
-        'consultancy_meta' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',

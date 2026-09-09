@@ -14,8 +14,9 @@ use Illuminate\Support\Str;
  * PENDING; a reviewer confirms / edits each fee line-item, adds internal notes,
  * then Verify → Approve. Only on approval is the client emailed the agreement.
  *
- * State lives on the lead: `consultancy_review` (workflow) + `consultancy_meta`
- * (per fee-item amount / status / note thread).
+ * State lives on the lead in a single JSON column `consultancy_review`: the
+ * workflow envelope PLUS the per fee-item meta under `items` (amount / status /
+ * note thread). One column, because the wide `leads` row can't take a second.
  */
 class ConsultancyVerificationController extends Controller
 {
@@ -46,7 +47,7 @@ class ConsultancyVerificationController extends Controller
 
         $rows = $leads->map(function (Lead $l) use ($userNames, &$counts) {
             $review = is_array($l->consultancy_review) ? $l->consultancy_review : [];
-            $meta = is_array($l->consultancy_meta) ? $l->consultancy_meta : [];
+            $meta = is_array($review['items'] ?? null) ? $review['items'] : [];
             $status = $review['status'] ?? 'pending';
 
             if ($status === 'pending') {
@@ -136,7 +137,8 @@ class ConsultancyVerificationController extends Controller
             'meta.*.note' => 'nullable|string|max:1000',
         ]);
 
-        $meta = is_array($lead->consultancy_meta) ? $lead->consultancy_meta : [];
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        $meta = is_array($review['items'] ?? null) ? $review['items'] : [];
         $keys = array_keys($meta);
 
         foreach ($validated['meta'] as $key => $patch) {
@@ -158,7 +160,8 @@ class ConsultancyVerificationController extends Controller
             $meta[$key] = $current;
         }
 
-        $lead->consultancy_meta = $meta ?: null;
+        $review['items'] = $meta;
+        $lead->consultancy_review = $review;
         $lead->save();
 
         return back()->with('success', 'Updated.');
@@ -175,10 +178,10 @@ class ConsultancyVerificationController extends Controller
             'item_keys.*' => 'string',
         ]);
 
-        $meta = is_array($lead->consultancy_meta) ? $lead->consultancy_meta : [];
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        $meta = is_array($review['items'] ?? null) ? $review['items'] : [];
         $flagged = array_values(array_intersect($validated['item_keys'] ?? [], array_keys($meta)));
 
-        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
         $review['status'] = 'pending';
         $review['changes_requested'] = [
             'message' => trim((string) ($validated['message'] ?? '')) ?: 'Please revise this consultancy agreement.',
@@ -186,7 +189,6 @@ class ConsultancyVerificationController extends Controller
             'by' => $request->user()->id,
             'at' => now()->toIso8601String(),
         ];
-        $lead->consultancy_review = $review;
 
         // Drop a "change requested" note on each flagged item's thread.
         if (! empty($flagged)) {
@@ -198,9 +200,10 @@ class ConsultancyVerificationController extends Controller
                 $entry['notes'] = $notes;
                 $meta[$key] = $entry;
             }
-            $lead->consultancy_meta = $meta;
         }
 
+        $review['items'] = $meta;
+        $lead->consultancy_review = $review;
         $lead->save();
 
         return back()->with('success', 'Changes requested — the submitter has been flagged.');
@@ -235,11 +238,11 @@ class ConsultancyVerificationController extends Controller
         $verifyAll = $request->boolean('verify_all', false);
 
         if ($verifyAll) {
-            $meta = is_array($lead->consultancy_meta) ? $lead->consultancy_meta : [];
+            $meta = is_array($review['items'] ?? null) ? $review['items'] : [];
             foreach ($meta as $key => $m) {
                 $meta[$key] = array_merge(is_array($m) ? $m : [], ['status' => 'verified']);
             }
-            $lead->consultancy_meta = $meta ?: null;
+            $review['items'] = $meta;
             if (($review['status'] ?? null) === 'pending') {
                 $review['verified_at'] = now()->toIso8601String();
                 $review['verified_by'] = $request->user()->id;
@@ -327,7 +330,8 @@ class ConsultancyVerificationController extends Controller
     /** Load an item entry, mutate it via the callback, and persist. 404s if unknown. */
     private function mutateItem(Lead $lead, string $item, callable $fn): void
     {
-        $meta = is_array($lead->consultancy_meta) ? $lead->consultancy_meta : [];
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        $meta = is_array($review['items'] ?? null) ? $review['items'] : [];
         abort_unless(array_key_exists($item, $meta), 404, 'Unknown fee item.');
 
         $entry = is_array($meta[$item]) ? $meta[$item] : [];
@@ -335,7 +339,8 @@ class ConsultancyVerificationController extends Controller
         $fn($entry);
         $meta[$item] = $entry;
 
-        $lead->consultancy_meta = $meta;
+        $review['items'] = $meta;
+        $lead->consultancy_review = $review;
         $lead->save();
     }
 
