@@ -67,4 +67,17 @@ class StaffBookForLeadTest extends TestCase
         // A logged-out request is redirected to login (not allowed through).
         $this->post("/admin/leads/{$lead->id}/booking", $this->slot())->assertRedirect('/login');
     }
+
+    public function test_bookings_index_exposes_a_lead_picker_for_manual_booking(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Lead::create(['first_name' => 'Pick', 'last_name' => 'Me', 'email' => 'p@m.com', 'tracking_code' => 'BK004', 'lead_id' => 'LP-9999']);
+
+        $this->actingAs($admin)->get('/admin/booking')
+            ->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $p) => $p
+                ->component('admin/Bookings')
+                ->where('leadPicker', fn ($picker) => collect($picker)->contains(fn ($r) => $r['name'] === 'Pick Me' && $r['email'] === 'p@m.com'))
+            );
+    }
 }

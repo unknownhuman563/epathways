@@ -15,11 +15,23 @@ class BookingController extends Controller
     {
         $bookings = Booking::with('lead')->latest()->get();
 
+        // Lightweight lead list for the "Log Manual Booking" client picker.
+        $leadPicker = Lead::orderBy('first_name')
+            ->limit(1000)
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'email'])
+            ->map(fn (Lead $l) => [
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'email' => $l->email,
+            ]);
+
         return Inertia::render('admin/Bookings', [
             'bookings' => $bookings,
             // Canonical pipeline stages — the STAGE column dropdown reuses
             // these so it matches the Leads list exactly.
             'stages' => \App\Models\Lead::STAGES,
+            'leadPicker' => $leadPicker,
         ]);
     }
 

@@ -72,8 +72,24 @@ class AgentModuleController extends Controller
 
         $agreement = AgentAgreement::where('agent_id', $agent->id)->latest()->first();
 
+        // Count the agent's recruited leads by their effective stage (same
+        // resolution the table/commission use), over ALL their leads — not just
+        // the capped 200 shown in the table — so the cards are accurate.
+        $statusCounts = Lead::where('agent_id', $agent->id)
+            ->get(['status', 'education_stage', 'english_stage', 'immigration_stage', 'is_immigration_case'])
+            ->map(fn (Lead $l) => $l->education_stage
+                ?: ($l->english_stage
+                ?: (($l->is_immigration_case ? $l->immigration_stage : null)
+                ?: $l->status)))
+            ->filter(fn ($s) => filled($s))
+            ->countBy()
+            ->sortDesc()
+            ->map(fn ($count, $status) => ['status' => $status, 'count' => $count])
+            ->values();
+
         return inertia('admin/agents/Show', [
             'commission' => $this->commissionSummary($agent, $agreement),
+            'statusCounts' => $statusCounts,
             'agent' => [
                 'id' => $agent->id,
                 'name' => $agent->name,
