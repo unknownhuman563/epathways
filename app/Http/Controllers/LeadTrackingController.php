@@ -864,6 +864,15 @@ class LeadTrackingController extends Controller
             'is_student' => (bool) $lead->is_student,
             'is_immigration_case' => (bool) $lead->is_immigration_case,
             'is_accommodation_client' => (bool) $lead->is_accommodation_client,
+            // Drives the "Start Free Assessment" CTA on the tracker.
+            // `has_free_assessment` is the reliable signal — the lead has
+            // actually submitted the free-assessment form (which creates
+            // educationExps / studyPlans rows). `ai_analysis_status` alone
+            // is unreliable: manually-added leads can still carry a default
+            // status value even though no assessment was submitted.
+            'ai_analysis_status' => $lead->ai_analysis_status,
+            'has_free_assessment' => $lead->educationExps()->exists()
+                || $lead->studyPlans()->exists(),
         ];
     }
 

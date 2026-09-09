@@ -257,6 +257,7 @@ export default function TrackingPage({
                                         />
                                     ) : (
                                         <OverviewTab
+                                            lead={lead}
                                             visa={visa}
                                             documents={documents}
                                             sharedDocuments={shared_documents}
@@ -737,6 +738,7 @@ function IdentityHeader({ lead, visa, timeline = [], avatar = null, code = '', f
                         </span>
                     </div>
                 </div>
+
 
                 {/* PILL FIELDS — Visa / Application / Email / Tracking Code.
                     Email cell hides when the lead has no address on file so
@@ -1303,7 +1305,7 @@ function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], pro
  * (sign the agreement, upload outstanding docs), document stats, the
  * journey, and the adviser's shared documents (with e-sign).
  */
-function OverviewTab({ visa, documents = [], sharedDocuments = [], agreements = [], timeline = [], onSeeFull, onGoToVisa }) {
+function OverviewTab({ lead = null, visa, documents = [], sharedDocuments = [], agreements = [], timeline = [], onSeeFull, onGoToVisa }) {
     const checklist = visa?.checklist || [];
 
     const docsByKey = useMemo(() => {
@@ -1365,19 +1367,73 @@ function OverviewTab({ visa, documents = [], sharedDocuments = [], agreements = 
         { label: 'Still needed', value: outstanding, tone: 'text-amber-700' },
     ];
 
+    // "On file" only when the free-assessment form was actually submitted
+    // (creates educationExps/studyPlans rows). ai_analysis_status alone can
+    // carry a default value on manually-added leads, so it can't be trusted
+    // as the gate — but it's still useful for the analysing sub-state.
+    const hasAssessment = Boolean(lead?.has_free_assessment);
+    const assessmentStatus = lead?.ai_analysis_status ?? null;
+    const trackingCode = lead?.tracking_code || '';
+    const assessmentDone = hasAssessment && assessmentStatus === 'completed';
+    const assessmentPending = hasAssessment && assessmentStatus === 'processing';
+
     return (
         <div className="bg-white rounded-b-2xl border border-t-0 border-gray-100 shadow-sm p-4 sm:p-6 space-y-6">
-            {/* Needs your attention (full width) */}
-            <div>
-                <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Needs your attention</p>
-                {alerts.length > 0 ? (
-                    <ul className="space-y-2">{alerts.map((a, i) => <AlertRow key={i} alert={a} />)}</ul>
-                ) : (
-                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                        <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
-                        <p className="text-[13px] text-emerald-800 font-medium">You're all caught up — nothing needs your attention right now.</p>
-                    </div>
-                )}
+            {/* Free Assessment + Needs your attention — sit on one row on
+                desktop, stack on mobile. Both blocks keep the same header
+                treatment so they read as a pair. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Free Assessment</p>
+                    {hasAssessment ? (
+                        <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border h-full ${assessmentDone ? 'bg-emerald-50 border-emerald-100' : 'bg-blue-50 border-blue-100'}`}>
+                            <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${assessmentDone ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {assessmentDone ? <CheckCircle2 size={18} /> : <Clock size={18} />}
+                            </div>
+                            <div className="min-w-0">
+                                <p className={`text-[13px] font-bold ${assessmentDone ? 'text-emerald-800' : 'text-blue-800'}`}>
+                                    {assessmentDone ? 'Free Assessment on file' : assessmentPending ? 'Analysing your answers…' : 'Free Assessment received'}
+                                </p>
+                                <p className="text-[12px] text-gray-600 mt-0.5">
+                                    {assessmentDone
+                                        ? 'Shared with your adviser.'
+                                        : 'We\'ll notify you when your snapshot is ready.'}
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-900 text-white h-full">
+                            <div className="w-9 h-9 shrink-0 rounded-full bg-white/10 flex items-center justify-center">
+                                <Sparkles size={16} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[13px] font-bold">Start your Free Assessment</p>
+                                <p className="text-[12px] text-white/70 mt-0.5 truncate">
+                                    Short questionnaire — get an eligibility snapshot.
+                                </p>
+                            </div>
+                            <a
+                                href={`/free-assessment${trackingCode ? `?code=${encodeURIComponent(trackingCode)}` : ''}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-white text-gray-900 px-3 py-1.5 text-[12px] font-bold hover:bg-gray-100 transition-colors shrink-0"
+                            >
+                                Start
+                                <ArrowRight size={13} />
+                            </a>
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Needs your attention</p>
+                    {alerts.length > 0 ? (
+                        <ul className="space-y-2">{alerts.map((a, i) => <AlertRow key={i} alert={a} />)}</ul>
+                    ) : (
+                        <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100 h-full">
+                            <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
+                            <p className="text-[13px] text-emerald-800 font-medium">You're all caught up — nothing needs your attention right now.</p>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Summary row — documents graph (uploaded vs not) on the left,

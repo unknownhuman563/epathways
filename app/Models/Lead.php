@@ -180,6 +180,22 @@ class Lead extends Model
         return $status === 'approved' || $status === null;
     }
 
+    /** Consultancy-agreement verification status: pending | verified | approved | null. */
+    public function consultancyStatus(): ?string
+    {
+        $r = is_array($this->consultancy_review) ? $this->consultancy_review : [];
+
+        return $r['status'] ?? null;
+    }
+
+    /** A consultancy agreement is sent to the client only once approved (legacy = live). */
+    public function consultancyIsLive(): bool
+    {
+        $status = $this->consultancyStatus();
+
+        return $status === 'approved' || $status === null;
+    }
+
     public function pushStageHistory(string $department, ?string $stage, ?string $assignee = null): void
     {
         $history = $this->stage_history ?? [];
@@ -316,6 +332,8 @@ class Lead extends Model
         // Per-program verification overrides (fee/school/intake/status/edited),
         // keyed by program id — drives the Program Verification table.
         'proposed_program_meta',
+        'consultancy_review',
+        'consultancy_meta',
         // Study-proposal verification workflow (pending → verified → approved).
         'proposal_review',
         // Lead's chosen program (FK to programs.id) from that shortlist,
@@ -449,6 +467,8 @@ class Lead extends Model
         'proposed_program_reasons' => 'array',
         'proposed_program_meta' => 'array',
         'proposal_review' => 'array',
+        'consultancy_review' => 'array',
+        'consultancy_meta' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',

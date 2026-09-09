@@ -30,12 +30,26 @@ return [
             'label' => 'Agents',
             'description' => 'Manage referral agents — their leads, profiles, and agreements.',
         ],
+        // Historically "Program Verification"; the key is kept so existing grants
+        // keep working. Now a two-part "Verification" module: the Proposal queue
+        // and the Consultancy Agreement queue. A whole-module grant covers both;
+        // each part is also grantable on its own.
         'program_verification' => [
-            'label' => 'Program Verification',
-            'description' => 'Verify and approve study proposals before they reach the client.',
+            'label' => 'Verification',
+            'description' => 'Verify and approve study proposals and consultancy agreements before they reach the client.',
             // Admins + super admins always see it (in the admin panel); still
             // grantable to department staff (e.g. Education) via Module Management.
             'admin_default' => true,
+            'features' => [
+                'proposal' => [
+                    'label' => 'Proposal',
+                    'description' => 'Verify and approve study proposals (programmes) before they reach the client.',
+                ],
+                'consultancy' => [
+                    'label' => 'Consultancy Agreement',
+                    'description' => 'Verify and approve consultancy agreements & their fees before they reach the client.',
+                ],
+            ],
         ],
         'dtr' => [
             'label' => 'DTR',
@@ -60,6 +74,14 @@ return [
             'label' => 'Portal Invitations',
             'description' => 'Approve/reject/revoke client portal invitations and generate credentials.',
             'admin_default' => true,
+        ],
+        // Read-only Students list inside the Agent / Sub-agent portals, scoped
+        // to that portal's own referrals. Deliberately NOT admin_default: it
+        // ships hidden and a super admin grants it per agent from Module
+        // Management, so giving one agent visibility doesn't give it to all.
+        'referral_students' => [
+            'label' => 'Students (referral portals)',
+            'description' => 'Let a recruiting agent or sub-agent see the students their own referrals became. Read-only — no edits, no deletes.',
         ],
     ],
 

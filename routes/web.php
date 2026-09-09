@@ -539,10 +539,11 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.agents.agreement.download');
     });
 
-    // Program Verification module — restricted (default super-admin-only,
-    // grantable per user via Module Management, e.g. to Dinah). Gated only by
-    // the module so it's reachable from any portal the grantee is in.
-    Route::middleware('module:program_verification')->group(function () {
+    // Verification module — restricted (default super-admin-only + admins,
+    // grantable per user via Module Management, e.g. to Dinah). Two parts, each
+    // its own grantable feature: Proposal (programmes) and Consultancy Agreement.
+    // Gated only by the module so it's reachable from any portal the grantee is in.
+    Route::middleware('module:program_verification.proposal')->group(function () {
         Route::get('/program-verification', [\App\Http\Controllers\ProgramVerificationController::class, 'index'])
             ->name('program-verification.index');
         Route::post('/program-verification/{lead}/programs', [\App\Http\Controllers\ProgramVerificationController::class, 'updatePrograms'])
@@ -555,6 +556,27 @@ Route::middleware(['auth'])->group(function () {
             ->name('program-verification.verify');
         Route::post('/program-verification/{lead}/approve', [\App\Http\Controllers\ProgramVerificationController::class, 'approve'])
             ->name('program-verification.approve');
+    });
+
+    // Consultancy Agreement Verification — the consultancy counterpart, gated by
+    // the same module's `consultancy` feature.
+    Route::middleware('module:program_verification.consultancy')->group(function () {
+        Route::get('/consultancy-verification', [\App\Http\Controllers\ConsultancyVerificationController::class, 'index'])
+            ->name('consultancy-verification.index');
+        Route::post('/consultancy-verification/{lead}/meta', [\App\Http\Controllers\ConsultancyVerificationController::class, 'updateMeta'])
+            ->name('consultancy-verification.meta');
+        Route::post('/consultancy-verification/{lead}/request-changes', [\App\Http\Controllers\ConsultancyVerificationController::class, 'requestChanges'])
+            ->name('consultancy-verification.request-changes');
+        Route::post('/consultancy-verification/{lead}/verify', [\App\Http\Controllers\ConsultancyVerificationController::class, 'verify'])
+            ->name('consultancy-verification.verify');
+        Route::post('/consultancy-verification/{lead}/approve', [\App\Http\Controllers\ConsultancyVerificationController::class, 'approve'])
+            ->name('consultancy-verification.approve');
+        Route::post('/consultancy-verification/{lead}/notes/{item}', [\App\Http\Controllers\ConsultancyVerificationController::class, 'addNote'])
+            ->name('consultancy-verification.notes.add');
+        Route::post('/consultancy-verification/{lead}/notes/{item}/{noteId}/reply', [\App\Http\Controllers\ConsultancyVerificationController::class, 'replyNote'])
+            ->name('consultancy-verification.notes.reply');
+        Route::post('/consultancy-verification/{lead}/notes/{item}/{noteId}/actioned', [\App\Http\Controllers\ConsultancyVerificationController::class, 'toggleActioned'])
+            ->name('consultancy-verification.notes.actioned');
     });
 
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
@@ -1264,6 +1286,10 @@ Route::middleware(['auth'])->group(function () {
             // agent's own leads inside showLead(); declared after the static
             // /leads/* segments above so those keep winning.
             Route::get('/leads/{id}', [\App\Http\Controllers\Portal\AgentController::class, 'showLead'])->name('leads.show');
+            // Students, read-only — this agent's own referrals who have since
+            // been converted. Scoped inside students(); no write routes exist.
+            Route::get('/students', [\App\Http\Controllers\Portal\AgentController::class, 'students'])
+                ->middleware('module:referral_students')->name('students');
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
             Route::get('/agreement', [\App\Http\Controllers\Portal\AgentController::class, 'agreement'])->name('agreement');
             Route::post('/agreement/details', [\App\Http\Controllers\Portal\AgentController::class, 'updateAgreementDetails'])->name('agreement.details');
@@ -1305,6 +1331,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/follow-ups', [\App\Http\Controllers\Portal\SubAgentController::class, 'followUps'])->name('follow-ups');
             Route::post('/follow-ups', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeFollowUp'])->name('follow-ups.store');
             Route::post('/follow-ups/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateFollowUp'])->name('follow-ups.update');
+            // Students, read-only — the parent agent's referrals who have since
+            // been converted. Scoped inside students(); no write routes exist.
+            Route::get('/students', [\App\Http\Controllers\Portal\SubAgentController::class, 'students'])
+                ->middleware('module:referral_students')->name('students');
             Route::get('/profile', [\App\Http\Controllers\Portal\SubAgentController::class, 'profile'])->name('profile');
         });
 

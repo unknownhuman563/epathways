@@ -2126,16 +2126,15 @@ class LeadController extends Controller
                 $lead->stage_updated_by = auth()->id();
                 $lead->pushStageHistory($dept, $newValue, $assignee);
 
-                // Education handoff → auto-promote to an immigration case and
-                // retire from the Education queue (matches updateStudentField).
+                // Education handoff → auto-promote to an immigration case, but
+                // KEEP is_student so the person stays visible under Education too
+                // (they are legitimately under both departments). Matches
+                // updateStudentField.
                 if ($field === 'education_stage' && in_array($newValue, \App\Models\Lead::EDUCATION_STAGES_IMMIGRATION, true)) {
                     if (! $lead->is_immigration_case) {
                         $lead->is_immigration_case = true;
                         $lead->immigration_converted_at = now();
                         $lead->immigration_converted_by = auth()->id();
-                    }
-                    if ($lead->is_student) {
-                        $lead->is_student = false;
                     }
                 }
             }
