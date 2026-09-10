@@ -133,7 +133,9 @@ function QueueCard({ p, active, onClick }) {
             <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                     <span className="text-[13px] font-bold text-gray-900 truncate">{p.name}</span>
-                    <span className="text-[10px] text-gray-400 font-mono ml-1.5">{p.lead_id}</span>
+                    {p.agent
+                        ? <span className="text-[10px] font-semibold text-violet-700 ml-1.5">· {p.agent}</span>
+                        : <span className="text-[10px] text-gray-400 font-mono ml-1.5">{p.lead_id}</span>}
                 </div>
                 <StatusPill status={p.status} small />
             </div>
@@ -210,7 +212,9 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
                             <StatusPill status={p.status} />
                         </div>
                         <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-x-3 gap-y-0.5 flex-wrap">
-                            <span className="font-mono">{p.lead_id}</span>
+                            {p.agent
+                                ? <span className="font-semibold text-violet-700">Agent · {p.agent}</span>
+                                : <span className="font-mono">{p.lead_id}</span>}
                             {p.email && <span>{p.email}</span>}
                             <span>Submitted {fmtDateTime(p.submitted_at)}{p.submitted_by ? ` by ${p.submitted_by}` : ""}</span>
                         </div>
@@ -269,8 +273,7 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                                    <th className="py-2 pl-2 pr-3">Programme</th>
-                                    <th className="py-2 px-3">School</th>
+                                    <th className="py-2 pl-2 pr-3">Programme &amp; school</th>
                                     <th className="py-2 px-3">Intake</th>
                                     <th className="py-2 px-3">Notes</th>
                                     <th className="py-2 px-3 text-right pr-2">Status</th>
@@ -353,7 +356,7 @@ function ProgramRow({ row, flaggedForChange, onStatus, onSchool, onNote, onRemov
     return (
         <tr className="align-top group">
             <td className="py-3 pl-2 pr-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] font-semibold text-gray-900">{row.title}</span>
                     {row.level != null && (
                         <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-gray-100 text-gray-600">L{row.level}</span>
@@ -365,19 +368,21 @@ function ProgramRow({ row, flaggedForChange, onStatus, onSchool, onNote, onRemov
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-rose-50 text-rose-600 border border-rose-200">Revise</span>
                     )}
                 </div>
-            </td>
-            <td className="py-3 px-3 text-[12px] text-gray-700">
-                {editingSchool ? (
-                    <select autoFocus defaultValue={row.school || ""} onChange={(e) => { onSchool(e.target.value); setEditingSchool(false); }} onBlur={() => setEditingSchool(false)}
-                        className="px-2 py-1 border border-gray-200 rounded-md text-[12px] bg-white focus:outline-none focus:border-gray-900">
-                        <option value="">—</option>
-                        {schools.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                ) : (
-                    <button type="button" onClick={() => setEditingSchool(true)} className="hover:text-gray-900 hover:underline">
-                        {row.school || <span className="text-gray-300">Assign</span>}
-                    </button>
-                )}
+                {/* School — editable, shown under the programme name (merged column). */}
+                <div className="mt-1 text-[12px] text-gray-500">
+                    {editingSchool ? (
+                        <select autoFocus defaultValue={row.school || ""} onChange={(e) => { onSchool(e.target.value); setEditingSchool(false); }} onBlur={() => setEditingSchool(false)}
+                            className="px-2 py-1 border border-gray-200 rounded-md text-[12px] bg-white focus:outline-none focus:border-gray-900">
+                            <option value="">—</option>
+                            {schools.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    ) : (
+                        <button type="button" onClick={() => setEditingSchool(true)} className="inline-flex items-center gap-1 hover:text-gray-900 hover:underline">
+                            <School size={11} className="text-gray-400 shrink-0" />
+                            {row.school || <span className="text-gray-300">Assign school</span>}
+                        </button>
+                    )}
+                </div>
             </td>
             <td className="py-3 px-3 text-[12px] text-gray-700">{row.intake || <span className="text-gray-300">—</span>}</td>
             <td className="py-3 px-3 max-w-[280px]">

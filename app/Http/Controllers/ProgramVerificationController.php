@@ -37,7 +37,7 @@ class ProgramVerificationController extends Controller
             })
             ->orderByDesc('updated_at')
             ->limit(300)
-            ->with(['documents:id,lead_id,checklist_key,status'])
+            ->with(['documents:id,lead_id,checklist_key,status', 'agent:id,name'])
             ->get();
 
         // Resolve every program + staff name referenced, in two queries.
@@ -109,6 +109,7 @@ class ProgramVerificationController extends Controller
             return [
                 'id' => $l->id,
                 'lead_id' => $l->lead_id,
+                'agent' => optional($l->agent)->name,
                 'name' => trim("{$l->first_name} {$l->last_name}") ?: '—',
                 'initials' => $this->initials("{$l->first_name} {$l->last_name}"),
                 'email' => $l->email,
