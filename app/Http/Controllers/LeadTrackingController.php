@@ -973,9 +973,6 @@ class LeadTrackingController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->reject(fn (LeadDocument $d) => $d->checklist_key && in_array($d->checklist_key, $hidden, true))
-            // RFI documents surface under the "Request Information Form" item at
-            // the top of the checklist, not in this adviser-docs list.
-            ->reject(fn (LeadDocument $d) => $d->source_variant === 'rfi')
             ->map(function (LeadDocument $d) use ($code, $labels) {
                 // Prefer a friendly label for engagement docs (engagement:<type>).
                 $type = str_starts_with((string) $d->source_variant, 'engagement:')
@@ -1394,6 +1391,11 @@ class LeadTrackingController extends Controller
         // The Information Form is "Student Visa Information Form" for student
         // visas, plain "Visa Information Form" everywhere else.
         $isStudent = str_contains(strtolower((string) $lead->inz_visa_type), 'student');
+        // The RFI upload slot appears only once the adviser has REQUESTED info
+        // (attached the RFI notification file at the RFI stage). The slot itself
+        // is for the CLIENT's response uploads — the staff notification is not
+        // its content (it shows in "Documents from your adviser").
+        $hasRfiRequest = $lead->documents()->where('source_variant', 'rfi')->exists();
         $out = [];
 
         foreach (self::UNIVERSAL_ITEMS as $u) {
@@ -1401,14 +1403,14 @@ class LeadTrackingController extends Controller
                 continue;
             }
 
-            $docs = $docsByKey->get($u['key']) ?? collect();
-
-            // Optional universal items (e.g. Request Information Form) only appear
-            // once the adviser has actually attached one — so a case with no RFI
-            // never shows an empty "Request Information Form" slot.
-            if (($u['optional'] ?? false) && $docs->isEmpty()) {
+            // The RFI slot only shows once information has been requested.
+            if ($u['key'] === 'rfi' && ! $hasRfiRequest) {
                 continue;
             }
+
+            // The slot's status/count come from the CLIENT's own uploads (keyed
+            // by checklist_key), never the staff notification file.
+            $docs = $docsByKey->get($u['key']) ?? collect();
             $status = 'missing';
             if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
                 $status = 'approved';
