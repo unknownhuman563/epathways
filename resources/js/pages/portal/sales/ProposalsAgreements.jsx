@@ -803,37 +803,72 @@ function DocumentNoteThread({ docId, notes = [] }) {
     );
 }
 
+// Agreements tab — same review-inbox design/layout as the Proposals tab:
+// a sort toolbar, a desktop column header, and grouped profile/document/notes
+// rows. Grouped by whether the agreement still needs verification vs. is live.
 function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
-    // Flatten lead-grouped rows into doc-per-row so the table renders one
-    // line per generated agreement — matches the requested column layout.
+    const [sort, setSort] = useState('needs'); // 'needs' | 'newest'
+
+    // One row per generated (or pending) agreement document.
     const flat = useMemo(() => rows.flatMap((r) => r.documents.map((d) => ({ ...d, lead: r }))), [rows]);
+    const byNewest = (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0);
+
+    const groups = useMemo(() => {
+        if (sort === 'newest') {
+            return [{ key: 'all', rows: [...flat].sort(byNewest) }];
+        }
+        const pending = flat.filter((d) => d.pending_verification).sort(byNewest);
+        const live = flat.filter((d) => ! d.pending_verification).sort(byNewest);
+
+        return [
+            { key: 'pending', label: 'Needs verification', sub: 'action sits with ePathways', tone: 'amber', rows: pending },
+            { key: 'live', label: 'Generated & sent', sub: 'live agreements', tone: 'gray', rows: live },
+        ];
+    }, [flat, sort]);
 
     return (
-        <div className="md:overflow-x-auto">
-            <table className="w-full text-left text-xs max-md:block">
-                <thead className="max-md:hidden">
-                    <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                        <th className="px-4 py-3">Profile</th>
-                        <th className="px-3 py-3">Document</th>
-                        <th className="px-3 py-3">Notes</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Status &amp; created</th>
-                        <th className="px-3 py-3 text-right pr-4">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 max-md:block max-md:divide-y-0">
-                    {flat.map((d) => (
-                        <DocumentRow
-                            key={d.id}
-                            doc={d}
-                            portalBase={portalBase}
-                            fmtSize={fmtSize}
-                            fmtDate={fmtDate}
-                            onNotify={onNotify}
-                            onEdit={onEdit}
-                        />
+        <div className="text-xs">
+            {/* Toolbar */}
+            <div className="flex items-center justify-end gap-4 px-4 py-2 border-b border-gray-100">
+                <button
+                    type="button"
+                    onClick={() => setSort((s) => (s === 'needs' ? 'newest' : 'needs'))}
+                    className="text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+                >
+                    Sort: {sort === 'needs' ? 'needs verification first' : 'newest'}
+                </button>
+            </div>
+
+            {/* Column header (desktop) */}
+            <div className="hidden md:flex items-center gap-4 px-4 py-2.5 bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                <div className="w-[210px] shrink-0">Profile</div>
+                <div className="flex-1 grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] gap-x-6">
+                    <span>Document</span>
+                    <span>Notes</span>
+                </div>
+                <div className="w-[140px] shrink-0">Status &amp; created</div>
+                <div className="w-[32px] shrink-0 text-right">Actions</div>
+            </div>
+
+            {groups.map((g) => (g.rows.length === 0 ? null : (
+                <div key={g.key}>
+                    {g.label && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100">
+                            <span className={`w-1.5 h-1.5 rounded-full ${g.tone === 'amber' ? 'bg-amber-500' : 'bg-gray-400'}`} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">{g.label}</span>
+                            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">{g.rows.length}</span>
+                            <span className="text-[11px] text-gray-400">· {g.sub}</span>
+                        </div>
+                    )}
+                    {g.rows.map((d) => (
+                        <DocumentRow key={d.id} doc={d} portalBase={portalBase} fmtSize={fmtSize} fmtDate={fmtDate} onNotify={onNotify} onEdit={onEdit} />
                     ))}
-                </tbody>
-            </table>
+                </div>
+            )))}
+
+            {flat.length === 0 && (
+                <div className="p-12 text-center text-gray-400 text-sm">No agreements yet.</div>
+            )}
         </div>
     );
 }
@@ -841,79 +876,87 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
 function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
     const { lead } = doc;
     const mode = doc.applicant_mode; // 'single' | 'couple' | null
+    // A consultancy agreement still IN verification — no PDF yet, shown here
+    // alongside its entry in the verification queue.
+    const pending = doc.pending_verification;
     // Agreement lifecycle, read off the lead's pipeline stage: Generated (just
     // created) → Sent (staff notified the lead) → Signed (staff marked signed).
-    const agreeStatus =
-        lead.status === 'Consultancy Agreement Signed' ? { label: 'Signed',    cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+    const agreeStatus = pending
+        ? (doc.verification_status === 'verified'
+            ? { label: 'Verified',         cls: 'bg-blue-50 text-blue-700 border-blue-200' }
+            : { label: 'For verification', cls: 'bg-amber-50 text-amber-700 border-amber-200' })
+      : lead.status === 'Consultancy Agreement Signed' ? { label: 'Signed',    cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
       : lead.status === 'Consultancy Agreement Sent'   ? { label: 'Sent',      cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
       :                                                   { label: 'Generated', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
     return (
-        <tr className="hover:bg-gray-50/60 transition-colors align-top max-md:flex max-md:flex-col max-md:gap-1 max-md:border max-md:border-gray-100 max-md:rounded-xl max-md:mb-3 max-md:shadow-sm">
-            {/* ── CONTACT (name + id + email + phone) ──────────────── */}
-            <td className="px-4 py-3">
-                <Link
-                    href={`${portalBase}/leads/${lead.id}`}
-                    className="font-semibold text-gray-900 hover:text-emerald-700 hover:underline underline-offset-2 decoration-emerald-400"
-                >
-                    {lead.name}
-                </Link>
-                {lead.email && (
-                    <div className="text-[11px] text-gray-600 truncate max-w-[220px] mt-1">{lead.email}</div>
-                )}
-                {lead.phone && (
-                    <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{lead.phone}</div>
-                )}
-                {! lead.email && ! lead.phone && (
-                    <span className="text-[11px] text-gray-300">—</span>
-                )}
-            </td>
-
-            {/* ── TYPE + applicant mode chip ───────────────────────── */}
-            <td className="px-3 py-3">
-                <div className="flex items-center gap-2">
-                    <FileText size={13} className="text-gray-400 shrink-0" />
-                    <span className="text-[12px] font-semibold text-gray-800">{doc.type}</span>
-                    {mode && (
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                            mode === 'couple'
-                                ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                                : 'bg-blue-50 text-blue-700 border border-blue-100'
-                        }`}>
-                            {mode}
-                        </span>
-                    )}
+        <div className="flex flex-col md:flex-row md:items-stretch gap-4 px-4 py-4 border-b border-gray-100 hover:bg-gray-50/40 transition-colors">
+            {/* Profile */}
+            <div className="md:w-[210px] shrink-0 flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200 shrink-0">
+                    {lead.avatar_url
+                        ? <img src={lead.avatar_url} alt={lead.name} className="w-full h-full object-cover" />
+                        : rowInitials(lead.name)}
                 </div>
-                <div className="text-[10px] text-gray-400 mt-1 ml-[21px]">{fmtSize(doc.size)}</div>
-            </td>
+                <div className="min-w-0">
+                    <Link href={`${portalBase}/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-emerald-700 hover:underline">{lead.name}</Link>
+                    <div className="text-[10px] text-gray-400 font-mono">{lead.lead_id}</div>
+                    {lead.email && <div className="text-[11px] text-gray-600 truncate max-w-[190px] mt-1">{lead.email}</div>}
+                    {lead.phone && <div className="text-[11px] text-gray-500 truncate max-w-[190px]">{lead.phone}</div>}
+                </div>
+            </div>
 
-            {/* ── NOTES (threaded, same as the Proposals tab) ──────── */}
-            <td className="px-3 py-3">
-                <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />
-            </td>
+            {/* Document + Notes (aligned) */}
+            <div className="flex-1 min-w-0">
+                <div className="grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] max-md:grid-cols-1 gap-x-6 gap-y-3 items-start">
+                    {/* Document */}
+                    <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <FileText size={13} className="text-gray-400 shrink-0" />
+                            <span className="text-[13px] font-semibold text-gray-900">{doc.type}</span>
+                            {mode && (
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                    mode === 'couple'
+                                        ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                        : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                }`}>
+                                    {mode}
+                                </span>
+                            )}
+                        </div>
+                        <div className="text-[11px] text-gray-400 mt-0.5 ml-[21px]">{pending ? doc.original_name : fmtSize(doc.size)}</div>
+                    </div>
+                    {/* Notes */}
+                    <div>
+                        {pending
+                            ? <span className="text-[11px] text-gray-400 italic">Notes in verification</span>
+                            : <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />}
+                    </div>
+                </div>
+            </div>
 
-            {/* ── STATUS & CREATED (merged) ────────────────────────── */}
-            <td className="px-3 py-3 whitespace-nowrap">
+            {/* Status & created */}
+            <div className="md:w-[140px] shrink-0 whitespace-nowrap">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${agreeStatus.cls}`}>
                     {agreeStatus.label}
                 </span>
-                <div className="text-[11px] text-gray-600 mt-1.5">{fmtDate(doc.created_at)}</div>
+                <div className="text-[11px] text-gray-500 mt-1.5">{fmtDate(doc.created_at)}</div>
                 {doc.uploader?.name && (
-                    <div className="text-[10px] text-gray-500">
-                        by <span className="font-medium text-gray-600">{doc.uploader.name}</span>
-                    </div>
+                    <div className="text-[10px] text-gray-400">by {doc.uploader.name}</div>
                 )}
-            </td>
+            </div>
 
-            {/* ── ACTIONS: 3-dot dropdown ──────────────────────────── */}
-            <td className="px-3 py-3 text-right pr-4">
-                <DocumentRowActions
-                    doc={doc}
-                    lead={lead}
-                    onNotify={onNotify}
-                    onEdit={onEdit}
-                />
-            </td>
-        </tr>
+            {/* Actions */}
+            <div className="md:w-[32px] shrink-0 md:text-right">
+                {pending ? (
+                    <Link href="/consultancy-verification"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
+                        <ShieldCheck size={12} /> Review
+                    </Link>
+                ) : (
+                    <DocumentRowActions doc={doc} lead={lead} onNotify={onNotify} onEdit={onEdit} />
+                )}
+            </div>
+        </div>
     );
 }
 

@@ -667,6 +667,55 @@ class SalesController extends Controller
                 ->map($mapRow)
                 ->values();
 
+            // Consultancy agreements still IN verification (pending / verified)
+            // have no generated PDF yet — but staff should still see them on the
+            // Agreements tab as "For verification" entries (in addition to the
+            // verification queue). Skip any lead already shown with a real doc.
+            $shownIds = $agreements->pluck('id');
+            $pendingConsultancy = Lead::whereNotNull('consultancy_review')
+                ->whereIn('consultancy_review->status', ['pending', 'verified'])
+                ->with('faceImage')
+                ->orderByDesc('updated_at')
+                ->get()
+                ->reject(fn (Lead $l) => $shownIds->contains($l->id))
+                ->map(function (Lead $l) {
+                    $review = is_array($l->consultancy_review) ? $l->consultancy_review : [];
+                    $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
+                        'email' => $l->email,
+                        'phone' => $l->phone,
+                        'stage' => $l->stage,
+                        'status' => $l->status,
+                        'documents' => [[
+                            'id' => 'review-'.$l->id,
+                            'checklist_key' => 'agree.consultancy',
+                            'type' => 'Consultancy Agreement',
+                            'variant' => $review['scenario'] ?? null,
+                            'applicant_mode' => $review['applicant_mode'] ?? 'single',
+                            'original_name' => $review['scenario_label'] ?? 'Consultancy Agreement',
+                            'size' => null,
+                            'created_at' => $review['submitted_at'] ?? null,
+                            'note' => null,
+                            'notes' => [],
+                            'uploader' => null,
+                            // Flags the Agreements table to show the verification
+                            // status instead of a download / lifecycle badge.
+                            'pending_verification' => true,
+                            'verification_status' => $review['status'] ?? 'pending', // pending | verified
+                            'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+                        ]],
+                        'documents_count' => 1,
+                        'latest_generated_at' => $review['submitted_at'] ?? null,
+                    ];
+                });
+
+            $agreements = $agreements->concat($pendingConsultancy)->values();
+
             // Tab: Proposals — leads with a program shortlist saved. Each
             // row exposes the picked programs (id + title) so the frontend
             // can render badges without a second lookup.

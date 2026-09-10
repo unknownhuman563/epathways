@@ -3211,7 +3211,7 @@ class ImmigrationController extends Controller
      *
      * @return array<string, array<int, string>>
      */
-    private function intakeSectionSchema(string $type): array
+    public function intakeSectionSchema(string $type): array
     {
         return match ($type) {
             'resident' => [
@@ -3269,7 +3269,7 @@ class ImmigrationController extends Controller
     }
 
     /** Friendly label for an intake column (overrides where headline reads poorly). */
-    private function intakeFieldLabel(string $col): string
+    public function intakeFieldLabel(string $col): string
     {
         static $labels = [
             'dob' => 'Date of Birth',
@@ -3407,7 +3407,7 @@ class ImmigrationController extends Controller
     }
 
     /** Humanise a single intake attribute value for display. */
-    private function formatIntakeValue($value): ?string
+    public function formatIntakeValue($value): ?string
     {
         if (is_bool($value)) {
             return $value ? 'Yes' : 'No';
@@ -3429,6 +3429,93 @@ class ImmigrationController extends Controller
         }
 
         return $value === null ? null : (string) $value;
+    }
+
+    /**
+     * Build the Visa Information Form's sections from the client's ACTUAL
+     * assessment (the same per-visa schema the readiness workspace shows), so
+     * every section they filled — Study Plan, Travel Plan, Family, etc. — is in
+     * the VIF. Output shape matches the pdf.intake Blade (letter/title/rows).
+     * Files aren't questions, so they're skipped.
+     */
+    public function buildVifSections(string $type, array $data): array
+    {
+        $schema = $this->intakeSectionSchema($type);
+        $sections = [];
+        $letterCode = ord('A');
+
+        foreach ($schema as $title => $keys) {
+            $isDeclaration = str_contains(strtolower($title), 'declaration');
+            $rows = [];
+
+            foreach ($keys as $key) {
+                if (in_array($key, ['documents', 'document_files'], true)) {
+                    continue; // uploads, not Q&A rows
+                }
+                if ($key === 'declaration_accepted') {
+                    $rows[] = [
+                        't' => 'check',
+                        'label' => 'I declare that the information provided is true, correct and complete.',
+                        'on' => (bool) ($data[$key] ?? false),
+                    ];
+
+                    continue;
+                }
+                $rows[] = [
+                    'q' => $this->intakeFieldLabel($key),
+                    'a' => $this->formatIntakeValue($data[$key] ?? null) ?? '',
+                ];
+            }
+
+            if (empty($rows)) {
+                continue;
+            }
+            $sections[] = [
+                'letter' => chr($letterCode),
+                'title' => $title,
+                // Declaration sections render as statements, not a Q/A table.
+                'bare' => $isDeclaration,
+                'rows' => $rows,
+            ];
+            $letterCode++;
+        }
+
+        return $sections;
+    }
+
+    /**
+     * Free-assessment VIF sections — the free funnel stores its answers on the
+     * Lead + JSON blocks, so reuse the readiness-workspace section builder and
+     * map it into the same VIF (Blade) shape. Guarantees the free assessment's
+     * full content lands in the VIF too.
+     */
+    public function freeVifSections(Lead $lead): array
+    {
+        [$schemaSections] = $this->freeAssessmentSections($lead);
+        $sections = [];
+        $letterCode = ord('A');
+
+        foreach ($schemaSections as $sec) {
+            $rows = [];
+            foreach (($sec['fields'] ?? []) as $field) {
+                $rows[] = [
+                    'q' => $field['label'] ?? '',
+                    'a' => ($field['provided'] ?? false) ? ($field['value'] ?? '') : '',
+                ];
+            }
+            if (empty($rows)) {
+                continue;
+            }
+            $sections[] = [
+                'letter' => chr($letterCode),
+                'title' => $sec['title'] ?? '',
+                'bare' => false,
+                'rows' => $rows,
+            ];
+            $letterCode++;
+        }
+
+        return $sections;
     }
 
     public function showIntake(string $type, int $id)
@@ -3768,20 +3855,18 @@ class ImmigrationController extends Controller
      */
     private function intakeVifData(string $type, int $id): array
     {
-        // Free assessment — a Lead, not an intake. Its attributes feed the same
-        // VIF builder (identity fields populate; unmatched questions stay blank,
-        // exactly like the paper form), so it exports in the official format too.
+        // Free assessment — a Lead, not an intake. Built from the free
+        // assessment's own sections so its full content lands in the VIF.
         if ($type === 'free') {
             $lead = Lead::findOrFail($id);
-            $vif = \App\Support\VisaInformationForm::build($lead->toArray());
-            $applicant = $vif['applicant'] ?: (trim("{$lead->first_name} {$lead->last_name}") ?: 'Applicant');
+            $applicant = trim("{$lead->first_name} {$lead->last_name}") ?: 'Applicant';
             $data = [
                 'applicant' => $applicant,
-                'sections' => $vif['sections'],
+                'sections' => $this->freeVifSections($lead),
                 'intakeId' => $lead->lead_id,
                 'generatedAt' => now()->format('d/m/Y'),
             ];
-            $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? '')) ?: ($lead->lead_id ?? 'Applicant');
+            $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $applicant)) ?: ($lead->lead_id ?? 'Applicant');
 
             return [$data, $name.' VIF'];
         }
@@ -3798,18 +3883,20 @@ class ImmigrationController extends Controller
         }
 
         $intake = $modelMap[$type]::findOrFail($id)->toArray();
-        $vif = \App\Support\VisaInformationForm::build($intake);
+        // Build the VIF from the client's ACTUAL assessment sections so nothing
+        // they filled is dropped (Study Plan, Travel Plan, Family, …).
+        $applicant = trim(($intake['first_name'] ?? '').' '.($intake['last_name'] ?? $intake['family_name'] ?? '')) ?: 'Applicant';
 
         $data = [
-            'applicant' => $vif['applicant'] ?: 'Applicant',
-            'sections' => $vif['sections'],
+            'applicant' => $applicant,
+            'sections' => $this->buildVifSections($type, $intake),
             'intakeId' => $intake['intake_id'] ?? null,
             'generatedAt' => now()->format('d/m/Y'),
         ];
 
         // Filename = client's name + " VIF" (e.g. "Mary Katherine Paspe VIF").
         // Falls back to the reference id, then a generic label.
-        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? ''));
+        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $applicant));
         if ($name === '') {
             $name = $intake['intake_id'] ?? 'Applicant';
         }
