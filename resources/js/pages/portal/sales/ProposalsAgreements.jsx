@@ -1613,6 +1613,23 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     const applyBankPreset = (preset) => setBank((b) => ({ ...b, preset, ...BANK_PRESETS[preset] }));
     const setBankField = (key, val) => setBank((b) => ({ ...b, [key]: val }));
     const [leadSearch, setLeadSearch] = useState('');
+    // Server-side search results for the current query — the page's `picker`
+    // prop is a capped roster, so a lead late in the alphabet isn't in it; this
+    // finds any eligible lead. Keyed by the query it answered so stale results
+    // aren't shown after the box changes.
+    const [remote, setRemote] = useState({ q: '', leads: [] });
+    useEffect(() => {
+        const q = leadSearch.trim();
+        if (! q) return;
+        let cancelled = false;
+        const t = setTimeout(() => {
+            fetch(`/admin/leads/doc-picker-search?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } })
+                .then((r) => (r.ok ? r.json() : { leads: [] }))
+                .then((d) => { if (! cancelled) setRemote({ q, leads: d.leads || [] }); })
+                .catch(() => { if (! cancelled) setRemote({ q, leads: [] }); });
+        }, 250);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [leadSearch]);
     const [programSearch, setProgramSearch] = useState('');
     const [pickedProgramIds, setPickedProgramIds] = useState([]);
     // Per-program "why this program" reasons, keyed by program id.
@@ -1683,12 +1700,20 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     const filteredPicker = useMemo(() => {
         const q = leadSearch.trim().toLowerCase();
         if (! q) return picker.slice(0, 50);
-        return picker.filter((p) =>
+        // Immediate client-side matches from the loaded roster…
+        const client = picker.filter((p) =>
             (p.name || '').toLowerCase().includes(q)
             || (p.email || '').toLowerCase().includes(q)
             || (p.lead_id || '').toLowerCase().includes(q)
-        ).slice(0, 50);
-    }, [picker, leadSearch]);
+        );
+        // …plus server results for this query (leads beyond the capped roster),
+        // deduped by id. Falls back to the client list until the fetch returns.
+        if (remote.q.trim().toLowerCase() === q) {
+            const seen = new Set(remote.leads.map((l) => l.id));
+            return [...remote.leads, ...client.filter((c) => ! seen.has(c.id))].slice(0, 50);
+        }
+        return client.slice(0, 50);
+    }, [picker, leadSearch, remote]);
 
     // Proposal path saves a program shortlist; every other type kicks off
     // the templated PDF generator. Keep both paths behind the same
