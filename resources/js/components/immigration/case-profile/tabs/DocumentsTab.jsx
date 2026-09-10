@@ -250,13 +250,23 @@ export default function DocumentsTab({
         return { total, approved };
     }, [allRows]);
 
+    // The Immigration team's own documents — the Visa Information Form, the
+    // engagement pack, and the invoice — are grouped under one "Immigration
+    // Team" section rather than three separate ones.
+    const immigrationTeamCategory = (cat) => {
+        const c = (cat || "").toString().toLowerCase();
+        return (c.includes("information form") || c === "invoices" || c.includes("engagement"))
+            ? "Immigration Team"
+            : (cat || "Other");
+    };
+
     // Group rows by category into ordered sections (Applicant → Financial →
     // Sponsor → Other), preserving the checklist order. First appearance of a
     // category fixes its position, so the seeded order drives the layout.
     const groupedRows = [];
     const groupIndex = new Map();
     for (const row of allRows) {
-        const category = row.category || "Other";
+        const category = immigrationTeamCategory(row.category);
         if (! groupIndex.has(category)) {
             groupIndex.set(category, groupedRows.length);
             groupedRows.push([category, []]);
