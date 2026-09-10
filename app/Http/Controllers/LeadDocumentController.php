@@ -652,7 +652,7 @@ class LeadDocumentController extends Controller
 
                 return back()->with('success', "Consultancy Agreement submitted for verification — {$lead->first_name} {$lead->last_name}.");
             } elseif ($type === 'english_engagement') {
-                $generator->englishEngagement($lead, $overrides['currency'] ?? 'php');
+                $generator->englishEngagement($lead, $overrides['currency'] ?? 'php', $overrides);
                 $friendly = 'English Engagement';
             } else {
                 return back()->withErrors(['error' => "Unknown document type: {$type}"]);
@@ -1324,7 +1324,7 @@ class LeadDocumentController extends Controller
     private function feeOverridesFromRequest(Request $request): array
     {
         $out = [];
-        foreach (['school_enrolment_fee', 'english_proficiency_fee'] as $key) {
+        foreach (['school_enrolment_fee', 'english_proficiency_fee', 'english_fee'] as $key) {
             $val = $request->input($key);
             if ($val !== null && $val !== '' && is_numeric($val) && (int) $val > 0) {
                 $out[$key] = (int) $val;
@@ -1457,7 +1457,7 @@ class LeadDocumentController extends Controller
             $view = 'agreements.consultancy';
         } elseif ($type === 'english_engagement') {
             $view = 'agreements.engagement-english';
-            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php');
+            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php', (int) ($overrides['english_fee'] ?? 14500));
         } else {
             return response('<html><body style="font-family:sans-serif;padding:2rem;color:#666">Unknown document type.</body></html>', 400)
                 ->header('Content-Type', 'text/html; charset=utf-8');
@@ -1467,7 +1467,7 @@ class LeadDocumentController extends Controller
             ->header('Content-Type', 'text/html; charset=utf-8');
     }
 
-    private function englishEngagementPayload(Lead $lead, string $currency = 'php'): array
+    private function englishEngagementPayload(Lead $lead, string $currency = 'php', int $englishFee = 14500): array
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
 
@@ -1486,6 +1486,7 @@ class LeadDocumentController extends Controller
             'generated_at_formatted' => now()->format('jS').' day of '.now()->format('F Y'),
             'currency' => $currency === 'nzd' ? 'nzd' : 'php',
             'currency_symbol' => $this->currencySymbolFor($currency),
+            'english_fee' => $englishFee,
         ];
     }
 

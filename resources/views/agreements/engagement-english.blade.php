@@ -104,15 +104,15 @@
                     </ul>
                 </td>
                 <td class="center">1</td>
-                <td class="right">14,500.00</td>
-                <td class="right">14,500.00</td>
+                <td class="right">{{ number_format($english_fee ?? 14500, 2) }}</td>
+                <td class="right">{{ number_format($english_fee ?? 14500, 2) }}</td>
             </tr>
             <tr>
                 <td></td>
                 <td></td>
                 <td></td>
                 <td class="right">TOTAL</td>
-                <td class="right">Php 14,500.00</td>
+                <td class="right">{{ $currency_symbol ?? 'Php' }} {{ number_format($english_fee ?? 14500, 2) }}</td>
             </tr>
         </tbody>
     </table>

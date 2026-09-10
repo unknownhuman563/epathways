@@ -1560,7 +1560,7 @@ const DOC_TYPES = [
     { value: 'consultancy_voucher_single_150',    label: 'With Voucher · Single · 150,000',                category: 'philippines', hint: 'Sole applicant. Inclusive of the INZ visa application fee (voucher).',                        backendType: 'consultancy_voucher_150', applicantMode: 'single', defaultSchoolFee: 150000 },
     { value: 'consultancy_voucher_couple_150',    label: 'With Voucher · Couple · 150,000',                category: 'philippines', hint: 'Applicant + partner. Inclusive of the INZ visa application fee (voucher).',                   backendType: 'consultancy_voucher_150', applicantMode: 'couple', defaultSchoolFee: 150000 },
     { value: 'consultancy_english_single_100',    label: 'With English · Single · 100,000',                category: 'philippines', hint: 'Sole applicant with English review add-on.',                                                  backendType: 'consultancy_english_100', applicantMode: 'single', defaultSchoolFee: 100000 },
-    { value: 'english_engagement',                label: 'English Engagement Agreement',                   category: 'philippines', hint: 'PTE preparation services (separate document).' },
+    { value: 'english_engagement',                label: 'Onshore - English',                              category: 'english',     hint: 'English Proficiency Test (IELTS/PTE) review agreement. Editable package fee.', backendType: 'english_engagement', englishFee: true, defaultEnglishFee: 550 },
 
     { value: 'consultancy_onshore',               label: 'Onshore Engagement (free)',                      category: 'onshore',     hint: 'Applicant already in NZ. Education engagement — FREE OF CHARGE (no consultancy fees). Refers to a Licensed Immigration Adviser.', backendType: 'consultancy_onshore', free: true },
 
@@ -1579,6 +1579,7 @@ const CATEGORIES = {
     philippines: { code: 'philippines', label: 'Philippines', currency: 'php' },
     onshore:     { code: 'onshore',     label: 'Onshore',     currency: 'nzd' },
     offshore:    { code: 'offshore',    label: 'Offshore',    currency: 'nzd' },
+    english:     { code: 'english',     label: 'English',     currency: 'nzd' },
 };
 
 // Currency metadata keyed by code — drives the fee symbol + locale in the UI.
@@ -1677,7 +1678,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // while they flip around within the same scenario.
     useEffect(() => {
         const meta = DOC_TYPES.find((t) => t.value === type);
-        setSchoolFee(meta?.defaultSchoolFee ?? 100000);
+        // For the English engagement the single package fee reuses schoolFee.
+        setSchoolFee(meta?.defaultSchoolFee ?? meta?.defaultEnglishFee ?? 100000);
         setEnglishFee(DEFAULT_ENGLISH_FEE);
         // Offshore uses the ANZ bank block by default; PH consultancy uses RCBC.
         if (type === 'consultancy_offshore') {
@@ -1764,7 +1766,9 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                     bank_reference: bank.reference,
                     notify: wantNotify,
                 }
-                : { currency, notify: wantNotify });
+                : (isEnglishType
+                    ? { currency, english_fee: schoolFee, notify: wantNotify }
+                    : { currency, notify: wantNotify }));
 
         const finish = () => {
             setSubmitting(false);
@@ -1835,6 +1839,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
 
     // Consultancy = has a fee/bank panel (excludes the free onshore engagement).
     const isConsultancyType = CONSULTANCY_TYPES.has(type);
+    const isEnglishType = type === 'english_engagement';
     // Any agreement whose generate endpoint self-emails the client (all
     // consultancy scenarios + onshore + offshore) — so the modal skips the
     // second notify POST for these.
@@ -1854,7 +1859,10 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         // Currency rides on every preview (not just consultancy) so the symbol
         // updates live for English Engagement too.
         if (! isConsultancyType) {
-            return `${base}?${new URLSearchParams({ currency }).toString()}`;
+            // English engagement carries its editable package fee into the preview.
+            const q = { currency };
+            if (isEnglishType) q.english_fee = String(schoolFee || 0);
+            return `${base}?${new URLSearchParams(q).toString()}`;
         }
         const params = new URLSearchParams({
             school_enrolment_fee: String(schoolFee || 0),
@@ -1969,21 +1977,17 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             automatically (Philippines = PhP, Onshore/Offshore = NZ$). */}
                         <div className="px-5 py-4 border-b border-gray-100">
                             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Category</div>
-                            <div className="grid grid-cols-3 gap-2">
-                                {Object.values(CATEGORIES).map((c) => (
-                                    <button
-                                        key={c.code}
-                                        type="button"
-                                        onClick={() => { setCategory(c.code); setType(''); }}
-                                        className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[13px] font-semibold transition-colors ${
-                                            category === c.code
-                                                ? 'border-gray-900 bg-gray-900 text-white'
-                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
-                                        }`}
-                                    >
-                                        {c.label}
-                                    </button>
-                                ))}
+                            <div className="relative">
+                                <select
+                                    value={category}
+                                    onChange={(e) => { setCategory(e.target.value); setType(''); }}
+                                    className="w-full appearance-none pl-3 pr-9 py-2 rounded-lg text-sm bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 transition-all font-semibold text-gray-900"
+                                >
+                                    {Object.values(CATEGORIES).map((c) => (
+                                        <option key={c.code} value={c.code}>{c.label}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                             <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
                                 Sets the available documents and the currency ({cur.short}). Amounts aren&rsquo;t converted.
@@ -2024,8 +2028,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             </p>
                         </div>
 
-                        {/* Fees section — consultancy only */}
-                        {isConsultancyType && (
+                        {/* Fees section — consultancy + English engagement */}
+                        {(isConsultancyType || isEnglishType) && (
                             <div className="px-5 py-4 border-b border-gray-100">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Fees · {cur.short}</div>
@@ -2034,7 +2038,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                         LIVE
                                     </span>
                                 </div>
-                                {typeMeta?.singleFee ? (
+                                {(typeMeta?.singleFee || isEnglishType) ? (
                                     // Single package fee (offshore / onshore). The "Zero fees"
                                     // variant just defaults this to 0 — staff can still type an
                                     // amount, and $0 keeps the waived wording in the document.

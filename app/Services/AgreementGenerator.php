@@ -27,7 +27,7 @@ class AgreementGenerator
      * English Engagement Agreement — PTE preparation services. No variant
      * (just one template). Stored against checklist_key='agree.engagement_english'.
      */
-    public function englishEngagement(Lead $lead, string $currency = 'php'): LeadDocument
+    public function englishEngagement(Lead $lead, string $currency = 'php', array $overrides = []): LeadDocument
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '');
@@ -49,6 +49,8 @@ class AgreementGenerator
             'generated_at_formatted' => $dateLine,
             'currency' => $currency,
             'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
+            // Staff-editable package price (defaults to the old 14,500).
+            'english_fee' => (int) ($overrides['english_fee'] ?? 14500),
         ];
 
         $pdf = Pdf::loadView('agreements.engagement-english', $payload)->setPaper('a4');
