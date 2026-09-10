@@ -151,11 +151,11 @@
 
     <h3>Section 2. Bank Details</h3>
     <div class="bank-box">
-        <div class="heading">PAYMENT DETAILS</div>
-        <div class="row"><span class="label">Bank Name:</span> <strong>BPI</strong></div>
-        <div class="row"><span class="label">Account Name:</span> <strong>Dinah Jabone</strong></div>
-        <div class="row"><span class="label">Account Number:</span> <strong>9269224808</strong></div>
-        <div class="row"><span class="label">Reference:</span> <strong>#PTE{{ $client_reference }}</strong></div>
+        <div class="heading">{{ $bank_heading ?? 'PAYMENT DETAILS' }}</div>
+        <div class="row"><span class="label">Bank Name:</span> <strong>{{ $bank_name ?? 'BPI' }}</strong></div>
+        <div class="row"><span class="label">Account Name:</span> <strong>{{ $bank_account_name ?? 'Dinah Suarin' }}</strong></div>
+        <div class="row"><span class="label">Account Number:</span> <strong>{{ $bank_account_number ?? '9269224808' }}</strong></div>
+        <div class="row"><span class="label">Reference:</span> <strong>{{ $bank_reference ?? ('#PTE'.$client_reference) }}</strong></div>
     </div>
 
     <div class="article-bar">ARTICLE 2 &nbsp;•&nbsp; SCOPE OF SERVICES</div>

@@ -53,7 +53,7 @@ class AgreementGenerator
             // and the separate PTE Examination fee in USD (defaults 240).
             'english_fee' => (int) ($overrides['english_fee'] ?? 14500),
             'pte_fee' => (int) ($overrides['pte_fee'] ?? 240),
-        ];
+        ] + $this->englishBankVars($overrides);
 
         $pdf = Pdf::loadView('agreements.engagement-english', $payload)->setPaper('a4');
         $binary = $pdf->output();
@@ -80,6 +80,24 @@ class AgreementGenerator
     }
 
     /**
+     * Editable bank block for the English agreements — the staff-entered
+     * overrides (a preset or fully custom) or the BPI default. Blank reference
+     * falls back to the "#PTE<name>" convention in the template.
+     */
+    public function englishBankVars(array $overrides): array
+    {
+        $val = fn ($k, $default) => filled($overrides[$k] ?? null) ? $overrides[$k] : $default;
+
+        return [
+            'bank_heading' => $val('bank_heading', 'PAYMENT DETAILS'),
+            'bank_name' => $val('bank_name', 'BPI'),
+            'bank_account_name' => $val('bank_account_name', 'Dinah Suarin'),
+            'bank_account_number' => $val('bank_account_number', '9269224808'),
+            'bank_reference' => filled($overrides['bank_reference'] ?? null) ? $overrides['bank_reference'] : null,
+        ];
+    }
+
+    /**
      * English Proficiency Test (IELTS/PTE) Review Agreement — OFFSHORE variant
      * (NZD, single editable package fee). Same document bucket as the English
      * engagement, different template.
@@ -103,7 +121,7 @@ class AgreementGenerator
             'currency' => $currency,
             'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
             'english_fee' => (int) ($overrides['english_fee'] ?? 550),
-        ];
+        ] + $this->englishBankVars($overrides);
 
         $pdf = Pdf::loadView('agreements.engagement-english-offshore', $payload)->setPaper('a4');
         $binary = $pdf->output();

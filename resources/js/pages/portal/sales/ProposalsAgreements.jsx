@@ -1644,6 +1644,7 @@ const CURRENCIES = {
 const BANK_PRESETS = {
     rcbc:  { label: 'RCBC',  heading: 'Payment for School Enrollment and Documentation Fee',              bank_name: 'RCBC', account_name: 'Dinah Suarin',          account_number: '9045440503' },
     anz:   { label: 'ANZ',   heading: 'Payment for Documentation, School Enrolment, and Visa Application Fee', bank_name: 'ANZ',  account_name: 'EMPLOYMENT PATHWAYS LTD', account_number: '06-0185-0987269-01' },
+    bpi:   { label: 'BPI',   heading: 'PAYMENT DETAILS',                                                  bank_name: 'BPI',  account_name: 'Dinah Suarin',          account_number: '9269224808' },
     other: { label: 'Other', heading: '',                                                                 bank_name: '',     account_name: '',                     account_number: '' },
 };
 
@@ -1736,9 +1737,12 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         setSchoolFee(meta?.defaultSchoolFee ?? meta?.defaultEnglishFee ?? 100000);
         setEnglishFee(DEFAULT_ENGLISH_FEE);
         setPteFee(meta?.defaultPteFee ?? 240);
-        // Offshore uses the ANZ bank block by default; PH consultancy uses RCBC.
+        // Offshore uses the ANZ bank block; English agreements use BPI; other
+        // PH consultancy uses RCBC.
         if (type === 'consultancy_offshore') {
             setBank({ preset: 'anz', ...BANK_PRESETS.anz, reference: '' });
+        } else if (meta?.englishFee) {
+            setBank({ preset: 'bpi', ...BANK_PRESETS.bpi, reference: '' });
         } else if (meta?.backendType && ! meta.free) {
             setBank({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' });
         }
@@ -1826,6 +1830,11 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                         currency,
                         english_fee: schoolFee,
                         ...(typeMeta?.hasPte ? { pte_fee: pteFee } : {}),
+                        bank_heading: bank.heading,
+                        bank_name: bank.bank_name,
+                        bank_account_name: bank.account_name,
+                        bank_account_number: bank.account_number,
+                        bank_reference: bank.reference,
                         notify: wantNotify,
                     }
                     : { currency, notify: wantNotify }));
@@ -1921,7 +1930,14 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         if (! isConsultancyType) {
             // English engagement carries its editable package fee into the preview.
             const q = { currency };
-            if (isEnglishType) q.english_fee = String(schoolFee || 0);
+            if (isEnglishType) {
+                q.english_fee = String(schoolFee || 0);
+                q.bank_heading = bank.heading || '';
+                q.bank_name = bank.bank_name || '';
+                q.bank_account_name = bank.account_name || '';
+                q.bank_account_number = bank.account_number || '';
+                q.bank_reference = bank.reference || '';
+            }
             if (typeMeta?.hasPte) q.pte_fee = String(pteFee || 0);
             return `${base}?${new URLSearchParams(q).toString()}`;
         }
@@ -2163,13 +2179,13 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             </div>
                         )}
 
-                        {/* Bank details section — consultancy only. A preset fills
-                            the fields; every field stays editable. "Other" blanks
-                            them for a fully custom bank. */}
-                        {isConsultancyType && (
+                        {/* Bank details section — consultancy + English agreements.
+                            A preset fills the fields; every field stays editable.
+                            "Other" blanks them for a fully custom bank. */}
+                        {(isConsultancyType || isEnglishType) && (
                             <div className="px-5 py-4 border-b border-gray-100">
                                 <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Bank details</div>
-                                <div className="grid grid-cols-3 gap-2 mb-3">
+                                <div className="grid grid-cols-4 gap-2 mb-3">
                                     {Object.entries(BANK_PRESETS).map(([key, p]) => (
                                         <button
                                             key={key}

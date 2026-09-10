@@ -1469,10 +1469,12 @@ class LeadDocumentController extends Controller
             $view = 'agreements.consultancy';
         } elseif ($type === 'english_engagement') {
             $view = 'agreements.engagement-english';
-            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php', (int) ($overrides['english_fee'] ?? 14500), (int) ($overrides['pte_fee'] ?? 240));
+            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php', (int) ($overrides['english_fee'] ?? 14500), (int) ($overrides['pte_fee'] ?? 240))
+                + $generator->englishBankVars($overrides);
         } elseif ($type === 'english_offshore') {
             $view = 'agreements.engagement-english-offshore';
-            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'nzd', (int) ($overrides['english_fee'] ?? 550));
+            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'nzd', (int) ($overrides['english_fee'] ?? 550))
+                + $generator->englishBankVars($overrides);
         } else {
             return response('<html><body style="font-family:sans-serif;padding:2rem;color:#666">Unknown document type.</body></html>', 400)
                 ->header('Content-Type', 'text/html; charset=utf-8');

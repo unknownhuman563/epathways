@@ -111,7 +111,7 @@
                     </tr>
                 @endunless
                 @foreach ($section['rows'] as $row)
-                    @switch($row['t'])
+                    @switch($row['t'] ?? 'qa')
                         @case('sub')
                             <tr><td class="sub" colspan="2">{{ $row['label'] }}</td></tr>
                             @break
