@@ -186,8 +186,21 @@ export default function DocumentsTab({
         return map;
     }, [documents]);
 
+    // Request for Information PDFs (attached when a case is moved to the "Request
+    // for Information" stage). They get their own fixed row under the VIF rather
+    // than landing in the "Other" bucket.
+    const rfiDocs = useMemo(
+        () => documents
+            .filter((d) => (typeof d.source_variant === "string" ? d.source_variant : "") === "rfi")
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+        [documents],
+    );
+
     const orphans = useMemo(
-        () => documents.filter((d) => ! d.checklist_key || ! knownKeys.has(d.checklist_key)),
+        () => documents.filter((d) =>
+            (! d.checklist_key || ! knownKeys.has(d.checklist_key))
+            && (typeof d.source_variant === "string" ? d.source_variant : "") !== "rfi",
+        ),
         [documents, knownKeys],
     );
 
@@ -243,7 +256,27 @@ export default function DocumentsTab({
         };
     });
 
-    const allRows = [...rows, ...orphanRows];
+    // Fixed "Request Information Form" row — always shown, right below the Visa
+    // Information Form, holding any RFI PDFs the adviser attached.
+    const rfiRow = {
+        kind:      "checklist",
+        key:       "rfi",
+        label:     "Request Information Form",
+        category:  "Immigration Team",
+        required:  false,
+        hidden:    false,
+        document:  rfiDocs.slice(-1)[0] || null,
+        documents: rfiDocs,
+    };
+    const rowsWithRfi = [];
+    let rfiInserted = false;
+    for (const r of rows) {
+        rowsWithRfi.push(r);
+        if (! rfiInserted && isVifLabel(r.label)) { rowsWithRfi.push(rfiRow); rfiInserted = true; }
+    }
+    if (! rfiInserted) rowsWithRfi.push(rfiRow);
+
+    const allRows = [...rowsWithRfi, ...orphanRows];
     const totals = useMemo(() => {
         const total = allRows.length;
         const approved = allRows.filter((r) => r.document?.status === "Approved").length;

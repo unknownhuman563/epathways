@@ -973,6 +973,9 @@ class LeadTrackingController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->reject(fn (LeadDocument $d) => $d->checklist_key && in_array($d->checklist_key, $hidden, true))
+            // RFI documents surface under the "Request Information Form" item at
+            // the top of the checklist, not in this adviser-docs list.
+            ->reject(fn (LeadDocument $d) => $d->source_variant === 'rfi')
             ->map(function (LeadDocument $d) use ($code, $labels) {
                 // Prefer a friendly label for engagement docs (engagement:<type>).
                 $type = str_starts_with((string) $d->source_variant, 'engagement:')
@@ -1377,6 +1380,7 @@ class LeadTrackingController extends Controller
      */
     private const UNIVERSAL_ITEMS = [
         ['key' => 'svf', 'label' => 'Visa Information Form', 'hint' => 'Visa information form prepared with your adviser.'],
+        ['key' => 'rfi', 'label' => 'Request Information Form', 'hint' => 'Information your adviser has requested — review it and upload your response.', 'optional' => true],
     ];
 
     /**
@@ -1398,6 +1402,13 @@ class LeadTrackingController extends Controller
             }
 
             $docs = $docsByKey->get($u['key']) ?? collect();
+
+            // Optional universal items (e.g. Request Information Form) only appear
+            // once the adviser has actually attached one — so a case with no RFI
+            // never shows an empty "Request Information Form" slot.
+            if (($u['optional'] ?? false) && $docs->isEmpty()) {
+                continue;
+            }
             $status = 'missing';
             if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
                 $status = 'approved';
@@ -1411,7 +1422,7 @@ class LeadTrackingController extends Controller
                 'key' => $u['key'],
                 'label' => ($u['key'] === 'svf' && $isStudent) ? 'Student Visa Information Form' : $u['label'],
                 'hint' => $u['hint'] ?? null,
-                'required' => true,
+                'required' => ! ($u['optional'] ?? false),
                 'status' => $status,
                 'count' => $docs->count(),
                 // Flag the frontend keys on to pin this to the top section.

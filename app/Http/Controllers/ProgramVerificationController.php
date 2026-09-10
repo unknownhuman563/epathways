@@ -98,6 +98,20 @@ class ProgramVerificationController extends Controller
                         'edited' => (bool) ($m['edited'] ?? false),
                         // Internal staff note (private) vs. the client-facing reason.
                         'note' => trim((string) ($m['note'] ?? '')) ?: null,
+                        // Threaded per-programme notes — the SAME thread the
+                        // Proposals tab uses, so notes/replies added there are
+                        // visible (and repliable) here and vice versa.
+                        'notes' => collect(is_array($m['notes'] ?? null) ? $m['notes'] : [])
+                            ->map(fn ($n) => [
+                                'id' => $n['id'] ?? (string) \Illuminate\Support\Str::uuid(),
+                                'tag' => $n['tag'] ?? 'note',
+                                'body' => $n['body'] ?? '',
+                                'author' => $n['author'] ?? 'Staff',
+                                'role' => $n['role'] ?? null,
+                                'created_at' => $n['created_at'] ?? null,
+                                'actioned_at' => $n['actioned_at'] ?? null,
+                                'replies' => array_values(is_array($n['replies'] ?? null) ? $n['replies'] : []),
+                            ])->values(),
                         'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null,
                         'is_first_choice' => (int) $l->preferred_program_id === (int) $p->id,
                     ];

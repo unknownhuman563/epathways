@@ -1644,7 +1644,10 @@ class ImmigrationController extends Controller
             $name = $file->getClientOriginalName() ?: 'RFI document.pdf';
             \App\Models\LeadDocument::create([
                 'lead_id' => $lead->id,
-                'checklist_key' => null,
+                // Keyed 'rfi' so it lands under the client tracker's "Request
+                // Information Form" universal item AND can be shown/hidden with
+                // the same staff tracker-visibility toggle as other documents.
+                'checklist_key' => 'rfi',
                 'original_name' => $name,
                 'file_path' => $path,
                 'mime' => $file->getClientMimeType(),
