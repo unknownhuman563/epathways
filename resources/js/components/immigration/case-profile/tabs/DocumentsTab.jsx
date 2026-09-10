@@ -186,12 +186,12 @@ export default function DocumentsTab({
         return map;
     }, [documents]);
 
-    // Request for Information PDFs (attached when a case is moved to the "Request
-    // for Information" stage). They get their own fixed row under the VIF rather
-    // than landing in the "Other" bucket.
+    // The "Request Information Form" row holds the CLIENT's response uploads
+    // (checklist_key 'rfi'), NOT the staff's RFI notification file. It's empty
+    // until the client uploads, then shows their file(s).
     const rfiDocs = useMemo(
         () => documents
-            .filter((d) => (typeof d.source_variant === "string" ? d.source_variant : "") === "rfi")
+            .filter((d) => d.checklist_key === "rfi")
             .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
         [documents],
     );
@@ -199,7 +199,8 @@ export default function DocumentsTab({
     const orphans = useMemo(
         () => documents.filter((d) =>
             (! d.checklist_key || ! knownKeys.has(d.checklist_key))
-            && (typeof d.source_variant === "string" ? d.source_variant : "") !== "rfi",
+            // Client RFI responses live in the Request Information Form row above.
+            && d.checklist_key !== "rfi",
         ),
         [documents, knownKeys],
     );
@@ -236,21 +237,26 @@ export default function DocumentsTab({
         const isInz = variant.startsWith("inz:");
         const isDecline = variant === "decline";
         const isGenerated = d.source === "generated";
+        // The staff RFI notification file (what was requested) — grouped with the
+        // Immigration Team docs, separate from the client's response row.
+        const isRfi = variant === "rfi";
         return {
             kind:     "orphan",
             key:      `orphan-${d.id}`,
             label:    d.original_name,
             category: isDecline
                 ? "Visa outcome"
-                : isInvoice
-                    ? "Invoices"
-                    : isEngagement
-                        ? "Engagement documents"
-                        : isInz
-                            ? "INZ forms (generated)"
-                            : isGenerated
-                                ? "Generated documents"
-                                : "Other (no checklist match)",
+                : isRfi
+                    ? "Immigration Team"
+                    : isInvoice
+                        ? "Invoices"
+                        : isEngagement
+                            ? "Engagement documents"
+                            : isInz
+                                ? "INZ forms (generated)"
+                                : isGenerated
+                                    ? "Generated documents"
+                                    : "Other (no checklist match)",
             required: false,
             document: d,
         };
