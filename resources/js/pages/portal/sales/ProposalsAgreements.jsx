@@ -652,7 +652,9 @@ function NoteComposer({ value, onChange, onSubmit, onCancel, placeholder, small 
 // DOC_TYPES key so the "Edit" action can pre-open the modal at the same
 // variant the doc was generated with.
 function variantToTypeKey(doc) {
-    if (doc.checklist_key === 'agree.engagement_english') return 'english_engagement';
+    if (doc.checklist_key === 'agree.engagement_english') {
+        return doc.variant === 'engagement-english-offshore' ? 'english_offshore' : 'english_engagement';
+    }
     if (doc.checklist_key === 'agree.consultancy') {
         const parts = (doc.variant || '').split(':');
         const scenario = parts[1] || 'std_100';
@@ -1264,7 +1266,7 @@ function documentCategory(type) {
             border: 'border-violet-200',
         };
     }
-    if (type === 'english_engagement') {
+    if (type === 'english_engagement' || type === 'english_offshore') {
         return {
             label: 'English',
             chip: 'bg-sky-100 text-sky-700 ring-1 ring-sky-200',
@@ -1560,7 +1562,8 @@ const DOC_TYPES = [
     { value: 'consultancy_voucher_single_150',    label: 'With Voucher · Single · 150,000',                category: 'philippines', hint: 'Sole applicant. Inclusive of the INZ visa application fee (voucher).',                        backendType: 'consultancy_voucher_150', applicantMode: 'single', defaultSchoolFee: 150000 },
     { value: 'consultancy_voucher_couple_150',    label: 'With Voucher · Couple · 150,000',                category: 'philippines', hint: 'Applicant + partner. Inclusive of the INZ visa application fee (voucher).',                   backendType: 'consultancy_voucher_150', applicantMode: 'couple', defaultSchoolFee: 150000 },
     { value: 'consultancy_english_single_100',    label: 'With English · Single · 100,000',                category: 'philippines', hint: 'Sole applicant with English review add-on.',                                                  backendType: 'consultancy_english_100', applicantMode: 'single', defaultSchoolFee: 100000 },
-    { value: 'english_engagement',                label: 'Onshore - English',                              category: 'english',     hint: 'English Proficiency Test (IELTS/PTE) review agreement. Editable package fee.', backendType: 'english_engagement', englishFee: true, defaultEnglishFee: 550 },
+    { value: 'english_engagement',                label: 'Offshore - Philippines',                         category: 'english',     hint: 'English Engagement Agreement (PTE prep + exam) — Php. Editable English Review + PTE Exam fees.', backendType: 'english_engagement', englishFee: true, hasPte: true, defaultEnglishFee: 14500, defaultPteFee: 240, currency: 'php' },
+    { value: 'english_offshore',                  label: 'Offshore - English',                             category: 'english',     hint: 'English Proficiency Test (IELTS/PTE) Review Agreement — NZD. Editable package fee.', backendType: 'english_offshore', englishFee: true, defaultEnglishFee: 550, currency: 'nzd' },
 
     { value: 'consultancy_onshore',               label: 'Onshore Engagement (free)',                      category: 'onshore',     hint: 'Applicant already in NZ. Education engagement — FREE OF CHARGE (no consultancy fees). Refers to a Licensed Immigration Adviser.', backendType: 'consultancy_onshore', free: true },
 
@@ -1568,7 +1571,10 @@ const DOC_TYPES = [
     { value: 'consultancy_offshore_zero',         label: 'Standard · Offshore — Zero fees',                category: 'offshore',    hint: 'Applicant offshore. Same document as Standard · Offshore, but all fees waived (NZ$0).', backendType: 'consultancy_offshore_zero', applicantMode: 'single', defaultSchoolFee: 0, singleFee: true, zeroFees: true },
 ];
 // Consultancy types that carry a fee/bank panel (excludes the free onshore).
-const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType && ! t.free).map((t) => t.value));
+// Consultancy scenarios only — a paid backend type that ISN'T an English
+// engagement (those carry `englishFee` and route through their own fee/preview
+// branch, so they must not be treated as consultancy).
+const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType && ! t.free && ! t.englishFee).map((t) => t.value));
 const MAX_PROPOSED_PROGRAMS = 5;
 const DEFAULT_ENGLISH_FEE = 14500;
 
@@ -1606,7 +1612,10 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // Category chosen before the doc type — filters which doc types show and
     // sets the currency automatically (Philippines = PhP, Onshore/Offshore = NZ$).
     const [category, setCategory] = useState('philippines');
-    const currency = (CATEGORIES[category] || CATEGORIES.philippines).currency;
+    // Currency: a document type may pin its own (e.g. Offshore - Philippines is
+    // always Php even under the English category); otherwise the category sets it.
+    const currency = (DOC_TYPES.find((t) => t.value === type)?.currency)
+        || (CATEGORIES[category] || CATEGORIES.philippines).currency;
     const cur = CURRENCIES[currency] || CURRENCIES.php;
     // Editable bank details (consultancy agreements). A preset fills the
     // fields; every field stays editable. RCBC default = unchanged docs.
@@ -1641,6 +1650,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // consultancy scenarios. Defaults come from the selected DOC_TYPE.
     const [schoolFee, setSchoolFee] = useState(100000);
     const [englishFee, setEnglishFee] = useState(DEFAULT_ENGLISH_FEE);
+    // Offshore - Philippines carries a second, USD-priced PTE Examination fee.
+    const [pteFee, setPteFee] = useState(240);
     // Preview iframe loading state — flipped to true whenever the URL
     // changes, back to false when the iframe fires `onLoad`. Gives staff
     // a spinner instead of a suspicious white A4 while dompdf renders.
@@ -1681,6 +1692,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         // For the English engagement the single package fee reuses schoolFee.
         setSchoolFee(meta?.defaultSchoolFee ?? meta?.defaultEnglishFee ?? 100000);
         setEnglishFee(DEFAULT_ENGLISH_FEE);
+        setPteFee(meta?.defaultPteFee ?? 240);
         // Offshore uses the ANZ bank block by default; PH consultancy uses RCBC.
         if (type === 'consultancy_offshore') {
             setBank({ preset: 'anz', ...BANK_PRESETS.anz, reference: '' });
@@ -1767,7 +1779,12 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                     notify: wantNotify,
                 }
                 : (isEnglishType
-                    ? { currency, english_fee: schoolFee, notify: wantNotify }
+                    ? {
+                        currency,
+                        english_fee: schoolFee,
+                        ...(typeMeta?.hasPte ? { pte_fee: pteFee } : {}),
+                        notify: wantNotify,
+                    }
                     : { currency, notify: wantNotify }));
 
         const finish = () => {
@@ -1839,7 +1856,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
 
     // Consultancy = has a fee/bank panel (excludes the free onshore engagement).
     const isConsultancyType = CONSULTANCY_TYPES.has(type);
-    const isEnglishType = type === 'english_engagement';
+    const isEnglishType = type === 'english_engagement' || type === 'english_offshore';
     // Any agreement whose generate endpoint self-emails the client (all
     // consultancy scenarios + onshore + offshore) — so the modal skips the
     // second notify POST for these.
@@ -1862,6 +1879,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             // English engagement carries its editable package fee into the preview.
             const q = { currency };
             if (isEnglishType) q.english_fee = String(schoolFee || 0);
+            if (typeMeta?.hasPte) q.pte_fee = String(pteFee || 0);
             return `${base}?${new URLSearchParams(q).toString()}`;
         }
         const params = new URLSearchParams({
@@ -1876,7 +1894,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             bank_reference: bank.reference || '',
         });
         return `${base}?${params.toString()}`;
-    }, [leadId, type, isConsultancyType, schoolFee, englishFee, typeMeta, currency, bank]);
+    }, [leadId, type, isConsultancyType, schoolFee, englishFee, pteFee, typeMeta, currency, bank]);
 
     // Reset the loading flag every time the URL swings — the iframe's
     // onLoad callback will clear it once the new content is painted.
@@ -2038,10 +2056,29 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                         LIVE
                                     </span>
                                 </div>
-                                {(typeMeta?.singleFee || isEnglishType) ? (
-                                    // Single package fee (offshore / onshore). The "Zero fees"
-                                    // variant just defaults this to 0 — staff can still type an
-                                    // amount, and $0 keeps the waived wording in the document.
+                                {typeMeta?.hasPte ? (
+                                    // Offshore - Philippines: an English Review package (Php) plus
+                                    // a separate PTE Examination fee (USD), both editable.
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <FeeInput
+                                            label="English Review"
+                                            value={schoolFee}
+                                            onChange={setSchoolFee}
+                                            step={500}
+                                            symbol={cur.symbol}
+                                        />
+                                        <FeeInput
+                                            label="PTE Examination Fee"
+                                            value={pteFee}
+                                            onChange={setPteFee}
+                                            step={10}
+                                            symbol="US$"
+                                        />
+                                    </div>
+                                ) : (typeMeta?.singleFee || isEnglishType) ? (
+                                    // Single package fee (offshore / onshore / offshore-english).
+                                    // The "Zero fees" variant defaults this to 0 — staff can still
+                                    // type an amount, and $0 keeps the waived wording.
                                     <>
                                         <FeeInput
                                             label="Package fee"
