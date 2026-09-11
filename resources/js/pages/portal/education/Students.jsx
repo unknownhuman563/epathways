@@ -8,7 +8,7 @@ import {
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
     ChevronDown, Check, TrendingUp, Globe,
-    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound,
+    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound, Flag,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import AddEditStudentModal from "./AddEditStudentModal";
@@ -719,9 +719,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                 <th className="pr-2 py-3 w-6" />
                                 <SortableTh label="Student"   sortKey="name"         current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Status"    sortKey="status"       current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="Location"  sortKey="location"     current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="Program"   sortKey="program"      current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="School"    sortKey="school"       current={sortKey} dir={sortDir} onSort={toggleSort} />
+                                <SortableTh label="Programme & School" sortKey="program" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Intake"    sortKey="intake"       current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Engaged"   sortKey="date_engaged" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
@@ -732,7 +730,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={12} className="px-6 py-20 text-center">
+                                    <td colSpan={10} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Users size={22} />
                                             <p className="text-sm font-medium">
@@ -801,14 +799,15 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                         <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">
                                                             {s.name}
                                                         </div>
-                                                        {s.lead_id && (
+                                                        {s.location ? (
+                                                            <div className="flex items-center gap-1 text-[10px] text-gray-500 truncate">
+                                                                <MapPin size={10} className="text-gray-300 flex-shrink-0" /> {s.location}
+                                                            </div>
+                                                        ) : s.lead_id ? (
                                                             <div className="text-[10px] text-gray-400 font-mono truncate">{s.lead_id}</div>
-                                                        )}
+                                                        ) : null}
                                                     </div>
                                                 </Link>
-                                                <div className="mt-1 pl-[38px]">
-                                                    <StudentPriority student={s} />
-                                                </div>
                                                 </div>
                                             </td>
 
@@ -834,41 +833,30 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 />
                                             </td>
 
-                                            {/* Location */}
-                                            <td className="px-3 py-2.5">
-                                                {s.location ? (
-                                                    <span className="inline-flex items-center gap-1 text-gray-600">
-                                                        <MapPin size={11} className="text-gray-300" /> {s.location}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-300">—</span>
-                                                )}
-                                            </td>
-
-                                            {/* Program — one line per selected program */}
+                                            {/* Programme & School — program name with its school underneath, paired per line */}
                                             <td className="px-3 py-2.5 align-top">
-                                                {s.program ? (
-                                                    <div className="flex flex-col gap-0.5 max-w-[220px]">
-                                                        {s.program.split(" · ").map((p, i) => (
-                                                            <span key={i} className="text-gray-700 text-[12px] leading-tight truncate" title={p}>{p}</span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-300">—</span>
-                                                )}
-                                            </td>
-
-                                            {/* School — one line per selected school */}
-                                            <td className="px-3 py-2.5 align-top">
-                                                {(s.school || s.school_name) ? (
-                                                    <div className="flex flex-col gap-0.5 max-w-[200px]">
-                                                        {(s.school || s.school_name).split(" · ").map((sc, i) => (
-                                                            <span key={i} className="text-gray-700 text-[12px] leading-tight truncate" title={sc}>{sc}</span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-300">—</span>
-                                                )}
+                                                {(() => {
+                                                    const programs = s.program ? s.program.split(" · ") : [];
+                                                    const schools = (s.school || s.school_name) ? (s.school || s.school_name).split(" · ") : [];
+                                                    if (!programs.length && !schools.length) {
+                                                        return <span className="text-gray-300">—</span>;
+                                                    }
+                                                    const rows = Math.max(programs.length, schools.length);
+                                                    return (
+                                                        <div className="flex flex-col gap-1.5 max-w-[260px]">
+                                                            {Array.from({ length: rows }).map((_, i) => (
+                                                                <div key={i} className="flex flex-col">
+                                                                    {programs[i] && (
+                                                                        <span className="text-gray-800 text-[12px] font-medium leading-tight truncate" title={programs[i]}>{programs[i]}</span>
+                                                                    )}
+                                                                    {schools[i] && (
+                                                                        <span className="text-gray-500 text-[11px] leading-tight truncate" title={schools[i]}>{schools[i]}</span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
 
                                             {/* Intake */}
@@ -980,7 +968,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                         {/* Expander — full Students-Dashboard schema */}
                                         {isExpanded && (
                                             <tr className="bg-indigo-50/20 border-t border-indigo-100/60">
-                                                <td colSpan={12} className="px-6 py-4">
+                                                <td colSpan={10} className="px-6 py-4">
                                                     <StudentDashboardPanel student={s} />
                                                 </td>
                                             </tr>
@@ -1065,6 +1053,13 @@ function StudentDashboardPanel({ student: s }) {
             <section>
                 <PanelTitle>Profile</PanelTitle>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                            <Flag size={11} className="text-gray-400" />
+                            Priority
+                        </div>
+                        <StudentPriority student={s} />
+                    </div>
                     <ReadOnlyField icon={Calendar}  label="Date engaged"   value={fmtDate(s.date_engaged)} />
                     <ReadOnlyField icon={MapPin}    label="Location"       value={s.location} />
                     <ReadOnlyField icon={Phone}     label="Contact number" value={s.phone}    href={s.phone ? `tel:${s.phone}` : null} />

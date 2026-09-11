@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
     FileText, Download, Upload, Eye, Check, Loader2,
     Send, X as XIcon, AlertCircle, Paperclip, ChevronDown, ChevronRight, Plus, MessageSquare,
-    MoreVertical, Trash2, Flag,
+    MoreVertical, Trash2, Flag, Calendar,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
@@ -186,23 +186,34 @@ export default function DocumentsTab({
         return map;
     }, [documents]);
 
-    // The "Request Information Form" row holds the CLIENT's response uploads
-    // (checklist_key 'rfi'), NOT the staff's RFI notification file. It's empty
-    // until the client uploads, then shows their file(s).
+    // The "Request Information Form" row displays INZ's RFI letter(s) that the
+    // adviser attached (source_variant 'rfi'). The client responds through the
+    // individual extracted "Request Information — INZ" document requests, so this
+    // row is the source letter, not the client's response. (Legacy client
+    // uploads keyed 'rfi' are still shown here so nothing is lost.)
     const rfiDocs = useMemo(
         () => documents
-            .filter((d) => d.checklist_key === "rfi")
+            .filter((d) => d.source_variant === "rfi" || d.checklist_key === "rfi")
             .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
         [documents],
     );
 
+    // Uploads answering an RFI request render inside the Request Information
+    // rows — keep them out of the orphan list so they don't show twice.
+    const rfiRequestIds = useMemo(
+        () => new Set(documentRequests.filter((r) => r.origin === "rfi").map((r) => r.id)),
+        [documentRequests],
+    );
     const orphans = useMemo(
         () => documents.filter((d) =>
             (! d.checklist_key || ! knownKeys.has(d.checklist_key))
-            // Client RFI responses live in the Request Information Form row above.
-            && d.checklist_key !== "rfi",
+            // Client RFI responses and the staff RFI letter both live in the
+            // "Request Information Form" row above, not in the orphan list.
+            && d.checklist_key !== "rfi"
+            && d.source_variant !== "rfi"
+            && ! (d.request_id && rfiRequestIds.has(d.request_id)),
         ),
-        [documents, knownKeys],
+        [documents, knownKeys, rfiRequestIds],
     );
 
     const rows = items.map((item) => {
@@ -237,50 +248,56 @@ export default function DocumentsTab({
         const isInz = variant.startsWith("inz:");
         const isDecline = variant === "decline";
         const isGenerated = d.source === "generated";
-        // The staff RFI notification file (what was requested) — grouped with the
-        // Immigration Team docs, separate from the client's response row.
-        const isRfi = variant === "rfi";
         return {
             kind:     "orphan",
             key:      `orphan-${d.id}`,
             label:    d.original_name,
             category: isDecline
                 ? "Visa outcome"
-                : isRfi
-                    ? "Immigration Team"
-                    : isInvoice
-                        ? "Invoices"
-                        : isEngagement
-                            ? "Engagement documents"
-                            : isInz
-                                ? "INZ forms (generated)"
-                                : isGenerated
-                                    ? "Generated documents"
-                                    : "Other (no checklist match)",
+                : isInvoice
+                    ? "Invoices"
+                    : isEngagement
+                        ? "Engagement documents"
+                        : isInz
+                            ? "INZ forms (generated)"
+                            : isGenerated
+                                ? "Generated documents"
+                                : "Other (no checklist match)",
             required: false,
             document: d,
         };
     });
 
-    // Fixed "Request Information Form" row — always shown, right below the Visa
-    // Information Form, holding any RFI PDFs the adviser attached.
+    // "Request Information Form" row — displays INZ's RFI letter(s) the adviser
+    // attached. It lives in its own "Request Information" section (placed right
+    // after Immigration Team below) and appears ONLY for cases that have an RFI
+    // letter, i.e. that reached the Request for Information stage — not on every
+    // case. The extracted per-document requests are NOT here: they belong under
+    // the "Request documents" button, rendered from documentRequests.
+    const hasRfi = rfiDocs.length > 0;
+    // The documents INZ asked for (extracted from the RFI letter). They render
+    // inside the "Request Information" section — below the letter — NOT under the
+    // manual "Request documents" button, since they aren't ad-hoc staff requests.
+    const rfiRequests = documentRequests.filter((r) => r.origin === "rfi");
     const rfiRow = {
         kind:      "checklist",
         key:       "rfi",
         label:     "Request Information Form",
-        category:  "Immigration Team",
+        category:  "Request Information",
         required:  false,
         hidden:    false,
         document:  rfiDocs.slice(-1)[0] || null,
         documents: rfiDocs,
     };
+    // The section shows when the case has an RFI letter and/or extracted requests.
+    const showRfiSection = hasRfi || rfiRequests.length > 0;
     const rowsWithRfi = [];
     let rfiInserted = false;
     for (const r of rows) {
         rowsWithRfi.push(r);
-        if (! rfiInserted && isVifLabel(r.label)) { rowsWithRfi.push(rfiRow); rfiInserted = true; }
+        if (showRfiSection && ! rfiInserted && isVifLabel(r.label)) { rowsWithRfi.push(rfiRow); rfiInserted = true; }
     }
-    if (! rfiInserted) rowsWithRfi.push(rfiRow);
+    if (showRfiSection && ! rfiInserted) rowsWithRfi.push(rfiRow);
 
     const allRows = [...rowsWithRfi, ...orphanRows];
     const totals = useMemo(() => {
@@ -311,6 +328,18 @@ export default function DocumentsTab({
             groupedRows.push([category, []]);
         }
         groupedRows[groupIndex.get(category)][1].push(row);
+    }
+
+    // Keep "Request Information" (INZ's RFI letter) directly under the
+    // "Immigration Team" section, regardless of first-appearance order.
+    {
+        const riIdx = groupedRows.findIndex(([c]) => c === "Request Information");
+        const itIdx = groupedRows.findIndex(([c]) => c === "Immigration Team");
+        if (riIdx !== -1 && itIdx !== -1 && riIdx !== itIdx + 1) {
+            const [ri] = groupedRows.splice(riIdx, 1);
+            const insertAt = groupedRows.findIndex(([c]) => c === "Immigration Team") + 1;
+            groupedRows.splice(insertAt, 0, ri);
+        }
     }
 
     // Which filter bucket a row falls into. Drives the filter-tab counts and
@@ -476,6 +505,12 @@ export default function DocumentsTab({
                                 const checklistRows = groupRows.filter((r) => r.kind === "checklist");
                                 const adviserWait = groupRows.filter((r) => bucketOf(r) === "adviser").length;
                                 const needAction = groupRows.filter((r) => bucketOf(r) === "needs").length;
+                                // The "Request Information" section also lists the
+                                // documents INZ asked for (below the letter) — fold
+                                // them into the section's counts.
+                                const sectionRfiReqs = (category === "Request Information" && filter === "all") ? rfiRequests : [];
+                                const secApproved = approved + sectionRfiReqs.filter((r) => r.latest_document?.status === "Approved").length;
+                                const secTotal = groupRows.length + sectionRfiReqs.length;
                                 // While a filter is active, always show matching
                                 // rows regardless of the section's collapse state.
                                 const collapsed = filter === "all" ? ! expandedCats.has(category) : false;
@@ -508,8 +543,13 @@ export default function DocumentsTab({
                                                             {category}
                                                         </span>
                                                         <span className="text-[11px] font-semibold text-gray-400">
-                                                            {approved}/{groupRows.length}
+                                                            {secApproved}/{secTotal}
                                                         </span>
+                                                        {category === "Request Information" && lead.rfi_deadline && (
+                                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 ml-1">
+                                                                <Calendar size={11} /> Due {formatDate(lead.rfi_deadline)}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {rightNote && (
                                                         <span className="text-[11px] text-gray-300">{rightNote}</span>
@@ -536,6 +576,9 @@ export default function DocumentsTab({
                                                 invoicePaidAt={engagement.invoice_paid_at}
                                                 proofs={proofDocs}
                                             />
+                                        ))}
+                                        {! collapsed && sectionRfiReqs.map((req) => (
+                                            <RfiRequestTableRow key={`rfireq-${req.id}`} req={req} leadId={lead.id} />
                                         ))}
                                     </Fragment>
                                 );
@@ -573,10 +616,14 @@ export default function DocumentsTab({
                     </button>
                 </div>
 
-                {documentRequests.length > 0 && (
+                {/* Ad-hoc requests only. RFI-extracted documents live in the
+                    "Request Information" section above, not here. */}
+                {documentRequests.filter((r) => r.origin !== "rfi").length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Requested from client ({documentRequests.length})</p>
-                        {documentRequests.map((r) => (
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            Requested from client ({documentRequests.filter((r) => r.origin !== "rfi").length})
+                        </p>
+                        {documentRequests.filter((r) => r.origin !== "rfi").map((r) => (
                             <RequestRow key={r.id} req={r} leadId={lead.id} />
                         ))}
                     </div>
@@ -2035,6 +2082,188 @@ function RequestRow({ req, leadId }) {
                 {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
             </button>
         </div>
+    );
+}
+
+// A document INZ requested (extracted from the RFI letter), rendered as a row
+// inside the "Request Information" checklist table — so the letter and the
+// documents it asks for sit together. Shows the client's uploaded file once it
+// arrives, else an "awaiting" state; staff can re-send the reminder or withdraw.
+function RfiRequestTableRow({ req, leadId }) {
+    const pageUrl = usePage().url || "";
+    const doc = req.latest_document || null;
+    const [busy, setBusy] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [status, setStatus] = useState(doc?.status || "");
+    const [savingStatus, setSavingStatus] = useState(false);
+    const [rejectOpen, setRejectOpen] = useState(false);
+    const [previewDoc, setPreviewDoc] = useState(null);
+    const fileRef = useRef(null);
+    const longDesc = (req.description || "").length > 90;
+    const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "");
+    const statusOptions = statusOptionsFor(pageUrl, doc?.status);
+
+    // Staff upload the requested file on the client's behalf (client sent it
+    // directly). It's tied to this request, fulfilling the row like a client upload.
+    const onFile = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (! files.length) return;
+        const fd = new FormData();
+        files.forEach((f) => fd.append("files[]", f));
+        setUploading(true);
+        router.post(`/admin/leads/${leadId}/documents/requests/${req.id}/upload`, fd, {
+            forceFormData: true, preserveScroll: true, preserveState: true,
+            onSuccess: () => toast.success("Uploaded on behalf of the client"),
+            onError: (er) => toast.error(Object.values(er)[0] || "Upload failed"),
+            onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ""; },
+        });
+    };
+    // Change the review status of the uploaded file — same dropdown + endpoint as
+    // every other document row (portal-dependent options; Reject needs a reason).
+    const persistStatus = (nextStatus, nextNote) => {
+        if (! doc) return;
+        setSavingStatus(true);
+        router.post(`/admin/leads/${leadId}/documents/${doc.id}/status`,
+            { status: nextStatus, note: nextNote },
+            {
+                preserveScroll: true, preserveState: true, only: ["documentRequests", "documents"],
+                onSuccess: () => toast.success("Status updated"),
+                onError: (errs) => { toast.error(Object.values(errs)[0] || "Update failed"); setStatus(doc.status || ""); },
+                onFinish: () => setSavingStatus(false),
+            });
+    };
+    const pickStatus = (next) => {
+        if (! next || next === status) return;
+        if (next === "Rejected") { setRejectOpen(true); return; }
+        setStatus(next);
+        persistStatus(next, doc?.note || "");
+    };
+    const cancel = () => {
+        if (busy) return;
+        setBusy(true);
+        router.delete(`/admin/leads/${leadId}/documents/requests/${req.id}`, {
+            preserveScroll: true, preserveState: true,
+            onSuccess: () => toast.success("Request removed"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not remove"),
+            onFinish: () => setBusy(false),
+        });
+    };
+    const resend = () => {
+        if (sending) return;
+        setSending(true);
+        router.post(`/admin/leads/${leadId}/documents/requests/${req.id}/resend`, {}, {
+            preserveScroll: true, preserveState: true,
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not send"),
+            onFinish: () => setSending(false),
+        });
+    };
+
+    return (
+        <tr className="border-b border-gray-50 last:border-b-0 align-top">
+            <td className="px-4 py-3">
+                <div className="flex items-start gap-2">
+                    <FileText size={14} className="text-gray-300 flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 leading-tight">
+                            {req.label}{req.required && <span className="ml-1 text-red-500">*</span>}
+                        </p>
+                        {req.description && (
+                            <div className="text-[10.5px] text-gray-500 mt-0.5">
+                                <p className={expanded ? "whitespace-pre-wrap" : "truncate max-w-[420px]"}>{req.description}</p>
+                                {longDesc && (
+                                    <button type="button" onClick={() => setExpanded((v) => !v)} className="font-semibold text-teal-600 hover:text-teal-800">
+                                        {expanded ? "See less" : "See more"}
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                            Requested {fmt(req.requested_at)}{req.requested_by ? ` · ${req.requested_by}` : ""}
+                        </p>
+                    </div>
+                </div>
+            </td>
+
+            {/* Attachment — the standard file card (View + menu) once uploaded,
+                or a staff upload button while awaiting. */}
+            <td className="px-4 py-3">
+                <input ref={fileRef} type="file" multiple className="hidden" onChange={onFile} />
+                {doc ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 max-w-[300px]">
+                        <FileText size={16} className="text-gray-300 flex-shrink-0" />
+                        <span className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[12px] text-gray-800 truncate" title={doc.original_name}>{doc.original_name}</span>
+                            {doc.size ? <span className="text-[10px] text-gray-400 tabular-nums">{formatBytes(doc.size)}</span> : null}
+                        </span>
+                        <button type="button" onClick={() => setPreviewDoc(doc)} title="View & comment"
+                            className="text-[12px] font-semibold text-teal-700 hover:text-teal-900 flex-shrink-0">View</button>
+                        <FileMenu doc={doc} leadId={leadId} checklistKey={null} />
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-900 text-white text-[11px] font-semibold hover:bg-black disabled:opacity-50">
+                            {uploading ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Upload
+                        </button>
+                        <span className="text-[10px] text-gray-400">or awaiting client</span>
+                    </div>
+                )}
+            </td>
+
+            {/* Verdict — review-status dropdown (portal-dependent) once a file is
+                in, matching every other document row. */}
+            <td className="px-4 py-3">
+                {doc ? (
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <VerdictSelect value={status} options={statusOptions} onPick={pickStatus} saving={savingStatus} />
+                            {savingStatus && <span className="text-[10px] text-gray-400">Saving…</span>}
+                        </div>
+                        {doc.reviewed_by ? (
+                            <p className="text-[10.5px] text-gray-400 pl-4 truncate" title={doc.reviewed_by}>
+                                {doc.reviewed_by}
+                                {doc.reviewed_by_role && <> · {String(doc.reviewed_by_role).replace(/_/g, " ")}</>}
+                                {doc.reviewed_at && <> · {formatDate(doc.reviewed_at)}</>}
+                            </p>
+                        ) : (
+                            <p className="text-[10.5px] text-gray-400 pl-4">not yet checked</p>
+                        )}
+                    </div>
+                ) : (
+                    <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-gray-500">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" /> Waiting
+                    </span>
+                )}
+            </td>
+
+            {/* Request actions — re-send the reminder or withdraw the request. */}
+            <td className="px-4 py-3">
+                <div className="flex items-center gap-1">
+                    <button type="button" onClick={resend} disabled={sending} title="Re-send the request email to the client"
+                        className="p-1 rounded-md text-gray-300 hover:text-violet-600 disabled:opacity-50">
+                        {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    </button>
+                    <button type="button" onClick={cancel} disabled={busy} title="Withdraw this request"
+                        className="p-1 rounded-md text-gray-300 hover:text-rose-600 disabled:opacity-50">
+                        {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    </button>
+                </div>
+            </td>
+
+            {rejectOpen && (
+                <RejectModal
+                    rowLabel={req.label}
+                    initialNote={doc?.note || ""}
+                    onClose={() => setRejectOpen(false)}
+                    onConfirm={(reason) => { setStatus("Rejected"); setRejectOpen(false); persistStatus("Rejected", reason); }}
+                />
+            )}
+            {previewDoc && (
+                <DocPreviewModal doc={previewDoc} label={req.label} leadId={leadId} onClose={() => setPreviewDoc(null)} />
+            )}
+        </tr>
     );
 }
 

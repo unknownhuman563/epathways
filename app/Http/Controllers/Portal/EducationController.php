@@ -281,6 +281,15 @@ class EducationController extends Controller
             // these into three department tabs (Education / English /
             // Immigration) — once a lead moves on, they drop out of the
             // Education tab automatically.
+            // Names of the (fee-paying) Student-category visas. An immigration
+            // case only belongs in the Students module when it holds one of
+            // these — that client is both a student and a case. Non-student
+            // cases (Work, Visitor, Residence, …) stay out of the Students
+            // list even though they are immigration cases.
+            $studentVisaNames = \App\Models\VisaType::where('category', 'Student')
+                ->pluck('name')
+                ->all();
+
             $students = Lead::with([
                 'studyPlans',
                 'documents',
@@ -291,12 +300,26 @@ class EducationController extends Controller
                 'stageUpdater:id,name', 'lastActivityUser:id,name',
                 'agent:id,name',
             ])
-                ->where(function ($q) {
+                ->where(function ($q) use ($studentVisaNames) {
                     $q->where('is_student', true)
-                        ->orWhere('is_immigration_case', true)
                         ->orWhere('stage', 'English Pro')
                         ->orWhereNotNull('english_stage')
-                        ->orWhereNotNull('immigration_stage');
+                        // Immigration cases surface here only when the client
+                        // holds a Student visa (fee-paying) — so they can be
+                        // searched under both Students and Immigration. All
+                        // other immigration cases are excluded.
+                        ->orWhere(function ($qc) use ($studentVisaNames) {
+                            $qc->where(function ($qi) {
+                                    $qi->where('is_immigration_case', true)
+                                        ->orWhereNotNull('immigration_stage');
+                                })
+                                ->where(function ($qv) use ($studentVisaNames) {
+                                    $qv->where('inz_visa_type', 'like', '%student%');
+                                    if (! empty($studentVisaNames)) {
+                                        $qv->orWhereIn('inz_visa_type', $studentVisaNames);
+                                    }
+                                });
+                        });
                 })
                 ->when($scope, $scope)
                 ->orderByDesc('student_converted_at')
