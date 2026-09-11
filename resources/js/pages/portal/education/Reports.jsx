@@ -1,546 +1,376 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Head, router } from "@inertiajs/react";
-import {
-    ChevronLeft, ChevronRight, Download, Share2, Lock, TrendingUp, TrendingDown,
-    Minus, Users, GraduationCap, FolderOpen, FileCheck, AlertTriangle, CheckCircle2,
-    Snowflake, CalendarDays, Sparkles, Star, ArrowRightLeft, BookOpen, CreditCard,
-    LineChart as LineChartIcon, ListChecks,
-} from "lucide-react";
+import { BookOpen, CheckCircle2, FileText, PencilLine, Save, X, RefreshCw, GraduationCap, Users, UserPlus, ClipboardList } from "lucide-react";
 
-const PERIODS = [
-    { key: "weekly",    label: "Weekly" },
-    { key: "monthly",   label: "Monthly" },
-    { key: "quarterly", label: "Quarterly" },
-    { key: "custom",    label: "Custom" },
+// Period presets — mirror the Immigration report.
+const PRESETS = [
+    { key: "today", label: "Today" },
+    { key: "this_week", label: "This week" },
+    { key: "two_weeks", label: "Last 2 weeks" },
+    { key: "this_month", label: "This month" },
+    { key: "last_month", label: "Last month" },
+    { key: "quarter", label: "Last 3 months" },
+    { key: "custom", label: "Custom" },
 ];
 
-const fmtRange = (a, b) => {
-    if (!a || !b) return "—";
-    const s = new Date(a + "T00:00:00"), e = new Date(b + "T00:00:00");
-    return `${s.toLocaleDateString("en-NZ", { day: "numeric", month: "short" })} – ${e.toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" })}`;
+const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "—");
+
+const SUMMARY_TITLES = { __new_students: "New students", __total_students: "Total students", __new_leads: "New leads", __register: "In the pipeline" };
+
+// Each Students tab (Education / English / Immigration) tracks its own status
+// set. Literal class strings only — Tailwind v4 JIT can't see concatenated names.
+const DEPT_META = {
+    education: { label: "Education", tab: "bg-blue-600", ring: "ring-blue-500", chip: "bg-blue-50 text-blue-700", head: "bg-blue-700" },
+    english: { label: "English", tab: "bg-violet-600", ring: "ring-violet-500", chip: "bg-violet-50 text-violet-700", head: "bg-violet-700" },
+    immigration: { label: "Immigration", tab: "bg-indigo-600", ring: "ring-indigo-500", chip: "bg-indigo-50 text-indigo-700", head: "bg-indigo-700" },
 };
 
-const fmtIso = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-};
+export default function EducationReports({ range = {}, pipeline = [], summary = {}, summaryLists = {}, totalRegister = 0, movements = 0, register = {}, departments = {}, programs = {}, conclusion = {}, generated_at = null, generated_by = null, error = null }) {
+    const [customFrom, setCustomFrom] = useState(range.from || "");
+    const [customTo, setCustomTo] = useState(range.to || "");
+    // Which card's client list is open (null = none; lists don't show by default).
+    // A value is either a stage name (pipeline card) or a "__key" (summary card).
+    const [selectedStage, setSelectedStage] = useState(null);
+    const go = (preset, extra = {}) => router.get("/portal/education/reports", { preset, ...extra }, { preserveScroll: true, preserveState: true });
 
-export default function EducationReports({
-    period = "weekly", range = {}, filters = {},
-    glance = {}, programs = {}, trend = [],
-    generated_at, generated_by,
-}) {
-    // Period switcher — preserves filters via the URL so they stick across
-    // tab clicks (a counselor filter set on Weekly stays when you click Monthly).
-    const setPeriod = (next) => {
-        const q = { ...filters, period: next };
-        router.get('/portal/education/reports', q, { preserveScroll: true });
-    };
+    // Resolve the open card to a { title, rows } list.
+    const openList = useMemo(() => {
+        if (!selectedStage) return null;
+        if (selectedStage === "__register") return { title: "On the register", rows: Object.values(register).flat() };
+        if (selectedStage.startsWith("__")) return { title: SUMMARY_TITLES[selectedStage], rows: summaryLists[selectedStage.slice(2)] || [] };
+        return { title: selectedStage, rows: register[selectedStage] || [] };
+    }, [selectedStage, register, summaryLists]);
 
-    const stepPeriod = (delta) => {
-        const a = range.start ? new Date(range.start + "T00:00:00") : new Date();
-        if (period === "monthly")        a.setMonth(a.getMonth() + delta);
-        else if (period === "quarterly") a.setMonth(a.getMonth() + (delta * 3));
-        else                              a.setDate(a.getDate() + (delta * 7));
-        router.get('/portal/education/reports', { ...filters, period, anchor: fmtIso(a) }, { preserveScroll: true });
-    };
-
-    const periodLabel = useMemo(() => {
-        if (period === "monthly")   return new Date(range.start + "T00:00:00").toLocaleDateString("en-NZ", { month: "long", year: "numeric" });
-        if (period === "quarterly") {
-            const d = new Date(range.start + "T00:00:00");
-            return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`;
-        }
-        return fmtRange(range.start, range.end);
-    }, [period, range.start, range.end]);
+    // Keep the report live: refresh its data on a short interval and whenever
+    // the tab regains focus, so stage/status changes made elsewhere reflect
+    // here without a manual reload. Only the data props re-fetch (partial),
+    // and local state (e.g. the note editor) is preserved.
+    useEffect(() => {
+        const refresh = () => router.reload({
+            preserveScroll: true,
+            preserveState: true,
+            only: ["pipeline", "summary", "summaryLists", "register", "departments", "totalRegister", "movements", "programs", "conclusion", "generated_at"],
+        });
+        const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+        const id = setInterval(refresh, 20000);
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("focus", refresh);
+        return () => {
+            clearInterval(id);
+            document.removeEventListener("visibilitychange", onVisible);
+            window.removeEventListener("focus", refresh);
+        };
+    }, []);
 
     return (
-        <div className="space-y-6 max-w-[1500px] mx-auto pb-12">
-            <Head title="Reports — Education" />
+        <div className="space-y-6 max-w-[1400px] mx-auto pb-16">
+            <Head title="Education Report" />
 
-            {/* Page header — tabs + actions */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Reports</h1>
-                    <div className="flex items-center gap-2">
-                        <DisabledAction icon={<Download size={13} />} label="Export PDF" />
-                        <DisabledAction icon={<Share2 size={13} />}   label="Share with…" />
+            <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-600">Updates and reporting</p>
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight mt-1">Education report</h1>
+                <p className="text-sm text-gray-500 mt-1">{totalRegister} lead{totalRegister === 1 ? "" : "s"} in the pipeline · {movements} movement{movements === 1 ? "" : "s"} in {range.label?.toLowerCase()}.</p>
+            </div>
+
+            {/* Period tabs */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-2 flex flex-wrap items-center gap-1">
+                {PRESETS.map((p) => (
+                    <button key={p.key} onClick={() => (p.key === "custom" ? go("custom", { from: customFrom, to: customTo }) : go(p.key))}
+                        className={`px-3.5 py-2 rounded-xl text-[12px] font-bold uppercase tracking-wide transition-colors ${range.preset === p.key ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
+                        {p.label}
+                    </button>
+                ))}
+                <span className="ml-auto flex items-center gap-3 pr-2 text-[12px] text-gray-400">
+                    <span className="inline-flex items-center gap-1.5 text-blue-600 font-semibold" title="This report refreshes automatically">
+                        <RefreshCw size={12} /> Live
+                    </span>
+                    <span>Showing <span className="font-semibold text-gray-600">{range.label}</span> · {range.days} day{range.days === 1 ? "" : "s"}</span>
+                </span>
+            </div>
+
+            {range.preset === "custom" && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 flex flex-wrap items-end gap-3">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">From
+                        <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="block mt-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm" />
+                    </label>
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">To
+                        <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="block mt-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm" />
+                    </label>
+                    <button onClick={() => go("custom", { from: customFrom, to: customTo })} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700">Apply</button>
+                </div>
+            )}
+
+            {error ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400">{error}</div>
+            ) : (
+                <>
+                    {/* Summary cards — clickable to reveal their list */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <Stat icon={UserPlus} value={summary.new_students} label="New students" sub="Enrolled this period" dark selected={selectedStage === "__new_students"} onClick={() => setSelectedStage(selectedStage === "__new_students" ? null : "__new_students")} />
+                        <Stat icon={GraduationCap} value={summary.total_students} label="Total students" sub="All enrolled" selected={selectedStage === "__total_students"} onClick={() => setSelectedStage(selectedStage === "__total_students" ? null : "__total_students")} />
+                        <Stat icon={Users} value={summary.new_leads} label="New leads" sub="Added this period" selected={selectedStage === "__new_leads"} onClick={() => setSelectedStage(selectedStage === "__new_leads" ? null : "__new_leads")} />
+                        <Stat icon={ClipboardList} value={summary.register} label="In the pipeline" sub="Active leads" selected={selectedStage === "__register"} onClick={() => setSelectedStage(selectedStage === "__register" ? null : "__register")} />
                     </div>
-                </div>
 
-                {/* Period tabs */}
-                <div className="flex items-center gap-1 border-b border-gray-100 -mx-5 px-5">
-                    {PERIODS.map((p) => (
-                        <button
-                            key={p.key}
-                            type="button"
-                            onClick={() => setPeriod(p.key)}
-                            className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${
-                                period === p.key
-                                    ? "text-indigo-700 border-indigo-600"
-                                    : "text-gray-400 border-transparent hover:text-gray-700"
-                            }`}
-                        >
-                            {p.label}
-                        </button>
-                    ))}
-                </div>
+                    {/* Section 01 — Pipeline overview (15 numbered stages) */}
+                    <Section n="01" title="Pipeline position">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                            {pipeline.map((p) => {
+                                const active = p.moved > 0 && !p.outside;
+                                const selected = selectedStage === p.stage;
+                                return (
+                                    <button
+                                        key={p.stage}
+                                        type="button"
+                                        onClick={() => setSelectedStage(selected ? null : p.stage)}
+                                        title="Click to see this stage's clients"
+                                        className={`text-left rounded-2xl border shadow-sm p-4 transition-all ${selected ? "ring-2 ring-blue-500 ring-offset-1" : ""} ${active ? "bg-blue-700 border-blue-700 text-white" : "bg-white border-gray-100 hover:border-blue-300 hover:shadow-md"}`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${active ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"}`}>{p.num}</span>
+                                            <span className={`text-3xl font-black tabular-nums leading-none ${active ? "text-white" : "text-gray-900"}`}>{p.count}</span>
+                                        </div>
+                                        <p className={`text-[12.5px] font-bold mt-2 ${active ? "text-white" : "text-gray-900"}`}>{p.stage}</p>
+                                        <p className={`text-[10.5px] mt-1 ${p.outside ? "text-amber-500" : active ? "text-white/70" : "text-gray-400"}`}>
+                                            {p.outside ? "Outside process" : p.moved > 0 ? `+${p.moved} this period` : "No change"}
+                                        </p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <p className="mt-2 text-[11px] text-gray-400">Click any stage card to see its client list below.</p>
+                    </Section>
 
-                {/* Period selector + filters */}
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2">
-                        {period !== "custom" && (
+                    {/* Section 02 — Client register (revealed by clicking a stage) */}
+                    <Section n="02" title="Client register">
+                        {!openList ? (
+                            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+                                <p className="text-sm font-semibold text-gray-500">Pick a card to see its clients</p>
+                                <p className="text-[12px] text-gray-400 mt-1">Click any summary or pipeline card above and its list of clients appears here.</p>
+                            </div>
+                        ) : (
                             <>
-                                <button type="button" onClick={() => stepPeriod(-1)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100">
-                                    <ChevronLeft size={16} />
-                                </button>
-                                <div className="min-w-[200px] text-center">
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">{period}</p>
-                                    <p className="text-base font-semibold text-gray-900 tracking-tight tabular-nums">{periodLabel}</p>
-                                </div>
-                                <button type="button" onClick={() => stepPeriod(1)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100">
-                                    <ChevronRight size={16} />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => router.get('/portal/education/reports', { ...filters, period }, { preserveScroll: true })}
-                                    className="ml-2 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200"
-                                >
-                                    Current
-                                </button>
+                                <StageCard stage={openList.title} rows={openList.rows} onClose={() => setSelectedStage(null)} />
+                                <p className="mt-3 flex items-center gap-1.5 text-[11px] text-gray-400"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" /> Moved during {range.label?.toLowerCase()}</p>
                             </>
                         )}
-                        {period === "custom" && (
-                            <div className="flex items-center gap-2">
-                                <input type="date" defaultValue={range.start} onChange={(e) => router.get('/portal/education/reports', { ...filters, period: "custom", from: e.target.value, to: range.end }, { preserveScroll: true })}
-                                    className="text-xs rounded-lg border border-gray-200 py-1.5 px-2.5" />
-                                <span className="text-gray-400 text-xs">→</span>
-                                <input type="date" defaultValue={range.end}   onChange={(e) => router.get('/portal/education/reports', { ...filters, period: "custom", from: range.start, to: e.target.value }, { preserveScroll: true })}
-                                    className="text-xs rounded-lg border border-gray-200 py-1.5 px-2.5" />
-                            </div>
-                        )}
-                    </div>
+                    </Section>
 
-                    {/* Filters — UI only for now (counselor/institution/intake/program live as later infra). */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <FilterStub label="All counselors" />
-                        <FilterStub label="All institutions" />
-                        <FilterStub label="All intakes" />
-                        <FilterStub label="All programs" />
-                    </div>
-                </div>
-            </div>
+                    {/* Section 03 — Education (the students register, broken down by
+                        department: Education / English / Immigration, each under its
+                        own real status set) */}
+                    <Section n="03" title="Education">
+                        <DepartmentBreakdown departments={departments} />
+                    </Section>
 
-            {/* Quarterly extras — strategic insights preface */}
-            {period === "quarterly" && (
-                <section className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl p-6 text-white">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Sparkles size={14} className="text-indigo-200" />
-                        <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-indigo-200">Strategic insights</p>
-                    </div>
-                    <h2 className="text-2xl font-medium tracking-tight">{periodLabel} — what to act on next quarter</h2>
-                    <p className="text-sm text-indigo-100 mt-2 max-w-2xl">
-                        Auto-curated top 3 wins, top 3 concerns, and adviser recommendations land here — wired up once we have enough per-quarter data to surface meaningful patterns.
+                    {/* Section 04 — ePortal Programs */}
+                    <Section n="04" title="ePortal Programs">
+                        <div className="grid grid-cols-3 gap-3">
+                            <Stat icon={BookOpen} value={programs.total} label="Total programs" sub="In the catalogue" />
+                            <Stat icon={CheckCircle2} value={programs.published} label="Published" sub="Live on the site" />
+                            <Stat icon={FileText} value={programs.draft} label="Drafts" sub="Not yet published" />
+                        </div>
+                    </Section>
+
+                    {/* Section 05 — Conclusion */}
+                    <Section n="05" title="Conclusion">
+                        <ConclusionCard conclusion={conclusion} />
+                    </Section>
+
+                    <p className="text-center text-[11px] text-gray-400">
+                        Generated {generated_at ? new Date(generated_at).toLocaleString("en-NZ") : "—"}{generated_by ? ` · ${generated_by}` : ""} · ePathways Education
                     </p>
-                </section>
+                </>
             )}
-
-            {/* All 13 sections */}
-            <Section title="At a glance">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <Tile label="New students"   value={glance.new_students?.value ?? 0} prev={glance.new_students?.prev} tone="success" icon={<GraduationCap size={14} />} />
-                    <Tile label="Total students" value={glance.total_students ?? 0}      tone="default" icon={<Users size={14} />} />
-                    <Tile label="Docs uploaded"  value={glance.docs_uploaded ?? 0}       tone="default" icon={<FolderOpen size={14} />} />
-                    <Tile label="Docs approved"  value={glance.docs_approved ?? 0}       tone="success" icon={<FileCheck size={14} />} />
-                    <Tile label="Docs rejected"  value={glance.docs_rejected ?? 0}       tone="danger"  icon={<AlertTriangle size={14} />} />
-                    <Tile label="Docs pending"   value={glance.docs_pending ?? 0}        tone="warning" icon={<Snowflake size={14} />} />
-                </div>
-            </Section>
-
-            <Section title="Pipeline health" subtitle="Student progression through programs and stages.">
-                <NeedsInfra icon={<LineChartIcon size={18} />} title="Needs student-stage tracking" lines={[
-                    "Today every lead has a Sales pipeline stage; students need a parallel Education pipeline (Researching → Applied → Offer received → Visa applied → Enrolled).",
-                    "Once that's modelled, this section becomes a stage-bar chart like the Sales report.",
-                ]} />
-            </Section>
-
-            <Section title="Going stale" subtitle="Students whose document submission has stalled.">
-                <NeedsInfra icon={<Snowflake size={18} />} title="Needs last-activity audit" lines={[
-                    "Cold buckets (7-14 / 15-30 / 30+ days no update) — same UX as Sales' Going Cold chart but scoped to students.",
-                    "Last-activity = last document upload OR last note OR last counselor task on that student.",
-                ]} />
-            </Section>
-
-            <Section title="Per-counselor activity" subtitle="Caseload, response times, and document throughput by counselor.">
-                <NeedsInfra icon={<Users size={18} />} title="Needs counselor assignment on student" lines={[
-                    "Add counselor_id (FK to users) on the lead when a student is created.",
-                    "Columns: active students, new assigned, docs reviewed, avg review turnaround, tasks done, tasks overdue.",
-                    "Visibility scoped: counselor sees own row + team aggregate; manager sees full table.",
-                ]} />
-            </Section>
-
-            <Section title="Intake pipeline" subtitle="Students grouped by their target intake (Feb 2027, Jul 2027, etc.).">
-                <NeedsInfra icon={<CalendarDays size={18} />} title="Needs intake column on study plan" lines={[
-                    "Today study_plans.preferred_intake exists as free text. Promote it to a structured intake_id referencing an intakes table.",
-                    "Once normalised, this section becomes a horizontal bar of students per upcoming intake with status breakdown.",
-                ]} />
-            </Section>
-
-            <Section title="Programs & institutions" subtitle="Which programs and NZ institutions students are headed to.">
-                <ProgramsChart programs={programs} />
-            </Section>
-
-            <Section title="Documents" subtitle="Document throughput for the period — uploaded broken down by current status.">
-                <DocumentsChart glance={glance} />
-            </Section>
-
-            <Section title="Payments" subtitle="Engagement-fee and tuition payment status.">
-                <NeedsInfra icon={<CreditCard size={18} />} title="Needs payments table" lines={[
-                    "Build lead_payments (lead_id, kind, amount, status, paid_at, method, receipt_path).",
-                    "Sections: collected this period, outstanding, overdue, breakdown by kind (engagement / tuition / visa).",
-                ]} />
-            </Section>
-
-            <Section title="AI activity" subtitle="AI assistance accepted, modified, rejected.">
-                <NeedsInfra icon={<Sparkles size={18} />} title="Needs ai_activity_logs" lines={[
-                    "Same backbone the Sales report needs — one shared table tracks AI suggestions across portals.",
-                ]} />
-            </Section>
-
-            <Section title="Trends" subtitle="Last 8 periods of new students vs document throughput.">
-                <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                    <TrendLines data={trend} period={period} />
-                </div>
-            </Section>
-
-            <Section title="Notable items" subtitle="Auto-curated wins and concerns for the period.">
-                <NeedsInfra icon={<Star size={18} />} title="Will populate once we have richer signals" lines={[
-                    "Wins — students who reached visa-lodged stage; sections verified ahead of schedule.",
-                    "Concerns — long-pending documents; counselors with growing overdue queues; expiring offers.",
-                ]} />
-            </Section>
-
-            <Section title="Cross-service handoffs" subtitle="Students who also engaged Immigration or Accommodation.">
-                <NeedsInfra icon={<ArrowRightLeft size={18} />} title="Needs multi-service flags" lines={[
-                    "Mirror is_student with is_immigration_case + is_accommodation_client on leads.",
-                    "This section then renders the handoff matrix — who's engaged with which combinations.",
-                ]} />
-            </Section>
-
-            {/* Footer */}
-            <footer className="bg-white rounded-2xl border border-gray-100 px-5 py-4 flex items-center justify-between gap-3 flex-wrap text-[11px] text-gray-500">
-                <div className="flex items-center gap-4">
-                    <span>Generated {new Date(generated_at || Date.now()).toLocaleString("en-NZ", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                    {generated_by && <span>by <span className="font-semibold text-gray-700">{generated_by}</span></span>}
-                </div>
-                <span className="italic text-gray-400">Not shared with any other team</span>
-            </footer>
         </div>
     );
 }
 
-// ── Building blocks ────────────────────────────────────────────────────────
-
-function Section({ title, subtitle, children }) {
+function Section({ n, title, children }) {
     return (
-        <section className="space-y-3">
-            <div>
-                <h2 className="text-lg font-bold text-gray-900 tracking-tight">{title}</h2>
-                {subtitle && <p className="text-[12px] text-gray-500 mt-0.5 max-w-3xl">{subtitle}</p>}
+        <div>
+            <div className="flex items-center gap-3 mb-3">
+                <span className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-[13px] font-bold shrink-0">{n}</span>
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-600">Section · updates and reporting</p>
+                    <h2 className="text-lg font-bold text-gray-900 tracking-tight">{title}</h2>
+                </div>
             </div>
             {children}
-        </section>
+        </div>
     );
 }
 
-function Tile({ label, value, prev = null, hint = null, tone = "default", muted = false, icon = null }) {
-    const showDelta = prev != null && typeof value === "number" && typeof prev === "number";
-    const delta = showDelta ? value - prev : null;
-    const TONES = {
-        default: { num: "text-gray-900",    glyph: "bg-gray-100 text-gray-600" },
-        success: { num: "text-emerald-700", glyph: "bg-emerald-100 text-emerald-700" },
-        warning: { num: "text-amber-700",   glyph: "bg-amber-100 text-amber-700" },
-        danger:  { num: "text-rose-700",    glyph: "bg-rose-100 text-rose-700" },
-    };
-    const t = TONES[tone] || TONES.default;
+// Per-department status breakdown. Each department (Education / English /
+// Immigration) has its OWN status set; a client can appear under more than one
+// department, matching the Students-page tab badges. Click a status card to
+// reveal the clients sitting at it.
+function DepartmentBreakdown({ departments = {} }) {
+    const keys = ["education", "english", "immigration"].filter((k) => departments[k]);
+    const [active, setActive] = useState(keys[0] || "education");
+    const [openStage, setOpenStage] = useState(null);
+    const dept = departments[active] || { total: 0, moved: 0, stages: [] };
+    const meta = DEPT_META[active] || DEPT_META.education;
+    const open = openStage ? dept.stages.find((s) => s.stage === openStage) || null : null;
+    const switchTo = (k) => { setActive(k); setOpenStage(null); };
+
+    if (keys.length === 0) {
+        return <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-400">No department data.</div>;
+    }
+
     return (
-        <div className={`bg-white rounded-2xl border border-gray-100 p-4 ${muted ? "opacity-70" : ""}`}>
-            <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">{label}</p>
-                {icon && <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${t.glyph}`}>{icon}</span>}
+        <div className="space-y-3">
+            {/* Department tabs with total badges */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-2 flex flex-wrap items-center gap-1">
+                {keys.map((k) => {
+                    const m = DEPT_META[k];
+                    const on = active === k;
+                    return (
+                        <button key={k} type="button" onClick={() => switchTo(k)}
+                            className={`px-3.5 py-2 rounded-xl text-[12px] font-bold uppercase tracking-wide transition-colors inline-flex items-center gap-2 ${on ? `${m.tab} text-white` : "text-gray-500 hover:bg-gray-50"}`}>
+                            {m.label}
+                            <span className={`text-[11px] rounded-full px-1.5 py-0.5 tabular-nums ${on ? "bg-white/20" : "bg-gray-100 text-gray-500"}`}>{departments[k].total}</span>
+                        </button>
+                    );
+                })}
+                <span className="ml-auto pr-2 text-[12px] text-gray-400">{dept.moved} moved in period</span>
             </div>
-            <p className={`text-3xl font-bold tabular-nums mt-2 ${t.num}`}>{value}</p>
-            {showDelta && delta !== null && (
-                <p className={`text-[11px] mt-1 inline-flex items-center gap-1 font-semibold ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-rose-600" : "text-gray-400"}`}>
-                    {delta > 0 ? <TrendingUp size={11} /> : delta < 0 ? <TrendingDown size={11} /> : <Minus size={11} />}
-                    {delta > 0 ? "+" : ""}{delta} vs previous
-                </p>
+
+            {/* Status cards for the active department — only statuses that
+                actually hold clients are shown */}
+            {dept.stages.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-400">No {meta.label.toLowerCase()} clients in this period.</div>
+            ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {dept.stages.map((s) => {
+                    const selected = openStage === s.stage;
+                    return (
+                        <button key={s.stage} type="button" onClick={() => setOpenStage(selected ? null : s.stage)}
+                            title="Click to see clients at this status"
+                            className={`text-left rounded-2xl border shadow-sm p-4 bg-white transition-all ${selected ? `ring-2 ${meta.ring} ring-offset-1 border-transparent` : "border-gray-100 hover:border-gray-300 hover:shadow-md"}`}>
+                            <div className="flex items-center justify-between">
+                                <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${meta.chip}`}>{s.moved > 0 ? `+${s.moved}` : "—"}</span>
+                                <span className="text-3xl font-black tabular-nums leading-none text-gray-900">{s.count}</span>
+                            </div>
+                            <p className="text-[12.5px] font-bold mt-2 text-gray-900">{s.stage}</p>
+                        </button>
+                    );
+                })}
+            </div>
             )}
-            {hint && <p className="text-[10px] text-gray-400 mt-1 italic">{hint}</p>}
+
+            {open ? (
+                <StageCard stage={`${meta.label} · ${open.stage}`} rows={open.clients} headClass={meta.head} onClose={() => setOpenStage(null)} />
+            ) : (
+                <p className="text-[11px] text-gray-400">Click any status card to see its clients below.</p>
+            )}
         </div>
     );
 }
 
-// Stacked horizontal bar — period's documents broken down by status. The
-// big number is "uploaded this period"; the bar shows current resolution.
-function DocumentsChart({ glance }) {
-    const uploaded = glance.docs_uploaded ?? 0;
-    const approved = glance.docs_approved ?? 0;
-    const rejected = glance.docs_rejected ?? 0;
-    const pending  = glance.docs_pending  ?? 0;
-
-    const approvedRate = uploaded > 0 ? Math.round((approved / uploaded) * 100) : 0;
-    const rejectedRate = uploaded > 0 ? Math.round((rejected / uploaded) * 100) : 0;
-
-    const rows = [
-        { key: "approved", label: "Approved",       value: approved, bar: "bg-emerald-500", num: "text-emerald-700" },
-        { key: "pending",  label: "Pending review", value: pending,  bar: "bg-amber-400",   num: "text-amber-700" },
-        { key: "rejected", label: "Rejected",       value: rejected, bar: "bg-rose-500",    num: "text-rose-700" },
-    ];
-    const total = Math.max(1, approved + pending + rejected);
-
+function StageCard({ stage, rows = [], onClose, headClass = "bg-blue-700" }) {
+    const list = Array.isArray(rows) ? rows : [];
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Funnel — period's uploaded with current status split */}
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
-                <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-                    <div>
-                        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-500">Uploaded this period</p>
-                        <p className="text-4xl font-bold text-gray-900 tabular-nums mt-1">{uploaded}</p>
-                    </div>
-                    <div className="flex items-center gap-4 text-[11px] font-bold uppercase tracking-widest tabular-nums">
-                        <span className="text-emerald-700">{approvedRate}% approved</span>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-rose-700">{rejectedRate}% rejected</span>
-                    </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className={`px-4 py-3 ${headClass} text-white flex items-center justify-between`}>
+                <div className="flex items-center gap-2">
+                    <h4 className="text-[14px] font-bold">{stage}</h4>
+                    <span className="text-[11px] font-bold bg-white/20 rounded-full px-2 py-0.5 tabular-nums">{list.length}</span>
                 </div>
-
-                {/* Stacked progress bar — outcomes of this period's uploaded docs */}
-                {(approved + pending + rejected) > 0 && (
-                    <div className="mt-5 h-4 rounded-full overflow-hidden flex bg-gray-100">
-                        {rows.filter((r) => r.value > 0).map((r) => (
-                            <div
-                                key={r.key}
-                                className={`${r.bar} transition-all`}
-                                style={{ width: `${(r.value / total) * 100}%` }}
-                                title={`${r.label}: ${r.value}`}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                <ul className="mt-5 space-y-3">
-                    {rows.map((r) => {
-                        const pct = total > 0 ? Math.round((r.value / total) * 100) : 0;
-                        return (
-                            <li key={r.key} className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                    <span className={`w-2.5 h-2.5 rounded-full ${r.bar}`}></span>
-                                    <p className="text-sm text-gray-700">{r.label}</p>
-                                </div>
-                                <div className="flex items-baseline gap-2">
-                                    <span className={`text-xl font-bold tabular-nums ${r.num}`}>{r.value}</span>
-                                    <span className="text-[11px] text-gray-400 tabular-nums">{pct}%</span>
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-
-                {(approved + pending + rejected) === 0 && (
-                    <p className="text-sm text-gray-400 italic text-center py-6">No documents resolved this period yet.</p>
+                {onClose && (
+                    <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-white/15 text-white/90" title="Close"><X size={15} /></button>
                 )}
             </div>
-
-            {/* Side card — overall pending queue across all periods */}
-            <div className="bg-gradient-to-br from-amber-50 via-white to-white rounded-2xl border border-amber-200 p-5 sm:p-6 flex flex-col">
-                <div className="flex items-center gap-2 text-amber-700 mb-1">
-                    <FolderOpen size={14} />
-                    <p className="text-[11px] font-bold uppercase tracking-[0.22em]">Awaiting review</p>
-                </div>
-                <p className="text-5xl font-bold tabular-nums text-amber-700 mt-2">{pending}</p>
-                <p className="text-sm text-amber-900/70 mt-1 font-medium">
-                    {pending === 1 ? "document" : "documents"} in the queue right now
-                </p>
-                <div className="flex-1" />
-                <a
-                    href="/portal/education/documents"
-                    className="mt-5 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-amber-700 transition-colors"
-                >
-                    <FolderOpen size={12} /> Open queue
-                </a>
-            </div>
-        </div>
-    );
-}
-
-// SVG donut + legend — programs by publish status.
-function ProgramsChart({ programs }) {
-    const total     = programs.total ?? 0;
-    const published = programs.published ?? 0;
-    const unpublished = Math.max(0, total - published);
-
-    const slices = [
-        { label: "Published",   value: published,   color: "stroke-emerald-500", chip: "bg-emerald-500" },
-        { label: "Unpublished", value: unpublished, color: "stroke-gray-300",    chip: "bg-gray-300" },
-    ];
-    const sum = slices.reduce((t, s) => t + s.value, 0);
-    const radius = 70, stroke = 22, circumference = 2 * Math.PI * radius;
-    let offset = 0;
-
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6 flex items-center justify-center">
-                {sum === 0 ? (
-                    <p className="text-sm text-gray-400 italic text-center py-10">No programs to chart yet.</p>
-                ) : (
-                    <div className="relative w-[180px] h-[180px]">
-                        <svg width="180" height="180" viewBox="0 0 180 180" className="-rotate-90">
-                            {slices.map((s, i) => {
-                                if (s.value === 0) return null;
-                                const dash = (s.value / sum) * circumference;
-                                const el = (
-                                    <circle
-                                        key={i}
-                                        cx="90" cy="90" r={radius}
-                                        fill="none"
-                                        strokeWidth={stroke}
-                                        strokeDasharray={`${dash} ${circumference - dash}`}
-                                        strokeDashoffset={-offset}
-                                        className={s.color}
-                                    />
-                                );
-                                offset += dash;
-                                return el;
-                            })}
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <p className="text-3xl font-bold text-gray-900 tabular-nums">{total}</p>
-                            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Programs</p>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
-                <div className="flex items-baseline justify-between mb-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-500">Status breakdown</p>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 tabular-nums">{total} total</p>
-                </div>
-                <ul className="space-y-3">
-                    {slices.map((s) => {
-                        const pct = sum > 0 ? Math.round((s.value / sum) * 100) : 0;
-                        return (
-                            <li key={s.label} className="flex items-center justify-between gap-3">
-                                <span className="inline-flex items-center gap-2 text-sm text-gray-700">
-                                    <span className={`w-2.5 h-2.5 rounded-full ${s.chip}`}></span>
-                                    {s.label}
-                                </span>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-xl font-bold tabular-nums text-gray-900">{s.value}</span>
-                                    <span className="text-[11px] text-gray-400 tabular-nums">{pct}%</span>
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-                <p className="text-[10px] italic text-gray-400 mt-5">
-                    "Most popular programme" + per-institution split land here once we link students → program records.
-                </p>
-            </div>
-        </div>
-    );
-}
-
-function NeedsInfra({ icon, title, lines }) {
-    return (
-        <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-6 flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">{icon}</div>
-            <div className="flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400 mb-1">Needs infrastructure</p>
-                <h3 className="text-base font-bold text-gray-800 mb-2">{title}</h3>
-                <ul className="text-[12px] text-gray-600 leading-relaxed space-y-1">
-                    {lines.map((l, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                            <span className="text-gray-400 mt-1.5">•</span>
-                            <span>{l}</span>
+            {list.length === 0 ? (
+                <p className="px-4 py-8 text-center text-[12.5px] text-gray-300">No clients on this stage.</p>
+            ) : (
+                <ul className="divide-y divide-gray-50 max-h-[460px] overflow-y-auto sm:columns-2 sm:divide-y-0">
+                    {list.map((r) => (
+                        <li key={r.id} className="px-4 py-2 flex items-center gap-2 border-b border-gray-50 break-inside-avoid">
+                            {r.moved && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+                            <span className={`text-[12.5px] truncate ${r.moved ? "font-bold text-gray-900" : "text-gray-700"}`}>{r.name}</span>
+                            {r.ref && <span className="text-[11px] text-gray-400 shrink-0">({r.ref})</span>}
+                            <span className="ml-auto text-[11px] text-gray-400 shrink-0">{fmtDate(r.date)}</span>
                         </li>
                     ))}
                 </ul>
+            )}
+        </div>
+    );
+}
+
+function Stat({ icon: Icon, value, label, sub, dark, onClick, selected }) {
+    const Tag = onClick ? "button" : "div";
+    return (
+        <Tag
+            type={onClick ? "button" : undefined}
+            onClick={onClick}
+            title={onClick ? "Click to see the list" : undefined}
+            className={`text-left w-full bg-white rounded-2xl border shadow-sm p-4 transition-all ${selected ? "ring-2 ring-blue-500 ring-offset-1" : "border-gray-100"} ${onClick ? "hover:border-blue-300 hover:shadow-md" : ""}`}
+        >
+            <div className="flex items-start justify-between">
+                <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${dark ? "bg-gray-900 text-white" : "bg-blue-600 text-white"}`}><Icon size={18} /></span>
+                <span className="text-3xl font-black text-gray-900 tabular-nums leading-none">{value ?? 0}</span>
+            </div>
+            <p className="text-[13px] font-bold text-gray-900 mt-3">{label}</p>
+            {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
+        </Tag>
+    );
+}
+
+function ConclusionCard({ conclusion = {} }) {
+    const [editing, setEditing] = useState(false);
+    const [note, setNote] = useState(conclusion.note || "");
+    const [saving, setSaving] = useState(false);
+    const stats = conclusion.stats || {};
+
+    const save = () => {
+        setSaving(true);
+        router.post("/portal/education/reports/note", { note_key: conclusion.note_key, note }, {
+            preserveScroll: true, onSuccess: () => setEditing(false), onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <MiniStat value={stats.movements} label="Lead movements" />
+                <MiniStat value={stats.qualified} label="Newly qualified" />
+                <MiniStat value={stats.proposals} label="Proposals sent" />
+                <MiniStat value={stats.register} label="In the pipeline" />
+            </div>
+            <p className="text-[13px] text-gray-700 leading-relaxed">{conclusion.auto}</p>
+
+            <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Commentary for this period</p>
+                    {!editing && (
+                        <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800">
+                            <PencilLine size={12} /> {conclusion.note ? "Edit" : "Add note"}
+                        </button>
+                    )}
+                </div>
+                {editing ? (
+                    <div>
+                        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Add the week's commentary, follow-ups and the week ahead…" />
+                        <div className="flex items-center justify-end gap-2 mt-2">
+                            <button onClick={() => { setEditing(false); setNote(conclusion.note || ""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold text-gray-600 rounded-lg hover:bg-gray-100"><X size={13} /> Cancel</button>
+                            <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white text-[12px] font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50"><Save size={13} /> {saving ? "Saving…" : "Save"}</button>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed">{conclusion.note || <span className="text-gray-300">No commentary added for this period.</span>}</p>
+                )}
             </div>
         </div>
     );
 }
 
-function TrendLines({ data, period }) {
-    const [series, setSeries] = useState({ new_students: true, docs_uploaded: true, docs_approved: false });
-    const toggle = (k) => setSeries((s) => ({ ...s, [k]: !s[k] }));
-    const w = 720, h = 220, pad = 36;
-    const max = Math.max(1, ...data.flatMap((d) => [
-        series.new_students  ? d.new_students  : 0,
-        series.docs_uploaded ? d.docs_uploaded : 0,
-        series.docs_approved ? d.docs_approved : 0,
-    ]));
-    const x = (i) => pad + (i * (w - 2 * pad)) / Math.max(1, data.length - 1);
-    const y = (v) => h - pad - ((v / max) * (h - 2 * pad));
-    const line = (key) => data.map((d, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(d[key])}`).join(" ");
-    const COLORS = { new_students: "stroke-indigo-500", docs_uploaded: "stroke-blue-500", docs_approved: "stroke-emerald-500" };
-    const LABELS = { new_students: "New students", docs_uploaded: "Docs uploaded", docs_approved: "Docs approved" };
-
+function MiniStat({ value, label }) {
     return (
-        <div>
-            <div className="flex items-center gap-3 mb-3 flex-wrap">
-                {Object.entries(LABELS).map(([k, label]) => (
-                    <button key={k} type="button" onClick={() => toggle(k)} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${series[k] ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                        <span className={`w-2 h-2 rounded-full ${COLORS[k].replace("stroke-", "bg-")}`}></span>
-                        {label}
-                    </button>
-                ))}
-            </div>
-            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
-                {[0.25, 0.5, 0.75, 1].map((p) => (
-                    <line key={p} x1={pad} x2={w - pad} y1={h - pad - p * (h - 2 * pad)} y2={h - pad - p * (h - 2 * pad)} className="stroke-gray-100" />
-                ))}
-                {series.new_students  && <path d={line("new_students")}  fill="none" strokeWidth="2.5" className={COLORS.new_students} />}
-                {series.docs_uploaded && <path d={line("docs_uploaded")} fill="none" strokeWidth="2.5" className={COLORS.docs_uploaded} />}
-                {series.docs_approved && <path d={line("docs_approved")} fill="none" strokeWidth="2.5" className={COLORS.docs_approved} />}
-                {data.map((d, i) => (
-                    <text key={i} x={x(i)} y={h - pad + 16} textAnchor="middle" className="text-[10px] fill-gray-400">
-                        {d.label}
-                    </text>
-                ))}
-            </svg>
-            <p className="text-[10px] italic text-gray-400 mt-2">8 {period === "quarterly" ? "quarters" : period === "monthly" ? "months" : "weeks"} ending {data[data.length - 1]?.label || ""}</p>
+        <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5 text-center">
+            <p className="text-2xl font-black text-gray-900 tabular-nums leading-none">{value ?? 0}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">{label}</p>
         </div>
-    );
-}
-
-function DisabledAction({ icon, label }) {
-    return (
-        <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed"
-        >
-            <Lock size={11} />
-            {icon}
-            {label}
-        </button>
-    );
-}
-
-function FilterStub({ label }) {
-    return (
-        <button
-            type="button"
-            disabled
-            title="Filter UI ready; backend filtering wired once counselor/intake/program normalisation lands"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-gray-500 bg-gray-50 border border-gray-200 cursor-not-allowed"
-        >
-            {label}
-        </button>
     );
 }

@@ -17,9 +17,11 @@ const STAGES_BY_DEPARTMENT = {
         label: "Education / Student",
         field: "education_stage",
         stages: [
-            "Endorsed to School", "Conditional Offer", "Unconditional Offer",
-            "Endorsed to Immigration", "Visa Lodged", "Approved in Principle",
-            "Request for Information", "Approved Visa", "Started Course",
+            "New Lead", "Pre-Screening Done", "For Proposal", "Proposal Sent",
+            "Engagement Sent", "Goal Setting Done", "School Enrolment",
+            "Conditional Offer", "Unconditional Offer", "Endorsed to Immigration",
+            "Visa Lodged", "Approved Visa", "Started Course",
+            "For Relodgement", "Declined Visa",
         ],
     },
     english: {

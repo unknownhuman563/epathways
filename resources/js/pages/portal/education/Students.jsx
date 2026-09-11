@@ -208,15 +208,21 @@ const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-g
 // frontend, mirrored to PHP via Lead::EDUCATION_STAGES. Order matters
 // (it's the dropdown order).
 const EDUCATION_STAGES = [
-    "Endorsed to School",
+    "New Lead",
+    "Pre-Screening Done",
+    "For Proposal",
+    "Proposal Sent",
+    "Engagement Sent",
+    "Goal Setting Done",
+    "School Enrolment",
     "Conditional Offer",
     "Unconditional Offer",
     "Endorsed to Immigration",
     "Visa Lodged",
-    "Approved in Principle",
-    "Request for Information",
     "Approved Visa",
     "Started Course",
+    "For Relodgement",
+    "Declined Visa",
 ];
 
 // Subset of EDUCATION_STAGES that hand the lead off to Immigration.
@@ -225,9 +231,9 @@ const EDUCATION_STAGES = [
 const IMMIGRATION_EDUCATION_STAGES = new Set([
     "Endorsed to Immigration",
     "Visa Lodged",
-    "Approved in Principle",
-    "Request for Information",
     "Approved Visa",
+    "For Relodgement",
+    "Declined Visa",
 ]);
 
 // English-team sub-stage list (mirrors Lead::ENGLISH_STAGES).
@@ -1204,24 +1210,31 @@ function StudentDashboardPanel({ student: s }) {
 // the team that owns that stage so the stepper can colour each segment
 // accordingly — green = Education team, indigo = Immigration team.
 const UNIFIED_JOURNEY = [
-    { stage: "Endorsed to School",       team: "education"   },
+    { stage: "New Lead",                 team: "education"   },
+    { stage: "Pre-Screening Done",       team: "education"   },
+    { stage: "For Proposal",             team: "education"   },
+    { stage: "Proposal Sent",            team: "education"   },
+    { stage: "Engagement Sent",          team: "education"   },
+    { stage: "Goal Setting Done",        team: "education"   },
+    { stage: "School Enrolment",         team: "education"   },
     { stage: "Conditional Offer",        team: "education"   },
     { stage: "Unconditional Offer",      team: "education"   },
     { stage: "Endorsed to Immigration",  team: "immigration" },
     { stage: "Visa Lodged",              team: "immigration" },
-    { stage: "Request for Information",  team: "immigration" },
-    { stage: "Approved in Principle",    team: "immigration" },
     { stage: "Approved Visa",            team: "immigration" },
     { stage: "Started Course",           team: "education"   },
+    { stage: "For Relodgement",          team: "immigration" },
+    { stage: "Declined Visa",            team: "immigration" },
 ];
 
 // Immigration team uses "Endorsed" as a shorter alias for "Endorsed to
-// Immigration"; everything else maps 1:1 to the unified labels above.
+// Immigration"; its interim visa sub-stages fold onto "Visa Lodged" in the
+// unified education journey (which doesn't carry them as separate nodes).
 const IMMIGRATION_TO_UNIFIED = {
     "Endorsed":                "Endorsed to Immigration",
     "Visa Lodged":             "Visa Lodged",
-    "Request for Information": "Request for Information",
-    "Approved in Principle":   "Approved in Principle",
+    "Request for Information": "Visa Lodged",
+    "Approved in Principle":   "Visa Lodged",
     "Approved Visa":           "Approved Visa",
 };
 

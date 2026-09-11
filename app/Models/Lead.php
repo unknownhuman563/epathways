@@ -21,17 +21,30 @@ class Lead extends Model
      * converted to a student. Surfaced as the dropdown in the Students
      * dashboard's Status column.
      */
+    // The full education pipeline — the 15-stage management-report workflow.
+    // A student's position is tracked by `education_stage`. Stages 1–6 are the
+    // pre-enrolment lead journey, 7–13 the enrolment→course path, and 14–15 the
+    // out-of-process visa outcomes.
     public const EDUCATION_STAGES = [
-        'Endorsed to School',
+        'New Lead',
+        'Pre-Screening Done',
+        'For Proposal',
+        'Proposal Sent',
+        'Engagement Sent',
+        'Goal Setting Done',
+        'School Enrolment',
         'Conditional Offer',
         'Unconditional Offer',
         'Endorsed to Immigration',
         'Visa Lodged',
-        'Approved in Principle',
-        'Request for Information',
         'Approved Visa',
         'Started Course',
+        'For Relodgement',
+        'Declined Visa',
     ];
+
+    /** Default stage a newly-converted education student starts on. */
+    public const EDUCATION_STAGE_DEFAULT = 'School Enrolment';
 
     /**
      * Subset of EDUCATION_STAGES that hand the lead off to the Immigration
@@ -45,9 +58,9 @@ class Lead extends Model
     public const EDUCATION_STAGES_IMMIGRATION = [
         'Endorsed to Immigration',
         'Visa Lodged',
-        'Approved in Principle',
-        'Request for Information',
         'Approved Visa',
+        'For Relodgement',
+        'Declined Visa',
     ];
 
     /**
@@ -151,6 +164,41 @@ class Lead extends Model
             ->where('is_immigration_case', false)
             ->where('is_accommodation_client', false)
             ->where('is_english_student', false);
+    }
+
+    /**
+     * The Students module universe — the exact set the Education "Students"
+     * page lists across its Education / English / Immigration tabs. It is:
+     *   - every converted student (is_student), plus
+     *   - every English learner (english_stage set, or stage = "English Pro"),
+     *     plus
+     *   - immigration cases, but ONLY those holding a fee-paying Student visa
+     *     (so a study client shows under both Students and Immigration; Work /
+     *     Visitor / Residence cases stay out).
+     * Kept here so the Students list and the education report count the same
+     * rows — they must never drift.
+     */
+    public function scopeInStudentsRegister($query)
+    {
+        $studentVisaNames = VisaType::where('category', 'Student')->pluck('name')->all();
+
+        return $query->where(function ($q) use ($studentVisaNames) {
+            $q->where('is_student', true)
+                ->orWhere('stage', 'English Pro')
+                ->orWhereNotNull('english_stage')
+                ->orWhere(function ($qc) use ($studentVisaNames) {
+                    $qc->where(function ($qi) {
+                        $qi->where('is_immigration_case', true)
+                            ->orWhereNotNull('immigration_stage');
+                    })
+                        ->where(function ($qv) use ($studentVisaNames) {
+                            $qv->where('inz_visa_type', 'like', '%student%');
+                            if (! empty($studentVisaNames)) {
+                                $qv->orWhereIn('inz_visa_type', $studentVisaNames);
+                            }
+                        });
+                });
+        });
     }
 
     /**

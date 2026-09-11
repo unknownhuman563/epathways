@@ -286,10 +286,6 @@ class EducationController extends Controller
             // these — that client is both a student and a case. Non-student
             // cases (Work, Visitor, Residence, …) stay out of the Students
             // list even though they are immigration cases.
-            $studentVisaNames = \App\Models\VisaType::where('category', 'Student')
-                ->pluck('name')
-                ->all();
-
             $students = Lead::with([
                 'studyPlans',
                 'documents',
@@ -300,27 +296,10 @@ class EducationController extends Controller
                 'stageUpdater:id,name', 'lastActivityUser:id,name',
                 'agent:id,name',
             ])
-                ->where(function ($q) use ($studentVisaNames) {
-                    $q->where('is_student', true)
-                        ->orWhere('stage', 'English Pro')
-                        ->orWhereNotNull('english_stage')
-                        // Immigration cases surface here only when the client
-                        // holds a Student visa (fee-paying) — so they can be
-                        // searched under both Students and Immigration. All
-                        // other immigration cases are excluded.
-                        ->orWhere(function ($qc) use ($studentVisaNames) {
-                            $qc->where(function ($qi) {
-                                    $qi->where('is_immigration_case', true)
-                                        ->orWhereNotNull('immigration_stage');
-                                })
-                                ->where(function ($qv) use ($studentVisaNames) {
-                                    $qv->where('inz_visa_type', 'like', '%student%');
-                                    if (! empty($studentVisaNames)) {
-                                        $qv->orWhereIn('inz_visa_type', $studentVisaNames);
-                                    }
-                                });
-                        });
-                })
+                // Education students + English learners + student-visa
+                // immigration cases — the report reuses this exact scope so the
+                // two surfaces always count the same rows.
+                ->inStudentsRegister()
                 ->when($scope, $scope)
                 ->orderByDesc('student_converted_at')
                 ->limit(200)
@@ -611,7 +590,7 @@ class EducationController extends Controller
                 // one — the row shows up under "Endorsed to School" with
                 // an "Endorsed by [Name]" subtitle in the table, instead
                 // of looking unstaged from day one.
-                'education_stage' => $data['education_stage'] ?? Lead::EDUCATION_STAGES[0],
+                'education_stage' => $data['education_stage'] ?? Lead::EDUCATION_STAGE_DEFAULT,
                 'english_stage' => $data['english_stage'] ?? null,
                 'immigration_stage' => $data['immigration_stage'] ?? null,
                 'english_assignee' => $data['english_assignee'] ?? null,
@@ -1007,80 +986,260 @@ class EducationController extends Controller
      * data underneath changes. Filters (counselor / institution / intake
      * / program) also come in via query so they persist across tab clicks.
      */
+    /**
+     * Education weekly/period report — mirrors the Immigration report: pick a
+     * period, get the pipeline position, named client movements, programs
+     * snapshot and an editable conclusion, all from live student data
+     * (education_stage). The named sections follow the management-report deck.
+     */
     public function reports(Request $request)
     {
-        $period = $request->input('period', 'weekly');
-        $period = in_array($period, ['weekly', 'monthly', 'quarterly', 'custom'], true) ? $period : 'weekly';
-
-        // Anchor + range per period. Custom takes from/to as ISO dates.
-        $now = now();
-        switch ($period) {
-            case 'monthly':
-                $start = $request->filled('anchor') ? \Illuminate\Support\Carbon::parse($request->input('anchor'))->startOfMonth() : $now->copy()->startOfMonth();
-                $end = $start->copy()->endOfMonth();
-                $prevStart = $start->copy()->subMonth();
-                $prevEnd = $prevStart->copy()->endOfMonth();
-                break;
-            case 'quarterly':
-                $start = $request->filled('anchor') ? \Illuminate\Support\Carbon::parse($request->input('anchor'))->startOfQuarter() : $now->copy()->startOfQuarter();
-                $end = $start->copy()->endOfQuarter();
-                $prevStart = $start->copy()->subQuarter();
-                $prevEnd = $prevStart->copy()->endOfQuarter();
-                break;
-            case 'custom':
-                $start = $request->filled('from') ? \Illuminate\Support\Carbon::parse($request->input('from'))->startOfDay() : $now->copy()->subDays(30)->startOfDay();
-                $end = $request->filled('to') ? \Illuminate\Support\Carbon::parse($request->input('to'))->endOfDay() : $now->copy()->endOfDay();
-                $prevSpan = $end->diffInDays($start) + 1;
-                $prevStart = $start->copy()->subDays($prevSpan);
-                $prevEnd = $start->copy()->subDay()->endOfDay();
-                break;
-            case 'weekly':
-            default:
-                $start = $request->filled('anchor') ? \Illuminate\Support\Carbon::parse($request->input('anchor'))->startOfWeek() : $now->copy()->startOfWeek();
-                $end = $start->copy()->endOfWeek();
-                $prevStart = $start->copy()->subWeek();
-                $prevEnd = $prevStart->copy()->endOfWeek();
-        }
+        [$preset, $from, $to] = $this->resolveEduReportRange($request);
+        $rangeDays = max(1, (int) $from->diffInDays($to) + 1);
 
         try {
-            // Real-data sections.
-            $newStudents = Lead::where('is_student', true)->whereBetween('student_converted_at', [$start, $end])->count();
-            $newStudentsPrev = Lead::where('is_student', true)->whereBetween('student_converted_at', [$prevStart, $prevEnd])->count();
+            // The education register = students PLUS any lead with a study plan
+            // (education intent). A record's position in the 15-stage pipeline is
+            // its education_stage when set (stages 6+), else its lead status
+            // mapped onto the early stages, so the pre-enrolment cards populate.
+            // Department membership — mirrors departmentsOf() on the Students
+            // page so the report and the tab badges count the same rows:
+            //   - immigration: is_immigration_case, an immigration_stage, or an
+            //     education_stage in the immigration-handoff subset.
+            //   - english:     an english_stage, or stage = "English Pro".
+            //   - education:   a student, or a lead owned by neither of the above.
+            $immHandoff = Lead::EDUCATION_STAGES_IMMIGRATION;
+            $deptOf = function ($l) use ($immHandoff) {
+                $inImm = $l->is_immigration_case || $l->immigration_stage || in_array($l->education_stage, $immHandoff, true);
+                $inEng = $l->english_stage || $l->stage === 'English Pro';
+                $set = [];
+                if ($inImm) {
+                    $set[] = 'immigration';
+                }
+                if ($inEng) {
+                    $set[] = 'english';
+                }
+                if ($l->is_student || (! $inImm && ! $inEng)) {
+                    $set[] = 'education';
+                }
 
-            $totalStudents = Lead::where('is_student', true)->count();
+                return $set;
+            };
 
-            // Document throughput
-            $docsApproved = \App\Models\LeadDocument::where('status', 'Approved')->whereBetween('reviewed_at', [$start, $end])->count();
-            $docsRejected = \App\Models\LeadDocument::where('status', 'Rejected')->whereBetween('reviewed_at', [$start, $end])->count();
-            $docsPending = \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count();
-            $docsUploaded = \App\Models\LeadDocument::whereBetween('created_at', [$start, $end])->count();
+            $inWin = fn ($l) => $l->stage_updated_at && $l->stage_updated_at->between($from, $to);
 
-            // Programs & institutions — quick snapshot
-            $programCount = \App\Models\Program::count();
-            $publishedProgs = \App\Models\Program::where('status', 'published')->count();
+            // ── Sections 01/02 — the LEADS pipeline. Mirrors the "List of Leads"
+            // page: every lead still in the pipeline (inLeadPipeline), counted by
+            // its real sales status. Converted students/cases are NOT here — they
+            // live in the department breakdown below.
+            $salesTerminal = ['Not Qualified', 'Work Pathway / Other'];
+            $leads = Lead::inLeadPipeline()
+                // A lead that already carries an English or Immigration sub-stage
+                // belongs to the Students register (department breakdown), not the
+                // general sales pipeline — keep it out of Section 01.
+                ->whereNull('english_stage')
+                ->whereNull('immigration_stage')
+                ->where(fn ($q) => $q->where('stage', '!=', 'English Pro')->orWhereNull('stage'))
+                ->get(['id', 'first_name', 'last_name', 'status', 'stage_updated_at', 'referral', 'student_school']);
 
-            // 8-period trend (weeks / months / quarters / days for custom)
-            $trend = $this->buildEducationTrend($period, $start);
+            // Canonical sales order first, then any other status value present in
+            // the data (legacy labels like "Submitted"), so nothing is dropped.
+            $extraStatuses = $leads->pluck('status')->filter()
+                ->reject(fn ($s) => in_array($s, Lead::STAGES, true))
+                ->unique()->values()->all();
+            $pipeStages = array_merge(Lead::STAGES, $extraStatuses);
+
+            $byStage = [];
+            foreach ($pipeStages as $s) {
+                $byStage[$s] = collect();
+            }
+            $noStatus = collect();
+            foreach ($leads as $l) {
+                if ($l->status && isset($byStage[$l->status])) {
+                    $byStage[$l->status]->push($l);
+                } else {
+                    $noStatus->push($l);
+                }
+            }
+            if ($noStatus->isNotEmpty()) {
+                $byStage['No status'] = $noStatus;
+                $pipeStages[] = 'No status';
+            }
+
+            // ── Section 01 — Pipeline position (only stages that hold leads) ──
+            $pipeline = collect($pipeStages)
+                ->filter(fn ($s) => $byStage[$s]->isNotEmpty())
+                ->values()
+                ->map(fn ($s, $i) => [
+                    'num' => $i + 1,
+                    'stage' => $s,
+                    'count' => $byStage[$s]->count(),
+                    'moved' => $byStage[$s]->filter($inWin)->count(),
+                    'outside' => in_array($s, $salesTerminal, true),
+                ])->all();
+            $totalRegister = $leads->count();
+            $movements = collect($byStage)->sum(fn ($c) => $c->filter($inWin)->count());
+
+            // Top-line summary cards.
+            $summary = [
+                'new_students' => Lead::where('is_student', true)->whereBetween('student_converted_at', [$from, $to])->count(),
+                'total_students' => Lead::where('is_student', true)->count(),
+                'new_leads' => Lead::inLeadPipeline()->whereBetween('created_at', [$from, $to])->count(),
+                'register' => $totalRegister,
+            ];
+
+            // Named lists behind the clickable summary cards.
+            $mkList = fn ($query, $dateField) => $query->get(['id', 'first_name', 'last_name', 'referral', 'student_school', $dateField])
+                ->map(fn ($l) => [
+                    'id' => $l->id,
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Client',
+                    'ref' => $l->referral,
+                    'school' => $l->student_school,
+                    'date' => optional($l->{$dateField})->toIso8601String(),
+                    'moved' => false,
+                ])->values();
+            $summaryLists = [
+                'new_students' => $mkList(Lead::where('is_student', true)->whereBetween('student_converted_at', [$from, $to])->orderByDesc('student_converted_at'), 'student_converted_at'),
+                'total_students' => $mkList(Lead::where('is_student', true)->orderByDesc('student_converted_at'), 'student_converted_at'),
+                'new_leads' => $mkList(Lead::inLeadPipeline()->whereBetween('created_at', [$from, $to])->orderByDesc('created_at'), 'created_at'),
+            ];
+
+            // ── Section 02 — Client register (named leads per sales stage) ───
+            $register = collect($pipeStages)
+                ->filter(fn ($s) => $byStage[$s]->isNotEmpty())
+                ->mapWithKeys(fn ($s) => [$s => $byStage[$s]
+                    ->sortByDesc(fn ($l) => optional($l->stage_updated_at)->timestamp)
+                    ->map(fn ($l) => [
+                        'id' => $l->id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Client',
+                        'ref' => $l->referral,
+                        'school' => $l->student_school,
+                        'date' => optional($l->stage_updated_at)->toIso8601String(),
+                        'moved' => $inWin($l),
+                    ])->values()->all()])->all();
+
+            // ── Section 02b — Department breakdown ───────────────────────────
+            // Each of the three Students tabs (Education / English / Immigration)
+            // has its OWN status set, and each real status is tracked here rather
+            // than folded onto the education pipeline. A record can appear under
+            // more than one department (it counts in each, matching the tabs).
+            $mkRow = fn ($l) => [
+                'id' => $l->id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Client',
+                'ref' => $l->referral,
+                'school' => $l->student_school,
+                'date' => optional($l->stage_updated_at)->toIso8601String(),
+                'moved' => $inWin($l),
+            ];
+            // The department breakdown mirrors the Students page tabs, so it is
+            // scoped to the Students REGISTER only (converted students + English
+            // learners + student-visa immigration cases) — NOT the general lead
+            // pipeline. That keeps the Education tab at its real student count
+            // and its real student statuses (no phantom lead stages like
+            // "Proposal Sent" leaking in from the sales pipeline).
+            $deptRecords = Lead::inStudentsRegister()
+                ->get(['id', 'first_name', 'last_name', 'education_stage', 'immigration_stage', 'english_stage', 'stage', 'is_immigration_case', 'is_student', 'stage_updated_at', 'referral', 'student_school']);
+
+            $buildDept = function (string $dept, array $stages, callable $stageOf) use ($deptRecords, $deptOf, $mkRow, $inWin) {
+                $members = $deptRecords->filter(fn ($l) => in_array($dept, $deptOf($l), true));
+                $buckets = [];
+                foreach ($stages as $s) {
+                    $buckets[$s] = collect();
+                }
+                $unset = collect();
+                foreach ($members as $l) {
+                    $s = $stageOf($l);
+                    if ($s && isset($buckets[$s])) {
+                        $buckets[$s]->push($l);
+                    } else {
+                        $unset->push($l);
+                    }
+                }
+                // Only surface statuses that actually hold clients, in canonical
+                // order — an empty stage isn't shown (so Education never lists a
+                // status no student sits at).
+                $rows = collect($stages)
+                    ->filter(fn ($s) => $buckets[$s]->isNotEmpty())
+                    ->map(fn ($s) => [
+                        'stage' => $s,
+                        'count' => $buckets[$s]->count(),
+                        'moved' => $buckets[$s]->filter($inWin)->count(),
+                        'clients' => $buckets[$s]
+                            ->sortByDesc(fn ($l) => optional($l->stage_updated_at)->timestamp)
+                            ->map($mkRow)->values()->all(),
+                    ]);
+                if ($unset->isNotEmpty()) {
+                    $rows->push([
+                        'stage' => 'No stage set',
+                        'count' => $unset->count(),
+                        'moved' => $unset->filter($inWin)->count(),
+                        'clients' => $unset->map($mkRow)->values()->all(),
+                    ]);
+                }
+
+                return [
+                    'total' => $members->count(),
+                    'moved' => $members->filter($inWin)->count(),
+                    'stages' => $rows->values()->all(),
+                ];
+            };
+
+            $departments = [
+                'education' => $buildDept('education', Lead::EDUCATION_STAGES,
+                    fn ($l) => $l->education_stage),
+                'english' => $buildDept('english', Lead::ENGLISH_STAGES,
+                    fn ($l) => $l->english_stage),
+                'immigration' => $buildDept('immigration', Lead::IMMIGRATION_STAGES,
+                    fn ($l) => $l->immigration_stage),
+            ];
+
+            // ── Section 04 — ePortal Programs snapshot ───────────────────────
+            $programs = [
+                'total' => Program::count(),
+                'published' => Program::where('status', 'published')->count(),
+                'draft' => Program::where('status', 'draft')->count(),
+            ];
+
+            // ── Section 05 — Conclusion ──────────────────────────────────────
+            $noteKey = 'edu_report_note:'.$from->toDateString().':'.$to->toDateString();
+            $proposals = ($byStage['Proposal Sent'] ?? collect())->filter($inWin)->count();
+            $qualified = collect(['Qualified', 'Qualified but Not Ready', 'Qualified but No Funds'])
+                ->sum(fn ($s) => ($byStage[$s] ?? collect())->filter($inWin)->count());
+            $auto = sprintf(
+                '%d lead movement%s this period across %d in the pipeline. %d newly qualified, %d proposal%s sent.',
+                $movements, $movements === 1 ? '' : 's', $totalRegister,
+                $qualified, $proposals, $proposals === 1 ? '' : 's',
+            );
+            $conclusion = [
+                'auto' => $auto,
+                'note' => \App\Models\Setting::get($noteKey),
+                'note_key' => $noteKey,
+                'stats' => [
+                    'movements' => $movements,
+                    'qualified' => $qualified,
+                    'proposals' => $proposals,
+                    'register' => $totalRegister,
+                ],
+            ];
 
             return inertia('portal/education/Reports', [
                 'portal' => 'education',
-                'period' => $period,
-                'range' => ['start' => $start->toDateString(), 'end' => $end->toDateString()],
-                'filters' => $request->only(['counselor', 'institution', 'intake', 'program']),
-
-                'glance' => [
-                    'new_students' => ['value' => $newStudents, 'prev' => $newStudentsPrev],
-                    'total_students' => $totalStudents,
-                    'docs_approved' => $docsApproved,
-                    'docs_rejected' => $docsRejected,
-                    'docs_pending' => $docsPending,
-                    'docs_uploaded' => $docsUploaded,
+                'range' => [
+                    'preset' => $preset,
+                    'from' => $from->toDateString(),
+                    'to' => $to->toDateString(),
+                    'days' => $rangeDays,
+                    'label' => $this->eduReportRangeLabel($preset, $from, $to),
                 ],
-                'programs' => [
-                    'total' => $programCount,
-                    'published' => $publishedProgs,
-                ],
-                'trend' => $trend,
+                'pipeline' => $pipeline,
+                'summary' => $summary,
+                'summaryLists' => $summaryLists,
+                'totalRegister' => $totalRegister,
+                'movements' => $movements,
+                'register' => $register,
+                'departments' => $departments,
+                'programs' => $programs,
+                'conclusion' => $conclusion,
                 'generated_at' => now()->toIso8601String(),
                 'generated_by' => optional(auth()->user())->name,
             ]);
@@ -1089,10 +1248,81 @@ class EducationController extends Controller
 
             return inertia('portal/education/Reports', [
                 'portal' => 'education',
-                'period' => $period,
+                'range' => ['preset' => $preset, 'from' => $from->toDateString(), 'to' => $to->toDateString(), 'days' => $rangeDays, 'label' => $this->eduReportRangeLabel($preset, $from, $to)],
                 'error' => 'Could not build the report.',
             ]);
         }
+    }
+
+    /** Save (or clear) the editable conclusion note for an education report period. */
+    public function saveReportNote(Request $request)
+    {
+        $data = $request->validate([
+            'note_key' => ['required', 'string', 'starts_with:edu_report_note:', 'max:120'],
+            'note' => ['nullable', 'string', 'max:4000'],
+        ]);
+
+        \App\Models\Setting::set($data['note_key'], $data['note'] ?: null, 'string', 'Education report note', 'education');
+
+        return back()->with('success', 'Report note saved.');
+    }
+
+    /**
+     * Resolve the report window from the request. Presets mirror the Immigration
+     * report: today | this_week | two_weeks | this_month | last_month | quarter |
+     * custom(from,to). Default is the last 14 days.
+     *
+     * @return array{0: string, 1: \Illuminate\Support\Carbon, 2: \Illuminate\Support\Carbon}
+     */
+    private function resolveEduReportRange(Request $request): array
+    {
+        $now = now();
+        $preset = $request->input('preset', 'two_weeks');
+        if (! in_array($preset, ['today', 'this_week', 'two_weeks', 'this_month', 'last_month', 'quarter', 'custom'], true)) {
+            $preset = 'two_weeks';
+        }
+
+        switch ($preset) {
+            case 'today':
+                return [$preset, $now->copy()->startOfDay(), $now->copy()->endOfDay()];
+            case 'this_week':
+                return [$preset, $now->copy()->startOfWeek(), $now->copy()->endOfDay()];
+            case 'this_month':
+                return [$preset, $now->copy()->startOfMonth(), $now->copy()->endOfDay()];
+            case 'last_month':
+                $m = $now->copy()->subMonthNoOverflow();
+
+                return [$preset, $m->copy()->startOfMonth(), $m->copy()->endOfMonth()];
+            case 'quarter':
+                return [$preset, $now->copy()->subMonthsNoOverflow(3)->startOfDay(), $now->copy()->endOfDay()];
+            case 'custom':
+                $cfrom = $request->filled('from')
+                    ? \Illuminate\Support\Carbon::parse($request->input('from'))->startOfDay()
+                    : $now->copy()->subDays(14)->startOfDay();
+                $cto = $request->filled('to')
+                    ? \Illuminate\Support\Carbon::parse($request->input('to'))->endOfDay()
+                    : $now->copy()->endOfDay();
+                if ($cfrom->gt($cto)) {
+                    [$cfrom, $cto] = [$cto->copy()->startOfDay(), $cfrom->copy()->endOfDay()];
+                }
+
+                return [$preset, $cfrom, $cto];
+            default: // two_weeks
+                return ['two_weeks', $now->copy()->subDays(14)->startOfDay(), $now->copy()->endOfDay()];
+        }
+    }
+
+    private function eduReportRangeLabel(string $preset, \Illuminate\Support\Carbon $from, \Illuminate\Support\Carbon $to): string
+    {
+        return match ($preset) {
+            'today' => 'Today',
+            'this_week' => 'This week',
+            'this_month' => $from->format('F Y'),
+            'last_month' => $from->format('F Y'),
+            'quarter' => 'Last 3 months',
+            'custom' => $from->format('j M').' – '.$to->format('j M Y'),
+            default => 'Last 2 weeks',
+        };
     }
 
     /** Build a period-appropriate trend array (8 buckets). */

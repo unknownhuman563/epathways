@@ -1539,6 +1539,7 @@ Route::middleware(['auth'])->group(function () {
             // REPORTS — single page; period (weekly|monthly|quarterly|custom)
             // is a query param, sections stay the same.
             Route::get('/reports', [EducationController::class, 'reports'])->name('reports');
+            Route::post('/reports/note', [EducationController::class, 'saveReportNote'])->name('reports.note');
 
             // ACCOUNT
             Route::get('/profile', [EducationController::class, 'profile'])->name('profile');
