@@ -40,6 +40,21 @@ class StudentMultiSchoolTest extends TestCase
         $this->assertSame($icl->id, $lead->school_id);
     }
 
+    public function test_stores_per_program_schools_on_the_study_plan(): void
+    {
+        $edu = User::factory()->create(['role' => 'education']);
+
+        $this->actingAs($edu)->post('/portal/education/students', $this->base([
+            'program_text' => 'Master of Business Informatics by Thesis · Bachelor of Applied Hotel Management',
+            // Index-aligned with program_text.
+            'program_schools' => ['Massey University', 'ATMC New Zealand'],
+            'school_text' => 'Massey University · ATMC New Zealand',
+        ]))->assertRedirect();
+
+        $plan = \App\Models\Lead::where('email', 'm@example.com')->first()->studyPlans->first();
+        $this->assertSame(['Massey University', 'ATMC New Zealand'], $plan->program_schools);
+    }
+
     public function test_update_replaces_the_school_list(): void
     {
         $edu = User::factory()->create(['role' => 'education']);

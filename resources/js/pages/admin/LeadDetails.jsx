@@ -164,13 +164,22 @@ function ProgramAddPicker({ options = [], excludeIds = [], disabled = false, onP
 // The student's enrolment programs (multi-select on the education student
 // modal, stored delimited). One card per program showing its school; each
 // clickable card opens the full program-detail modal. Only rendered with data.
-function EnrolmentProgramsCard({ programText, programOptions = [], onViewProgram }) {
+function EnrolmentProgramsCard({ programText, programSchools = [], unionSchools = "", programOptions = [], onViewProgram }) {
     const split = (t) => (t && String(t).trim() ? String(t).split(" · ").map((s) => s.trim()).filter(Boolean) : []);
     const programs = split(programText);
     if (programs.length === 0) return null;
 
     // Each catalogue option carries its resolved school + level + id.
     const optFor = (title) => programOptions.find((o) => o.title === title) || null;
+    // Legacy students stored only a de-duplicated union of schools; use it as an
+    // index fallback so their schools still show before a per-program re-save.
+    const union = split(unionSchools);
+    // School for a program = its saved per-program school (aligned by index),
+    // then the program's catalogue school, then the legacy union by index.
+    const schoolFor = (title, i) => {
+        const per = Array.isArray(programSchools) ? String(programSchools[i] || "").trim() : "";
+        return per || optFor(title)?.school || union[i] || "";
+    };
 
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -191,6 +200,7 @@ function EnrolmentProgramsCard({ programText, programOptions = [], onViewProgram
             <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {programs.map((title, i) => {
                     const opt = optFor(title);
+                    const school = schoolFor(title, i);
                     const clickable = !! opt?.id;
                     const Tag = clickable ? 'button' : 'div';
                     return (
@@ -207,7 +217,7 @@ function EnrolmentProgramsCard({ programText, programOptions = [], onViewProgram
                             <p className="text-[13px] font-bold text-gray-900 leading-snug">{title}</p>
                             <p className="mt-1 inline-flex items-center gap-1.5 text-[11.5px] text-gray-500">
                                 <Building2 size={12} className="text-gray-400 shrink-0" />
-                                {opt?.school || <span className="text-gray-300">No school on file</span>}
+                                {school || <span className="text-gray-300">No school on file</span>}
                             </p>
                             {clickable && (
                                 <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[#436235]">
@@ -1097,7 +1107,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 </div>
 
                 <ProposedProgramsCard proposal={proposal} leadId={backendLead.id} programOptions={programOptions} onViewProgram={setViewProgramId} />
-                <EnrolmentProgramsCard programText={studyPlan.preferred_course} programOptions={programOptions} onViewProgram={setViewProgramId} />
+                <EnrolmentProgramsCard programText={studyPlan.preferred_course} programSchools={studyPlan.program_schools} unionSchools={backendLead.student_school} programOptions={programOptions} onViewProgram={setViewProgramId} />
                 <AICapabilityHero lead={backendLead} />
                 <TagsPanel leadId={backendLead.id} tags={tags} allTags={allTags} />
 

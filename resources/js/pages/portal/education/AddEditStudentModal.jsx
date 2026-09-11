@@ -55,6 +55,39 @@ const SUFFIX_OPTIONS = ["", "Jr.", "Sr.", "II", "III", "IV", "V"];
 const PROGRAM_DELIM = " · ";
 const SCHOOL_DELIM = " · ";
 
+// A program's catalogue school name (by school_id, else institution). "" when
+// the program has no school in the catalogue.
+function resolveCatalogSchool(title, programOptions = [], schoolOptions = []) {
+    const p = (programOptions || []).find((o) => o.title === title);
+    if (! p) return "";
+    if (p.school_id != null && p.school_id !== "") {
+        const s = schoolOptions.find((o) => String(o.id) === String(p.school_id));
+        if (s) return s.name;
+    }
+    if (p.institution) {
+        const inst = String(p.institution).toLowerCase();
+        const s = schoolOptions.find((o) => o.name?.toLowerCase() === inst || o.name?.toLowerCase().includes(inst));
+        return s ? s.name : p.institution;
+    }
+    return "";
+}
+
+// Build the { programTitle: schoolName } map from stored data — using the saved
+// per-program school where present, else the program's catalogue school.
+function buildSchoolMap(programText, aligned, programOptions, schoolOptions, unionFallback = "") {
+    const titles = programText ? programText.split(PROGRAM_DELIM).map((s) => s.trim()).filter(Boolean) : [];
+    const arr = Array.isArray(aligned) ? aligned : [];
+    // Legacy students saved only a de-duplicated union of schools; distribute it
+    // by index as a starting point staff can correct.
+    const union = unionFallback ? String(unionFallback).split(SCHOOL_DELIM).map((s) => s.trim()).filter(Boolean) : [];
+    const map = {};
+    titles.forEach((t, i) => {
+        const stored = (arr[i] || "").trim();
+        map[t] = stored || resolveCatalogSchool(t, programOptions, schoolOptions) || (union[i] || "");
+    });
+    return map;
+}
+
 // localStorage key for the new-student draft so a user who cancels
 // accidentally (or refreshes) can resume from where they left off.
 const DRAFT_KEY = "education.newStudent.draft";
@@ -84,6 +117,8 @@ export default function AddEditStudentModal({
     const [form,    setForm]    = useState(blankForm);
     const [errors,  setErrors]  = useState({});
     const [saving,  setSaving]  = useState(false);
+    // Per-program school, keyed by program title (aligned to program_text).
+    const [schoolByProgram, setSchoolByProgram] = useState({});
 
     // Seed on open. We don't pull preferred_course / intake / english_test
     // from the student row because the listing serializer doesn't surface
@@ -102,6 +137,7 @@ export default function AddEditStudentModal({
                 if (raw) draft = JSON.parse(raw);
             } catch { /* malformed JSON in storage — ignore */ }
             setForm({ ...blankForm(), ...(draft || {}) });
+            setSchoolByProgram(buildSchoolMap(draft?.program_text || "", null, programOptions, schoolOptions));
             setErrors({});
             return;
         }
@@ -146,6 +182,7 @@ export default function AddEditStudentModal({
             oop:             student.oop                                ?? "",
             english_test:    student.english_test                       ?? "",
         });
+        setSchoolByProgram(buildSchoolMap(student.program || "", student.program_schools, programOptions, schoolOptions, student.school || student.school_name || ""));
         setErrors({});
     }, [open, editing, student?.id]);
 
@@ -171,40 +208,28 @@ export default function AddEditStudentModal({
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
     const setVal = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-    // Resolve a program title to its school NAME — by the program's school_id
-    // (matched against the school catalog), else by its institution text.
-    const schoolNameForProgram = (title) => {
-        const p = (programOptions || []).find((o) => o.title === title);
-        if (! p) return null;
-        if (p.school_id != null && p.school_id !== "") {
-            const s = schoolOptions.find((o) => String(o.id) === String(p.school_id));
-            if (s) return s.name;
-        }
-        if (p.institution) {
-            const inst = String(p.institution).toLowerCase();
-            const s = schoolOptions.find((o) => o.name?.toLowerCase() === inst || o.name?.toLowerCase().includes(inst));
-            return s ? s.name : p.institution;
-        }
-        return null;
+    // Resolve a program title to its catalogue school NAME — by the program's
+    // school_id (matched against the school catalog), else by its institution
+    // text. Null when the program has no school in the catalogue.
+    const catalogSchoolFor = (title) => resolveCatalogSchool(title, programOptions, schoolOptions);
+
+    // Ordered list of the selected program titles.
+    const programTitles = form.program_text
+        ? form.program_text.split(PROGRAM_DELIM).map((s) => s.trim()).filter(Boolean)
+        : [];
+
+    // Programs are a PROGRAM_DELIM-joined string; each program keeps its OWN
+    // school (schoolByProgram, keyed by title). Adding a program auto-fills its
+    // catalogue school when it has one; removing a program drops its school.
+    const setProgramTitles = (titles) => {
+        setForm((f) => ({ ...f, program_text: titles.join(PROGRAM_DELIM) }));
+        setSchoolByProgram((prev) => {
+            const next = {};
+            titles.forEach((t) => { next[t] = (t in prev) ? prev[t] : catalogSchoolFor(t); });
+            return next;
+        });
     };
-    const splitSchools = (txt) => (txt ? txt.split(SCHOOL_DELIM).map((s) => s.trim()).filter(Boolean) : []);
-
-    // Programs are multi-select — stored as a PROGRAM_DELIM-joined string in
-    // program_text. The School field mirrors the selected programs' schools:
-    // adding a program adds its school; removing a program drops its school
-    // (unless another selected program — or a manual pick — still uses it).
-    const setProgramTitles = (titles) => setForm((f) => {
-        const oldTitles = f.program_text ? f.program_text.split(PROGRAM_DELIM).map((s) => s.trim()).filter(Boolean) : [];
-        const oldProgSchools = new Set(oldTitles.map(schoolNameForProgram).filter(Boolean));
-        const newProgSchools = titles.map(schoolNameForProgram).filter(Boolean);
-        // Keep any school that wasn't derived from the previous program set
-        // (i.e. a manually-added school), then union in the new programs' schools.
-        const manual = splitSchools(f.school_text).filter((s) => ! oldProgSchools.has(s));
-        const merged = Array.from(new Set([...manual, ...newProgSchools]));
-        return { ...f, program_text: titles.join(PROGRAM_DELIM), school_text: merged.join(SCHOOL_DELIM) };
-    });
-
-    const setSchoolNames = (names) => setForm((f) => ({ ...f, school_text: names.join(SCHOOL_DELIM) }));
+    const setProgramSchool = (title, name) => setSchoolByProgram((prev) => ({ ...prev, [title]: name }));
 
     const submit = (e) => {
         e?.preventDefault?.();
@@ -232,11 +257,14 @@ export default function AddEditStudentModal({
             date_of_engagement:   form.date_of_engagement || null,
         };
 
-        // Keep the legacy single school_id in sync with the FIRST school in the
-        // multi-school list (matched against the catalog; null if free-typed).
-        const schoolNames = form.school_text ? form.school_text.split(SCHOOL_DELIM).map((s) => s.trim()).filter(Boolean) : [];
-        const firstSchool = schoolNames[0];
-        payload.school_text = form.school_text || null;
+        // Per-program schools (aligned with program_text order) drive everything:
+        // the study plan stores the aligned array; student_school keeps the
+        // de-duplicated union for the list view; school_id keeps the first match.
+        const programSchools = programTitles.map((t) => (schoolByProgram[t] || "").trim());
+        const schoolUnion = Array.from(new Set(programSchools.filter(Boolean)));
+        const firstSchool = schoolUnion[0];
+        payload.program_schools = programSchools;
+        payload.school_text = schoolUnion.join(SCHOOL_DELIM) || null;
         payload.school_id = firstSchool
             ? (schoolOptions.find((s) => s.name?.toLowerCase() === firstSchool.toLowerCase())?.id ?? null)
             : null;
@@ -400,7 +428,7 @@ export default function AddEditStudentModal({
                             <Field label="Date engaged" hint="When they became engaged · optional">
                                 <input type="date" value={form.date_of_engagement} onChange={set("date_of_engagement")} className={ICls} />
                             </Field>
-                            <Field label="Program offered" hint="Search or select one or more — the School auto-fills to match each program">
+                            <Field label="Program offered" hint="Search or select one or more — each program gets its own school below">
                                 <ProgramMultiSelect
                                     value={form.program_text}
                                     delim={PROGRAM_DELIM}
@@ -408,14 +436,16 @@ export default function AddEditStudentModal({
                                     onChange={setProgramTitles}
                                 />
                             </Field>
-                            <Field label="School" hint="Auto-filled from the selected programs — add or remove as needed">
-                                <SchoolMultiSelect
-                                    value={form.school_text}
-                                    delim={SCHOOL_DELIM}
+                            <div className="sm:col-span-2 lg:col-span-3">
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">School per program</label>
+                                <SchoolsPerProgram
+                                    programs={programTitles}
+                                    value={schoolByProgram}
                                     options={schoolOptions}
-                                    onChange={setSchoolNames}
+                                    onChange={setProgramSchool}
                                 />
-                            </Field>
+                                <p className="mt-1 text-[10.5px] text-gray-400">Auto-filled from each program's catalogue school when it has one — type to set or change any.</p>
+                            </div>
                             <Field label="Intake" hint="Intake start date · optional">
                                 <input type="date" value={form.intake} onChange={set("intake")} className={ICls} />
                             </Field>
@@ -582,6 +612,35 @@ function ProgramMultiSelect({ value = "", delim = " · ", options = [], onChange
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+// Per-program school editor — one row per selected program with an editable
+// school field (native datalist typeahead over the catalogue, free text
+// allowed). Values are held in the parent as a { programTitle: school } map.
+function SchoolsPerProgram({ programs = [], value = {}, options = [], onChange }) {
+    if (programs.length === 0) {
+        return <p className="text-[12px] text-gray-400 rounded-xl border border-dashed border-gray-200 px-3 py-3">Add a program above to assign its school.</p>;
+    }
+    return (
+        <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+            <datalist id="spp-school-options">
+                {options.map((s) => <option key={s.id} value={s.name} />)}
+            </datalist>
+            {programs.map((t, i) => (
+                <div key={`${t}-${i}`} className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2 bg-white">
+                    <span className="text-[12.5px] font-semibold text-gray-800 sm:w-1/2 min-w-0 truncate" title={t}>{t}</span>
+                    <input
+                        list="spp-school-options"
+                        value={value[t] || ""}
+                        onChange={(e) => onChange(t, e.target.value)}
+                        placeholder="School for this program…"
+                        maxLength={191}
+                        className="flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-800 outline-none focus:border-[#436235] focus:ring-1 focus:ring-[#436235]"
+                    />
+                </div>
+            ))}
         </div>
     );
 }

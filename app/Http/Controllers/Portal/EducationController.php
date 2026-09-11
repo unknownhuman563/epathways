@@ -373,6 +373,8 @@ class EducationController extends Controller
                         'date_engaged' => optional($l->date_of_engagement)->toDateString()
                             ?? optional($l->student_converted_at)->toDateString(),
                         'program' => optional($plan)->preferred_course,
+                        // Per-program schools, index-aligned with `program`.
+                        'program_schools' => optional($plan)->program_schools,
                         'level' => optional($plan)->qualification_level,
                         'intake' => optional($plan)->preferred_intake,
                         'english_test' => optional($plan)->english_test_type,
@@ -639,6 +641,7 @@ class EducationController extends Controller
                 \App\Models\LeadStudyPlan::create([
                     'lead_id' => $lead->id,
                     'preferred_course' => $programTitle,
+                    'program_schools' => $data['program_schools'] ?? null,
                     'qualification_level' => $programLevel,
                     'preferred_intake' => $data['intake'] ?? null,
                     'english_test_type' => $data['english_test'] ?? null,
@@ -716,6 +719,7 @@ class EducationController extends Controller
             $plan = $lead->studyPlans()->first() ?: new \App\Models\LeadStudyPlan(['lead_id' => $lead->id]);
             if (array_key_exists('program_text', $data)) {
                 $plan->preferred_course = $data['program_text'] ?: null;
+                $plan->program_schools = $data['program_schools'] ?? null;
                 if (! empty($data['program_text'])) {
                     $firstTitle = trim(explode(' · ', $data['program_text'])[0]);
                     $match = $firstTitle ? \App\Models\Program::where('title', $firstTitle)->first() : null;
@@ -789,9 +793,13 @@ class EducationController extends Controller
             'date_of_engagement' => 'nullable|date',
             'program_text' => 'nullable|string|max:1000',
             'school_id' => 'nullable|integer|exists:schools,id',
-            // One or more school names joined by " · " — mirrors the selected
-            // programs' schools. school_id keeps the first for legacy lookups.
+            // One or more school names joined by " · " — the de-duplicated union
+            // of the selected programs' schools. school_id keeps the first.
             'school_text' => 'nullable|string|max:1000',
+            // Per-program school, index-aligned with the delimited program_text,
+            // so each program can show its own school on the profile.
+            'program_schools' => 'nullable|array|max:50',
+            'program_schools.*' => 'nullable|string|max:191',
             'internal_note' => 'nullable|string|max:5000',
             'payment' => 'nullable|string|max:191',
             'intake' => 'nullable|string|max:120',
