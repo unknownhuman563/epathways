@@ -596,6 +596,8 @@ class EducationController extends Controller
                 'student_oop' => $data['oop'] ?? null,
                 'student_comments' => $data['internal_note'] ?? null,
                 'school_id' => $data['school_id'] ?? null,
+                // Full (possibly multi) school list mirroring the programs.
+                'student_school' => $data['school_text'] ?? null,
                 'is_student' => true,
                 'student_converted_at' => now(),
                 'student_converted_by' => auth()->id(),
@@ -683,6 +685,7 @@ class EducationController extends Controller
                 'student_oop' => $data['oop'] ?? null,
                 'student_comments' => $data['internal_note'] ?? null,
                 'school_id' => $data['school_id'] ?? null,
+                'student_school' => $data['school_text'] ?? null,
             ]);
             if (array_key_exists('date_of_engagement', $data)) {
                 $lead->date_of_engagement = $data['date_of_engagement'] ?: null;
@@ -786,6 +789,9 @@ class EducationController extends Controller
             'date_of_engagement' => 'nullable|date',
             'program_text' => 'nullable|string|max:1000',
             'school_id' => 'nullable|integer|exists:schools,id',
+            // One or more school names joined by " · " — mirrors the selected
+            // programs' schools. school_id keeps the first for legacy lookups.
+            'school_text' => 'nullable|string|max:1000',
             'internal_note' => 'nullable|string|max:5000',
             'payment' => 'nullable|string|max:191',
             'intake' => 'nullable|string|max:120',

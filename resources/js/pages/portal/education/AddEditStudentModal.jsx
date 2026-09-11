@@ -50,8 +50,10 @@ const COOP_OOP_PRESETS = ["Yes", "No"];
 const SUFFIX_OPTIONS = ["", "Jr.", "Sr.", "II", "III", "IV", "V"];
 
 // Multiple selected programs are stored joined by this delimiter in the single
-// program_text / preferred_course string field.
+// program_text / preferred_course string field. Schools use the same delimiter
+// in school_text (mirrors the selected programs' schools).
 const PROGRAM_DELIM = " · ";
+const SCHOOL_DELIM = " · ";
 
 // localStorage key for the new-student draft so a user who cancels
 // accidentally (or refreshes) can resume from where they left off.
@@ -66,7 +68,7 @@ const blankForm = () => ({
     department: "education", stage: "", assignee: "",
     date_of_engagement: "",
     program_text: "", internal_note: "",
-    payment: "", intake: "", school_id: "",
+    payment: "", intake: "", school_id: "", school_text: "",
     coop: "", oop: "", english_test: "",
 });
 
@@ -138,6 +140,8 @@ export default function AddEditStudentModal({
             payment:         student.payment                            ?? "",
             intake:          student.intake                             ?? "",
             school_id:       student.school_id                          ?? "",
+            // Multi-school text; fall back to the legacy single school name.
+            school_text:     student.school || student.school_name || "",
             coop:            student.coop                               ?? "",
             oop:             student.oop                                ?? "",
             english_test:    student.english_test                       ?? "",
@@ -167,28 +171,40 @@ export default function AddEditStudentModal({
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
     const setVal = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-    // Programs are multi-select — stored as a PROGRAM_DELIM-joined string in
-    // program_text so the backend keeps working with one column.
-    const setProgramTitles = (titles) => setForm((f) => ({ ...f, program_text: titles.join(PROGRAM_DELIM) }));
-
-    // When a catalog program is picked, auto-fill the School to match — by
-    // school_id, or by matching its institution against the school list —
-    // but only when the School is still empty, so it doesn't fight later picks.
-    const autofillSchool = (program) => {
-        if (! program) return;
-        setForm((f) => {
-            if (f.school_id) return f;
-            let sid = program.school_id != null && program.school_id !== "" ? String(program.school_id) : "";
-            if (! sid && program.institution) {
-                const inst = String(program.institution).toLowerCase();
-                const match = schoolOptions.find(
-                    (s) => s.name?.toLowerCase() === inst || s.name?.toLowerCase().includes(inst),
-                );
-                if (match) sid = String(match.id);
-            }
-            return sid ? { ...f, school_id: sid } : f;
-        });
+    // Resolve a program title to its school NAME — by the program's school_id
+    // (matched against the school catalog), else by its institution text.
+    const schoolNameForProgram = (title) => {
+        const p = (programOptions || []).find((o) => o.title === title);
+        if (! p) return null;
+        if (p.school_id != null && p.school_id !== "") {
+            const s = schoolOptions.find((o) => String(o.id) === String(p.school_id));
+            if (s) return s.name;
+        }
+        if (p.institution) {
+            const inst = String(p.institution).toLowerCase();
+            const s = schoolOptions.find((o) => o.name?.toLowerCase() === inst || o.name?.toLowerCase().includes(inst));
+            return s ? s.name : p.institution;
+        }
+        return null;
     };
+    const splitSchools = (txt) => (txt ? txt.split(SCHOOL_DELIM).map((s) => s.trim()).filter(Boolean) : []);
+
+    // Programs are multi-select — stored as a PROGRAM_DELIM-joined string in
+    // program_text. The School field mirrors the selected programs' schools:
+    // adding a program adds its school; removing a program drops its school
+    // (unless another selected program — or a manual pick — still uses it).
+    const setProgramTitles = (titles) => setForm((f) => {
+        const oldTitles = f.program_text ? f.program_text.split(PROGRAM_DELIM).map((s) => s.trim()).filter(Boolean) : [];
+        const oldProgSchools = new Set(oldTitles.map(schoolNameForProgram).filter(Boolean));
+        const newProgSchools = titles.map(schoolNameForProgram).filter(Boolean);
+        // Keep any school that wasn't derived from the previous program set
+        // (i.e. a manually-added school), then union in the new programs' schools.
+        const manual = splitSchools(f.school_text).filter((s) => ! oldProgSchools.has(s));
+        const merged = Array.from(new Set([...manual, ...newProgSchools]));
+        return { ...f, program_text: titles.join(PROGRAM_DELIM), school_text: merged.join(SCHOOL_DELIM) };
+    });
+
+    const setSchoolNames = (names) => setForm((f) => ({ ...f, school_text: names.join(SCHOOL_DELIM) }));
 
     const submit = (e) => {
         e?.preventDefault?.();
@@ -215,6 +231,15 @@ export default function AddEditStudentModal({
             immigration_assignee: department === "immigration" ? (assignee || null) : null,
             date_of_engagement:   form.date_of_engagement || null,
         };
+
+        // Keep the legacy single school_id in sync with the FIRST school in the
+        // multi-school list (matched against the catalog; null if free-typed).
+        const schoolNames = form.school_text ? form.school_text.split(SCHOOL_DELIM).map((s) => s.trim()).filter(Boolean) : [];
+        const firstSchool = schoolNames[0];
+        payload.school_text = form.school_text || null;
+        payload.school_id = firstSchool
+            ? (schoolOptions.find((s) => s.name?.toLowerCase() === firstSchool.toLowerCase())?.id ?? null)
+            : null;
 
         router.post(url, payload, {
             preserveScroll: true,
@@ -375,24 +400,21 @@ export default function AddEditStudentModal({
                             <Field label="Date engaged" hint="When they became engaged · optional">
                                 <input type="date" value={form.date_of_engagement} onChange={set("date_of_engagement")} className={ICls} />
                             </Field>
-                            <Field label="Program offered" hint="Search or select one or more — the School auto-fills to match">
+                            <Field label="Program offered" hint="Search or select one or more — the School auto-fills to match each program">
                                 <ProgramMultiSelect
                                     value={form.program_text}
                                     delim={PROGRAM_DELIM}
                                     options={programOptions}
                                     onChange={setProgramTitles}
-                                    onAutofillSchool={autofillSchool}
                                 />
                             </Field>
-                            <Field label="School" hint="Optional">
-                                <select value={form.school_id} onChange={set("school_id")} className={ICls}>
-                                    <option value="">— Not set —</option>
-                                    {schoolOptions.map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.name}{(s.country || s.city) ? ` · ${[s.city, s.country].filter(Boolean).join(", ")}` : ""}
-                                        </option>
-                                    ))}
-                                </select>
+                            <Field label="School" hint="Auto-filled from the selected programs — add or remove as needed">
+                                <SchoolMultiSelect
+                                    value={form.school_text}
+                                    delim={SCHOOL_DELIM}
+                                    options={schoolOptions}
+                                    onChange={setSchoolNames}
+                                />
                             </Field>
                             <Field label="Intake" hint="Intake start date · optional">
                                 <input type="date" value={form.intake} onChange={set("intake")} className={ICls} />
@@ -556,6 +578,96 @@ function ProgramMultiSelect({ value = "", delim = " · ", options = [], onChange
                         >
                             <span className="text-sm text-gray-800 truncate">{p.title}</span>
                             {p.level ? <span className="text-[10px] text-gray-400 flex-shrink-0 tabular-nums">Lvl {p.level}</span> : null}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Multi-select school picker — mirrors ProgramMultiSelect. Selected schools
+// show as removable chips (auto-filled from the chosen programs, but freely
+// editable). Selections are held in the parent as a `delim`-joined string of
+// school NAMES so several schools can be stored alongside the multi programs.
+function SchoolMultiSelect({ value = "", delim = " · ", options = [], onChange }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const boxRef = useRef(null);
+
+    useEffect(() => {
+        const onDoc = (e) => { if (boxRef.current && ! boxRef.current.contains(e.target)) setOpen(false); };
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, []);
+
+    const selected = value ? value.split(delim).map((s) => s.trim()).filter(Boolean) : [];
+    const q = query.trim().toLowerCase();
+    const available = (options || []).filter((s) => ! selected.includes(s.name));
+    const filtered = q ? available.filter((s) => s.name?.toLowerCase().includes(q)) : available;
+
+    const add = (name) => {
+        if (! name || selected.includes(name)) return;
+        onChange?.([...selected, name]);
+        setQuery("");
+    };
+    const remove = (name) => onChange?.(selected.filter((n) => n !== name));
+
+    const onKeyDown = (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const typed = query.trim();
+            if (! typed) return;
+            const match = (options || []).find((s) => s.name?.toLowerCase() === typed.toLowerCase());
+            add(match ? match.name : typed);
+        } else if (e.key === "Backspace" && ! query && selected.length) {
+            remove(selected[selected.length - 1]);
+        }
+    };
+
+    return (
+        <div ref={boxRef} className="relative">
+            {selected.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {selected.map((n) => (
+                        <span key={n} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-indigo-50 text-indigo-800 text-[12px] font-medium border border-indigo-200">
+                            <span className="truncate max-w-[220px]">{n}</span>
+                            <button type="button" onClick={() => remove(n)} className="w-4 h-4 rounded-full text-indigo-400 hover:text-red-600 hover:bg-white flex items-center justify-center">
+                                <X size={11} />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+            <div className="relative">
+                <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+                    onFocus={() => setOpen(true)}
+                    onKeyDown={onKeyDown}
+                    className={`${ICls} pr-8`}
+                    maxLength={191}
+                    placeholder={selected.length ? "Add another school…" : "Auto-fills from programs, or search…"}
+                />
+                <ChevronDown size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+            {open && (
+                <div className="absolute z-30 mt-1 left-0 right-0 max-h-60 overflow-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                    {filtered.length === 0 ? (
+                        <p className="px-3 py-2 text-[12px] text-gray-400 flex items-center gap-1.5">
+                            <Search size={12} /> {query ? `Press Enter to add “${query}”` : "All schools added."}
+                        </p>
+                    ) : filtered.slice(0, 60).map((s) => (
+                        <button
+                            key={s.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => add(s.name)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between gap-2"
+                        >
+                            <span className="text-sm text-gray-800 truncate">{s.name}</span>
+                            {(s.city || s.country) ? <span className="text-[10px] text-gray-400 flex-shrink-0">{[s.city, s.country].filter(Boolean).join(", ")}</span> : null}
                         </button>
                     ))}
                 </div>
