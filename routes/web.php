@@ -848,6 +848,8 @@ Route::middleware(['auth'])->group(function () {
         // "bulk-*" segments aren't captured as an {id}.
         Route::post('/admin/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('admin.leads.bulk-agent');
         Route::post('/admin/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('admin.leads.bulk-delete');
+        // Server-side lead search for the "+ New" proposal/agreement picker.
+        Route::get('/admin/leads/doc-picker-search', [SalesController::class, 'docPickerSearch'])->name('admin.leads.doc-picker-search');
         // Assign / clear the recruiting agent on a single lead from the Edit
         // Lead modal (declared before /admin/leads/{id} so "{id}/agent" resolves).
         Route::post('/admin/leads/{id}/agent', [SalesController::class, 'updateLeadAgent'])->name('admin.leads.agent');

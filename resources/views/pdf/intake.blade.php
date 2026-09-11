@@ -100,18 +100,18 @@
     </div>
 
     @foreach ($sections as $section)
-        @php $isK = ($section['letter'] ?? '') === 'K'; @endphp
+        @php $bare = ($section['bare'] ?? (($section['letter'] ?? '') === 'K')); @endphp
         <div class="section">
             <div class="section-title">Section {{ $section['letter'] }} – {{ $section['title'] }}</div>
             <table class="qa">
-                @unless ($isK)
+                @unless ($bare)
                     <tr>
                         <td class="qh">Question</td>
                         <td class="qh">Your answer</td>
                     </tr>
                 @endunless
                 @foreach ($section['rows'] as $row)
-                    @switch($row['t'])
+                    @switch($row['t'] ?? 'qa')
                         @case('sub')
                             <tr><td class="sub" colspan="2">{{ $row['label'] }}</td></tr>
                             @break

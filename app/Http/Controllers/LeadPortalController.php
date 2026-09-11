@@ -365,24 +365,29 @@ class LeadPortalController extends Controller
         [$type, $intake] = $this->leadIntake($lead);
         abort_unless($intake, 422, 'No completed assessment to generate a Visa Information Form from.');
 
-        $this->buildAndStoreVif($lead, $intake);
+        $this->buildAndStoreVif($lead, $type, $intake);
 
         return back()->with('success', 'Your Visa Information Form has been generated.');
     }
 
     /** Build the VIF PDF from an intake and store it as the lead's VIF document. */
-    private function buildAndStoreVif(Lead $lead, $intake): void
+    private function buildAndStoreVif(Lead $lead, string $type, $intake): void
     {
-        $vif = \App\Support\VisaInformationForm::build($intake->toArray());
+        // Same flexible builder the staff export uses — the VIF contains every
+        // section the client actually filled, in the official format.
+        $sections = app(\App\Http\Controllers\Portal\ImmigrationController::class)
+            ->buildVifSections($type, $intake->toArray());
+        $applicant = trim(($intake->first_name ?? '').' '.($intake->last_name ?? $intake->family_name ?? '')) ?: 'Applicant';
+
         $bytes = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.intake', [
-            'applicant' => $vif['applicant'] ?: 'Applicant',
-            'sections' => $vif['sections'],
+            'applicant' => $applicant,
+            'sections' => $sections,
             'intakeId' => $intake->intake_id ?? null,
             'generatedAt' => now()->format('d/m/Y'),
             'mode' => 'pdf',
         ])->setPaper('a4')->output();
 
-        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? '')) ?: 'Applicant';
+        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $applicant)) ?: 'Applicant';
         $path = "lead-documents/{$lead->id}/vif-".\Illuminate\Support\Str::uuid().'.pdf';
         \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
 
@@ -447,7 +452,7 @@ class LeadPortalController extends Controller
         $intake->save();
 
         // The VIF is derived from the assessment — keep it in lockstep.
-        $this->buildAndStoreVif($lead, $intake);
+        $this->buildAndStoreVif($lead, $type, $intake);
 
         // Notify all case staff that the client changed their assessment / VIF.
         try {
@@ -942,6 +947,18 @@ class LeadPortalController extends Controller
         $payload['embedded'] = true;
         $payload['sidebarTabs'] = true;
         $payload['initialTab'] = $tab;
+
+        // buildTrackerPayload builds shared-document URLs against the no-login
+        // /track/{code} route. A signed-in client must go through their own
+        // authenticated portal route instead — the /track route can 404 here
+        // (tracker gating / no code context). Rewrite view + download links.
+        $payload['shared_documents'] = collect($payload['shared_documents'] ?? [])
+            ->map(function (array $d) {
+                $d['view_url'] = "/portal/lead/documents/{$d['id']}/download?inline=1";
+                $d['download_url'] = "/portal/lead/documents/{$d['id']}/download";
+
+                return $d;
+            })->all();
 
         return inertia('portal/lead/Tracker', $payload);
     }

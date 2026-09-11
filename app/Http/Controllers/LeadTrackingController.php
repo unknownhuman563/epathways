@@ -1377,6 +1377,7 @@ class LeadTrackingController extends Controller
      */
     private const UNIVERSAL_ITEMS = [
         ['key' => 'svf', 'label' => 'Visa Information Form', 'hint' => 'Visa information form prepared with your adviser.'],
+        ['key' => 'rfi', 'label' => 'Request Information Form', 'hint' => 'Information your adviser has requested — review it and upload your response.', 'optional' => true],
     ];
 
     /**
@@ -1390,6 +1391,11 @@ class LeadTrackingController extends Controller
         // The Information Form is "Student Visa Information Form" for student
         // visas, plain "Visa Information Form" everywhere else.
         $isStudent = str_contains(strtolower((string) $lead->inz_visa_type), 'student');
+        // The RFI upload slot appears only once the adviser has REQUESTED info
+        // (attached the RFI notification file at the RFI stage). The slot itself
+        // is for the CLIENT's response uploads — the staff notification is not
+        // its content (it shows in "Documents from your adviser").
+        $hasRfiRequest = $lead->documents()->where('source_variant', 'rfi')->exists();
         $out = [];
 
         foreach (self::UNIVERSAL_ITEMS as $u) {
@@ -1397,6 +1403,13 @@ class LeadTrackingController extends Controller
                 continue;
             }
 
+            // The RFI slot only shows once information has been requested.
+            if ($u['key'] === 'rfi' && ! $hasRfiRequest) {
+                continue;
+            }
+
+            // The slot's status/count come from the CLIENT's own uploads (keyed
+            // by checklist_key), never the staff notification file.
             $docs = $docsByKey->get($u['key']) ?? collect();
             $status = 'missing';
             if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
@@ -1411,7 +1424,7 @@ class LeadTrackingController extends Controller
                 'key' => $u['key'],
                 'label' => ($u['key'] === 'svf' && $isStudent) ? 'Student Visa Information Form' : $u['label'],
                 'hint' => $u['hint'] ?? null,
-                'required' => true,
+                'required' => ! ($u['optional'] ?? false),
                 'status' => $status,
                 'count' => $docs->count(),
                 // Flag the frontend keys on to pin this to the top section.

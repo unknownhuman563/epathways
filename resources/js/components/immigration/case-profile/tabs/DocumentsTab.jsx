@@ -186,8 +186,22 @@ export default function DocumentsTab({
         return map;
     }, [documents]);
 
+    // The "Request Information Form" row holds the CLIENT's response uploads
+    // (checklist_key 'rfi'), NOT the staff's RFI notification file. It's empty
+    // until the client uploads, then shows their file(s).
+    const rfiDocs = useMemo(
+        () => documents
+            .filter((d) => d.checklist_key === "rfi")
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+        [documents],
+    );
+
     const orphans = useMemo(
-        () => documents.filter((d) => ! d.checklist_key || ! knownKeys.has(d.checklist_key)),
+        () => documents.filter((d) =>
+            (! d.checklist_key || ! knownKeys.has(d.checklist_key))
+            // Client RFI responses live in the Request Information Form row above.
+            && d.checklist_key !== "rfi",
+        ),
         [documents, knownKeys],
     );
 
@@ -223,32 +237,67 @@ export default function DocumentsTab({
         const isInz = variant.startsWith("inz:");
         const isDecline = variant === "decline";
         const isGenerated = d.source === "generated";
+        // The staff RFI notification file (what was requested) — grouped with the
+        // Immigration Team docs, separate from the client's response row.
+        const isRfi = variant === "rfi";
         return {
             kind:     "orphan",
             key:      `orphan-${d.id}`,
             label:    d.original_name,
             category: isDecline
                 ? "Visa outcome"
-                : isInvoice
-                    ? "Invoices"
-                    : isEngagement
-                        ? "Engagement documents"
-                        : isInz
-                            ? "INZ forms (generated)"
-                            : isGenerated
-                                ? "Generated documents"
-                                : "Other (no checklist match)",
+                : isRfi
+                    ? "Immigration Team"
+                    : isInvoice
+                        ? "Invoices"
+                        : isEngagement
+                            ? "Engagement documents"
+                            : isInz
+                                ? "INZ forms (generated)"
+                                : isGenerated
+                                    ? "Generated documents"
+                                    : "Other (no checklist match)",
             required: false,
             document: d,
         };
     });
 
-    const allRows = [...rows, ...orphanRows];
+    // Fixed "Request Information Form" row — always shown, right below the Visa
+    // Information Form, holding any RFI PDFs the adviser attached.
+    const rfiRow = {
+        kind:      "checklist",
+        key:       "rfi",
+        label:     "Request Information Form",
+        category:  "Immigration Team",
+        required:  false,
+        hidden:    false,
+        document:  rfiDocs.slice(-1)[0] || null,
+        documents: rfiDocs,
+    };
+    const rowsWithRfi = [];
+    let rfiInserted = false;
+    for (const r of rows) {
+        rowsWithRfi.push(r);
+        if (! rfiInserted && isVifLabel(r.label)) { rowsWithRfi.push(rfiRow); rfiInserted = true; }
+    }
+    if (! rfiInserted) rowsWithRfi.push(rfiRow);
+
+    const allRows = [...rowsWithRfi, ...orphanRows];
     const totals = useMemo(() => {
         const total = allRows.length;
         const approved = allRows.filter((r) => r.document?.status === "Approved").length;
         return { total, approved };
     }, [allRows]);
+
+    // The Immigration team's own documents — the Visa Information Form, the
+    // engagement pack, and the invoice — are grouped under one "Immigration
+    // Team" section rather than three separate ones.
+    const immigrationTeamCategory = (cat) => {
+        const c = (cat || "").toString().toLowerCase();
+        return (c.includes("information form") || c === "invoices" || c.includes("engagement"))
+            ? "Immigration Team"
+            : (cat || "Other");
+    };
 
     // Group rows by category into ordered sections (Applicant → Financial →
     // Sponsor → Other), preserving the checklist order. First appearance of a
@@ -256,7 +305,7 @@ export default function DocumentsTab({
     const groupedRows = [];
     const groupIndex = new Map();
     for (const row of allRows) {
-        const category = row.category || "Other";
+        const category = immigrationTeamCategory(row.category);
         if (! groupIndex.has(category)) {
             groupIndex.set(category, groupedRows.length);
             groupedRows.push([category, []]);

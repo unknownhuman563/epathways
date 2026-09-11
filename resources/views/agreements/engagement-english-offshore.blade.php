@@ -1,18 +1,16 @@
 {{--
-    English Engagement Agreement — PTE preparation services. Single variant
-    (no Single/Partner split like the Consultancy template). Rendered to PDF
-    by AgreementGenerator::englishEngagement().
+    English Proficiency Test (IELTS/PTE) Review Agreement — OFFSHORE variant.
+    Single editable package fee ($english_fee, the discounted price; the full
+    price shows as +100). Rendered to PDF by AgreementGenerator::englishOffshore().
 
-    Vars expected:
-        $client_name     — lead's full name
-        $client_reference — slugified name for bank reference
-        $generated_at_formatted — "26th day of May 2026"
+    Vars: $client_name, $client_reference, $english_fee, $currency_symbol,
+          $generated_at_formatted, $signer_*, $client_signature, $preview.
 --}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>English Engagement Agreement</title>
+<title>English Proficiency Test Review Agreement</title>
 <style>
     @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Regular.ttf") }}') format('truetype'); }
     @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Italic.ttf") }}') format('truetype'); }
@@ -23,10 +21,6 @@
     body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 12pt; color: #111; line-height: 1.5; }
     .page-header { position: fixed; top: -80px; left: 0; right: 0; text-align: center; }
     .page-header img { height: 60px; width: auto; }
-
-    /* Screen-only preview measure — see consultancy.blade.php for
-       the rationale. Same 794px A4 measure so the iframe preview
-       wraps at the printed page width. */
     @media screen {
         body { max-width: 794px; margin: 0 auto; padding: 24px 60px; background: #fff; }
         .page-header { position: static; text-align: center; margin: -8px 0 12px 0; }
@@ -43,9 +37,11 @@
     table.fees thead th { background: #436235; color: #fff; text-align: left; padding: 8px 10px; font-size: 10pt; }
     table.fees thead th.right { text-align: right; }
     table.fees thead th.center { text-align: center; }
-    table.fees tbody td { padding: 8px 10px; border-bottom: 1px solid #d8d8d8; font-size: 10pt; vertical-align: top; }
-    table.fees tbody td.right { text-align: right; font-weight: bold; }
+    table.fees tbody td { padding: 10px; border-bottom: 1px solid #d8d8d8; font-size: 10pt; vertical-align: middle; }
     table.fees tbody td.center { text-align: center; }
+    table.fees tbody td.price { text-align: right; }
+    .price-main { font-weight: bold; font-size: 12pt; }
+    .price-full { font-size: 9pt; color: #555; font-style: italic; }
     .bank-box { border: 1px solid #436235; padding: 10px 14px; margin: 8px 0 16px 0; }
     .bank-box .row { padding: 2px 0; font-size: 10pt; }
     .bank-box .label { display: inline-block; width: 130px; color: #555; }
@@ -71,11 +67,11 @@
     </div>
 
     <div class="eyebrow">OFFICIAL DOCUMENT &nbsp;•&nbsp; CONFIDENTIAL</div>
-    <h1>ENGLISH ENGAGEMENT AGREEMENT</h1>
+    <h1>ENGLISH PROFICIENCY TEST<br>(IELTS/PTE) REVIEW AGREEMENT</h1>
     <div class="subtitle">English Proficiency Test Preparation Services</div>
     <hr>
 
-    <p>This Engagement Agreement (&ldquo;Agreement&rdquo;) delineates the terms and conditions governing the provision of English Proficiency services by <strong>Epathways Philippines Consultancy</strong> (&ldquo;Company&rdquo;) to <span class="insert-name">{{ $client_name ?: 'INSERT NAME HERE' }}</span> (&ldquo;you&rdquo;). It is imperative that you thoroughly review the ensuing terms and signify your acceptance by executing and furnishing a copy of this Agreement.</p>
+    <p>This Engagement Agreement (&ldquo;Agreement&rdquo;) delineates the terms and conditions governing the provision of English Proficiency services by <strong>ePathways Philippines Consultancy</strong> (&ldquo;Company&rdquo;) to <span class="insert-name">{{ $client_name ?: 'INSERT NAME HERE' }}</span> (&ldquo;you&rdquo;). It is imperative that you thoroughly review the ensuing terms and signify your acceptance by executing and furnishing a copy of this Agreement.</p>
 
     <div class="article-bar">ARTICLE 1 &nbsp;•&nbsp; FEES STRUCTURE &amp; PAYMENT PLAN</div>
 
@@ -85,69 +81,26 @@
     <table class="fees">
         <thead>
             <tr>
-                <th class="center" style="width:50px;">Stage</th>
-                <th>Description</th>
+                <th>English Review and Exam (Pearson Test of English)</th>
                 <th class="center" style="width:50px;">Qty</th>
-                <th class="right" style="width:90px;">Price</th>
-                <th class="right" style="width:110px;">Total</th>
+                <th class="right" style="width:180px;">Price Package</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td class="center">1</td>
                 <td>
-                    <strong>English Review</strong> (Pearson Test of English) Mock Test (PTE)
-                    <ul style="margin-top:4px;">
+                    <ul style="margin:0 0 0 18px;">
                         <li>20 hours of personalized PTE coaching</li>
                         <li>1 mock test with assessment and feedback</li>
-                        <li>Assistance with exam booking</li>
                     </ul>
                 </td>
                 <td class="center">1</td>
-                <td class="right">{{ number_format($english_fee ?? 14500, 2) }}</td>
-                <td class="right">{{ number_format($english_fee ?? 14500, 2) }}</td>
-            </tr>
-            <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td class="right">TOTAL</td>
-                <td class="right">{{ $currency_symbol ?? 'Php' }} {{ number_format($english_fee ?? 14500, 2) }}</td>
+                <td class="price">
+                    <div class="price-main">NZD ${{ number_format($english_fee ?? 550, 0) }}</div>
+                </td>
             </tr>
         </tbody>
     </table>
-
-    <p>If you wish to avail our English Pro Review, you will be required to pay the amount stated above. It is explicitly acknowledged that the fees rendered for our services become <strong>non-refundable</strong> once work has commenced. Any refund requests will be assessed on a case-by-case basis at the sole discretion of ePathways Philippines.</p>
-
-    <table class="fees" style="margin-top:14px;">
-        <thead>
-            <tr>
-                <th class="center" style="width:50px;">Stage</th>
-                <th>Description</th>
-                <th class="center" style="width:50px;">Qty</th>
-                <th class="right" style="width:90px;">Price</th>
-                <th class="right" style="width:110px;">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td class="center">2</td>
-                <td>PTE Examination Fee</td>
-                <td class="center">1</td>
-                <td class="right">USD ${{ number_format($pte_fee ?? 240, 2) }}</td>
-                <td class="right">USD ${{ number_format($pte_fee ?? 240, 2) }}</td>
-            </tr>
-            <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td class="right">TOTAL</td>
-                <td class="right">USD ${{ number_format($pte_fee ?? 240, 2) }}</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <p>Please note that the PTE Examination Fee will be paid directly through the official PTE website at <strong>https://www.pearsonpte.com/</strong>. Applicants will be redirected to the official Pearson PTE booking portal to complete their registration and payment securely. The examination fee may vary depending on the testing location and available schedule at the time of booking. We recommend booking your exam early to secure your preferred test date and location.</p>
 
     <h3>Section 2. Bank Details</h3>
     <div class="bank-box">
@@ -173,22 +126,6 @@
         <li><strong>Progress Monitoring</strong> &ndash; Regular updates on your progress will be provided on a weekly, fortnightly, or as required basis.</li>
         <li><strong>Mock Test</strong> &ndash; A full-length mock exam is included as part of the preparation package. It allows the client to receive <strong>instant results</strong> with a <strong>comprehensive score report</strong>, review performance, identify strengths and areas for improvement, and practice under real exam conditions. This ensures enhanced readiness and confidence on the actual test day.</li>
     </ol>
-
-    <h3>Section 3. English Proficiency Exam Booking</h3>
-    <p>The Company facilitates the booking of the English Proficiency Exam (such as the PTE) on behalf of the client. All scheduling and registration will be completed accurately using the personal and identification information provided by the client via email.</p>
-    <p>By engaging the Company for this service, the client acknowledges and agrees to the following:</p>
-    <ul>
-        <li>The client must provide accurate and complete personal details, including valid identification.</li>
-        <li>The client should send an email to the Company indicating their preferred exam schedule.</li>
-        <li>The Company may create or access the client&rsquo;s testing account (e.g., Pearson PTE) solely for booking purposes.</li>
-        <li>Test dates and locations will be selected based on availability and the client&rsquo;s preferences.</li>
-        <li>Exam fees must be paid in full prior to booking confirmation. The method of payment will be communicated in advance.</li>
-        <li>Once payment is confirmed, the Company requires 2&ndash;3 business days to complete the booking process.</li>
-        <li>A booking confirmation will be shared with the client.</li>
-        <li>It is the client&rsquo;s responsibility to review and follow all exam day requirements, including ID and arrival time as stipulated in the PTE Policy.</li>
-        <li>Rescheduling or cancellations are subject to the exam provider&rsquo;s policies and may incur additional charges.</li>
-    </ul>
-    <p>The Company does not guarantee any specific test outcome but will provide appropriate support to help the client prepare effectively.</p>
 
     <div class="article-bar">ARTICLE 3 &nbsp;•&nbsp; TERMINATION</div>
     <p>Either party reserves the right to terminate this Agreement by issuing a written notification. Termination shall be deemed effective upon receipt of the written notice.</p>
@@ -246,7 +183,7 @@
     </table>
 
     <div class="ack-box">
-        <span id="ep-ack-mark">{!! ($acknowledged ?? false) ? '&#9745;' : '&#9744;' !!}</span>&nbsp;&nbsp; I have read and agreed to the English Engagement Agreement terms.
+        <span id="ep-ack-mark">{!! ($acknowledged ?? false) ? '&#9745;' : '&#9744;' !!}</span>&nbsp;&nbsp; I have read and agreed to the Consultancy Agreement terms.
     </div>
 
     <div class="footer-rule">
@@ -254,8 +191,6 @@
     </div>
 
     @if (($preview ?? false))
-        {{-- Preview-only: mirror signature + ack toggle from the tracker
-             sign modal via postMessage. Dompdf never sees this. --}}
         <script>
             (function () {
                 var sigImg = document.getElementById('ep-client-signature');

@@ -340,7 +340,17 @@ class ConsultancyVerificationController extends Controller
 
         if ($sendEmail) {
             try {
-                app(\App\Http\Controllers\LeadDocumentController::class)->sendConsultancyAgreementEmail($lead->fresh());
+                // Fire the Education "Consultancy agreement approved" automation
+                // (client / agent-CC / education-team, each off until configured).
+                // Its return says whether a CLIENT message was sent, so the
+                // built-in client email falls back only when none is configured.
+                $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+                $firedClient = app(\App\Services\EmailAutomationService::class)->fire('education.consultancy.approved', $lead->fresh(), [
+                    'agreement_type' => $review['scenario_label'] ?? 'Consultancy Agreement',
+                    'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+                ]);
+
+                app(\App\Http\Controllers\LeadDocumentController::class)->sendConsultancyAgreementEmail($lead->fresh(), ! $firedClient);
             } catch (\Throwable $e) {
                 Log::warning('Consultancy approval email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
             }

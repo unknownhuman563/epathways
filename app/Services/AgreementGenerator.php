@@ -27,7 +27,7 @@ class AgreementGenerator
      * English Engagement Agreement — PTE preparation services. No variant
      * (just one template). Stored against checklist_key='agree.engagement_english'.
      */
-    public function englishEngagement(Lead $lead, string $currency = 'php'): LeadDocument
+    public function englishEngagement(Lead $lead, string $currency = 'php', array $overrides = []): LeadDocument
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '');
@@ -49,7 +49,11 @@ class AgreementGenerator
             'generated_at_formatted' => $dateLine,
             'currency' => $currency,
             'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
-        ];
+            // Staff-editable prices: the English Review package (defaults 14,500)
+            // and the separate PTE Examination fee in USD (defaults 240).
+            'english_fee' => (int) ($overrides['english_fee'] ?? 14500),
+            'pte_fee' => (int) ($overrides['pte_fee'] ?? 240),
+        ] + $this->englishBankVars($overrides);
 
         $pdf = Pdf::loadView('agreements.engagement-english', $payload)->setPaper('a4');
         $binary = $pdf->output();
@@ -71,6 +75,73 @@ class AgreementGenerator
             'status' => LeadDocument::STATUS_SUBMITTED,
             'source' => LeadDocument::SOURCE_GENERATED,
             'source_variant' => 'engagement-english',
+            'uploaded_by' => Auth::id(),
+        ]);
+    }
+
+    /**
+     * Editable bank block for the English agreements — the staff-entered
+     * overrides (a preset or fully custom) or the BPI default. Blank reference
+     * falls back to the "#PTE<name>" convention in the template.
+     */
+    public function englishBankVars(array $overrides): array
+    {
+        $val = fn ($k, $default) => filled($overrides[$k] ?? null) ? $overrides[$k] : $default;
+
+        return [
+            'bank_heading' => $val('bank_heading', 'PAYMENT DETAILS'),
+            'bank_name' => $val('bank_name', 'BPI'),
+            'bank_account_name' => $val('bank_account_name', 'Dinah Suarin'),
+            'bank_account_number' => $val('bank_account_number', '9269224808'),
+            'bank_reference' => filled($overrides['bank_reference'] ?? null) ? $overrides['bank_reference'] : null,
+        ];
+    }
+
+    /**
+     * English Proficiency Test (IELTS/PTE) Review Agreement — OFFSHORE variant
+     * (NZD, single editable package fee). Same document bucket as the English
+     * engagement, different template.
+     */
+    public function englishOffshore(Lead $lead, string $currency = 'nzd', array $overrides = []): LeadDocument
+    {
+        $clientName = trim("{$lead->first_name} {$lead->last_name}");
+        $clientReference = Str::slug($clientName ?: 'ClientName', '');
+        $today = now();
+        $signer = Auth::user();
+        $currency = $currency === 'php' ? 'php' : 'nzd';
+
+        $payload = [
+            'client_name' => $clientName,
+            'client_reference' => $clientReference ?: 'ClientName',
+            'signer_name' => $signer?->name ?: 'Neil Bryan Escaner',
+            'signer_mobile' => $signer?->phone ?: '+63945 107 6871',
+            'signer_signature' => method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null,
+            'generated_at' => $today,
+            'generated_at_formatted' => $today->format('jS').' day of '.$today->format('F Y'),
+            'currency' => $currency,
+            'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
+            'english_fee' => (int) ($overrides['english_fee'] ?? 550),
+        ] + $this->englishBankVars($overrides);
+
+        $pdf = Pdf::loadView('agreements.engagement-english-offshore', $payload)->setPaper('a4');
+        $binary = $pdf->output();
+
+        $safeName = $this->safeBaseName($clientName ?: 'Client');
+        $filename = "EngOffshore-{$safeName}.pdf";
+        $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
+        Storage::disk(self::DISK)->put($path, $binary);
+
+        return LeadDocument::create([
+            'lead_id' => $lead->id,
+            'request_id' => null,
+            'checklist_key' => 'agree.engagement_english',
+            'original_name' => $filename,
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($binary),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'source' => LeadDocument::SOURCE_GENERATED,
+            'source_variant' => 'engagement-english-offshore',
             'uploaded_by' => Auth::id(),
         ]);
     }

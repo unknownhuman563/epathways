@@ -652,7 +652,9 @@ function NoteComposer({ value, onChange, onSubmit, onCancel, placeholder, small 
 // DOC_TYPES key so the "Edit" action can pre-open the modal at the same
 // variant the doc was generated with.
 function variantToTypeKey(doc) {
-    if (doc.checklist_key === 'agree.engagement_english') return 'english_engagement';
+    if (doc.checklist_key === 'agree.engagement_english') {
+        return doc.variant === 'engagement-english-offshore' ? 'english_offshore' : 'english_engagement';
+    }
     if (doc.checklist_key === 'agree.consultancy') {
         const parts = (doc.variant || '').split(':');
         const scenario = parts[1] || 'std_100';
@@ -801,37 +803,72 @@ function DocumentNoteThread({ docId, notes = [] }) {
     );
 }
 
+// Agreements tab — same review-inbox design/layout as the Proposals tab:
+// a sort toolbar, a desktop column header, and grouped profile/document/notes
+// rows. Grouped by whether the agreement still needs verification vs. is live.
 function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
-    // Flatten lead-grouped rows into doc-per-row so the table renders one
-    // line per generated agreement — matches the requested column layout.
+    const [sort, setSort] = useState('needs'); // 'needs' | 'newest'
+
+    // One row per generated (or pending) agreement document.
     const flat = useMemo(() => rows.flatMap((r) => r.documents.map((d) => ({ ...d, lead: r }))), [rows]);
+    const byNewest = (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0);
+
+    const groups = useMemo(() => {
+        if (sort === 'newest') {
+            return [{ key: 'all', rows: [...flat].sort(byNewest) }];
+        }
+        const pending = flat.filter((d) => d.pending_verification).sort(byNewest);
+        const live = flat.filter((d) => ! d.pending_verification).sort(byNewest);
+
+        return [
+            { key: 'pending', label: 'Needs verification', sub: 'action sits with ePathways', tone: 'amber', rows: pending },
+            { key: 'live', label: 'Generated & sent', sub: 'live agreements', tone: 'gray', rows: live },
+        ];
+    }, [flat, sort]);
 
     return (
-        <div className="md:overflow-x-auto">
-            <table className="w-full text-left text-xs max-md:block">
-                <thead className="max-md:hidden">
-                    <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                        <th className="px-4 py-3">Profile</th>
-                        <th className="px-3 py-3">Document</th>
-                        <th className="px-3 py-3">Notes</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Status &amp; created</th>
-                        <th className="px-3 py-3 text-right pr-4">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 max-md:block max-md:divide-y-0">
-                    {flat.map((d) => (
-                        <DocumentRow
-                            key={d.id}
-                            doc={d}
-                            portalBase={portalBase}
-                            fmtSize={fmtSize}
-                            fmtDate={fmtDate}
-                            onNotify={onNotify}
-                            onEdit={onEdit}
-                        />
+        <div className="text-xs">
+            {/* Toolbar */}
+            <div className="flex items-center justify-end gap-4 px-4 py-2 border-b border-gray-100">
+                <button
+                    type="button"
+                    onClick={() => setSort((s) => (s === 'needs' ? 'newest' : 'needs'))}
+                    className="text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+                >
+                    Sort: {sort === 'needs' ? 'needs verification first' : 'newest'}
+                </button>
+            </div>
+
+            {/* Column header (desktop) */}
+            <div className="hidden md:flex items-center gap-4 px-4 py-2.5 bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                <div className="w-[210px] shrink-0">Profile</div>
+                <div className="flex-1 grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] gap-x-6">
+                    <span>Document</span>
+                    <span>Notes</span>
+                </div>
+                <div className="w-[140px] shrink-0">Status &amp; created</div>
+                <div className="w-[32px] shrink-0 text-right">Actions</div>
+            </div>
+
+            {groups.map((g) => (g.rows.length === 0 ? null : (
+                <div key={g.key}>
+                    {g.label && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100">
+                            <span className={`w-1.5 h-1.5 rounded-full ${g.tone === 'amber' ? 'bg-amber-500' : 'bg-gray-400'}`} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">{g.label}</span>
+                            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">{g.rows.length}</span>
+                            <span className="text-[11px] text-gray-400">· {g.sub}</span>
+                        </div>
+                    )}
+                    {g.rows.map((d) => (
+                        <DocumentRow key={d.id} doc={d} portalBase={portalBase} fmtSize={fmtSize} fmtDate={fmtDate} onNotify={onNotify} onEdit={onEdit} />
                     ))}
-                </tbody>
-            </table>
+                </div>
+            )))}
+
+            {flat.length === 0 && (
+                <div className="p-12 text-center text-gray-400 text-sm">No agreements yet.</div>
+            )}
         </div>
     );
 }
@@ -839,79 +876,87 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
 function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
     const { lead } = doc;
     const mode = doc.applicant_mode; // 'single' | 'couple' | null
+    // A consultancy agreement still IN verification — no PDF yet, shown here
+    // alongside its entry in the verification queue.
+    const pending = doc.pending_verification;
     // Agreement lifecycle, read off the lead's pipeline stage: Generated (just
     // created) → Sent (staff notified the lead) → Signed (staff marked signed).
-    const agreeStatus =
-        lead.status === 'Consultancy Agreement Signed' ? { label: 'Signed',    cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+    const agreeStatus = pending
+        ? (doc.verification_status === 'verified'
+            ? { label: 'Verified',         cls: 'bg-blue-50 text-blue-700 border-blue-200' }
+            : { label: 'For verification', cls: 'bg-amber-50 text-amber-700 border-amber-200' })
+      : lead.status === 'Consultancy Agreement Signed' ? { label: 'Signed',    cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
       : lead.status === 'Consultancy Agreement Sent'   ? { label: 'Sent',      cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
       :                                                   { label: 'Generated', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
     return (
-        <tr className="hover:bg-gray-50/60 transition-colors align-top max-md:flex max-md:flex-col max-md:gap-1 max-md:border max-md:border-gray-100 max-md:rounded-xl max-md:mb-3 max-md:shadow-sm">
-            {/* ── CONTACT (name + id + email + phone) ──────────────── */}
-            <td className="px-4 py-3">
-                <Link
-                    href={`${portalBase}/leads/${lead.id}`}
-                    className="font-semibold text-gray-900 hover:text-emerald-700 hover:underline underline-offset-2 decoration-emerald-400"
-                >
-                    {lead.name}
-                </Link>
-                {lead.email && (
-                    <div className="text-[11px] text-gray-600 truncate max-w-[220px] mt-1">{lead.email}</div>
-                )}
-                {lead.phone && (
-                    <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{lead.phone}</div>
-                )}
-                {! lead.email && ! lead.phone && (
-                    <span className="text-[11px] text-gray-300">—</span>
-                )}
-            </td>
-
-            {/* ── TYPE + applicant mode chip ───────────────────────── */}
-            <td className="px-3 py-3">
-                <div className="flex items-center gap-2">
-                    <FileText size={13} className="text-gray-400 shrink-0" />
-                    <span className="text-[12px] font-semibold text-gray-800">{doc.type}</span>
-                    {mode && (
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                            mode === 'couple'
-                                ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                                : 'bg-blue-50 text-blue-700 border border-blue-100'
-                        }`}>
-                            {mode}
-                        </span>
-                    )}
+        <div className="flex flex-col md:flex-row md:items-stretch gap-4 px-4 py-4 border-b border-gray-100 hover:bg-gray-50/40 transition-colors">
+            {/* Profile */}
+            <div className="md:w-[210px] shrink-0 flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200 shrink-0">
+                    {lead.avatar_url
+                        ? <img src={lead.avatar_url} alt={lead.name} className="w-full h-full object-cover" />
+                        : rowInitials(lead.name)}
                 </div>
-                <div className="text-[10px] text-gray-400 mt-1 ml-[21px]">{fmtSize(doc.size)}</div>
-            </td>
+                <div className="min-w-0">
+                    <Link href={`${portalBase}/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-emerald-700 hover:underline">{lead.name}</Link>
+                    <div className="text-[10px] text-gray-400 font-mono">{lead.lead_id}</div>
+                    {lead.email && <div className="text-[11px] text-gray-600 truncate max-w-[190px] mt-1">{lead.email}</div>}
+                    {lead.phone && <div className="text-[11px] text-gray-500 truncate max-w-[190px]">{lead.phone}</div>}
+                </div>
+            </div>
 
-            {/* ── NOTES (threaded, same as the Proposals tab) ──────── */}
-            <td className="px-3 py-3">
-                <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />
-            </td>
+            {/* Document + Notes (aligned) */}
+            <div className="flex-1 min-w-0">
+                <div className="grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] max-md:grid-cols-1 gap-x-6 gap-y-3 items-start">
+                    {/* Document */}
+                    <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <FileText size={13} className="text-gray-400 shrink-0" />
+                            <span className="text-[13px] font-semibold text-gray-900">{doc.type}</span>
+                            {mode && (
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                    mode === 'couple'
+                                        ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                        : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                }`}>
+                                    {mode}
+                                </span>
+                            )}
+                        </div>
+                        <div className="text-[11px] text-gray-400 mt-0.5 ml-[21px]">{pending ? doc.original_name : fmtSize(doc.size)}</div>
+                    </div>
+                    {/* Notes */}
+                    <div>
+                        {pending
+                            ? <span className="text-[11px] text-gray-400 italic">Notes in verification</span>
+                            : <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />}
+                    </div>
+                </div>
+            </div>
 
-            {/* ── STATUS & CREATED (merged) ────────────────────────── */}
-            <td className="px-3 py-3 whitespace-nowrap">
+            {/* Status & created */}
+            <div className="md:w-[140px] shrink-0 whitespace-nowrap">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${agreeStatus.cls}`}>
                     {agreeStatus.label}
                 </span>
-                <div className="text-[11px] text-gray-600 mt-1.5">{fmtDate(doc.created_at)}</div>
+                <div className="text-[11px] text-gray-500 mt-1.5">{fmtDate(doc.created_at)}</div>
                 {doc.uploader?.name && (
-                    <div className="text-[10px] text-gray-500">
-                        by <span className="font-medium text-gray-600">{doc.uploader.name}</span>
-                    </div>
+                    <div className="text-[10px] text-gray-400">by {doc.uploader.name}</div>
                 )}
-            </td>
+            </div>
 
-            {/* ── ACTIONS: 3-dot dropdown ──────────────────────────── */}
-            <td className="px-3 py-3 text-right pr-4">
-                <DocumentRowActions
-                    doc={doc}
-                    lead={lead}
-                    onNotify={onNotify}
-                    onEdit={onEdit}
-                />
-            </td>
-        </tr>
+            {/* Actions */}
+            <div className="md:w-[32px] shrink-0 md:text-right">
+                {pending ? (
+                    <Link href="/consultancy-verification"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
+                        <ShieldCheck size={12} /> Review
+                    </Link>
+                ) : (
+                    <DocumentRowActions doc={doc} lead={lead} onNotify={onNotify} onEdit={onEdit} />
+                )}
+            </div>
+        </div>
     );
 }
 
@@ -1264,7 +1309,7 @@ function documentCategory(type) {
             border: 'border-violet-200',
         };
     }
-    if (type === 'english_engagement') {
+    if (type === 'english_engagement' || type === 'english_offshore') {
         return {
             label: 'English',
             chip: 'bg-sky-100 text-sky-700 ring-1 ring-sky-200',
@@ -1560,7 +1605,8 @@ const DOC_TYPES = [
     { value: 'consultancy_voucher_single_150',    label: 'With Voucher · Single · 150,000',                category: 'philippines', hint: 'Sole applicant. Inclusive of the INZ visa application fee (voucher).',                        backendType: 'consultancy_voucher_150', applicantMode: 'single', defaultSchoolFee: 150000 },
     { value: 'consultancy_voucher_couple_150',    label: 'With Voucher · Couple · 150,000',                category: 'philippines', hint: 'Applicant + partner. Inclusive of the INZ visa application fee (voucher).',                   backendType: 'consultancy_voucher_150', applicantMode: 'couple', defaultSchoolFee: 150000 },
     { value: 'consultancy_english_single_100',    label: 'With English · Single · 100,000',                category: 'philippines', hint: 'Sole applicant with English review add-on.',                                                  backendType: 'consultancy_english_100', applicantMode: 'single', defaultSchoolFee: 100000 },
-    { value: 'english_engagement',                label: 'English Engagement Agreement',                   category: 'philippines', hint: 'PTE preparation services (separate document).' },
+    { value: 'english_engagement',                label: 'Offshore - Philippines',                         category: 'english',     hint: 'English Engagement Agreement (PTE prep + exam) — Php. Editable English Review + PTE Exam fees.', backendType: 'english_engagement', englishFee: true, hasPte: true, defaultEnglishFee: 14500, defaultPteFee: 240, currency: 'php' },
+    { value: 'english_offshore',                  label: 'Offshore - English',                             category: 'english',     hint: 'English Proficiency Test (IELTS/PTE) Review Agreement — NZD. Editable package fee.', backendType: 'english_offshore', englishFee: true, defaultEnglishFee: 550, currency: 'nzd' },
 
     { value: 'consultancy_onshore',               label: 'Onshore Engagement (free)',                      category: 'onshore',     hint: 'Applicant already in NZ. Education engagement — FREE OF CHARGE (no consultancy fees). Refers to a Licensed Immigration Adviser.', backendType: 'consultancy_onshore', free: true },
 
@@ -1568,7 +1614,10 @@ const DOC_TYPES = [
     { value: 'consultancy_offshore_zero',         label: 'Standard · Offshore — Zero fees',                category: 'offshore',    hint: 'Applicant offshore. Same document as Standard · Offshore, but all fees waived (NZ$0).', backendType: 'consultancy_offshore_zero', applicantMode: 'single', defaultSchoolFee: 0, singleFee: true, zeroFees: true },
 ];
 // Consultancy types that carry a fee/bank panel (excludes the free onshore).
-const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType && ! t.free).map((t) => t.value));
+// Consultancy scenarios only — a paid backend type that ISN'T an English
+// engagement (those carry `englishFee` and route through their own fee/preview
+// branch, so they must not be treated as consultancy).
+const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType && ! t.free && ! t.englishFee).map((t) => t.value));
 const MAX_PROPOSED_PROGRAMS = 5;
 const DEFAULT_ENGLISH_FEE = 14500;
 
@@ -1579,6 +1628,7 @@ const CATEGORIES = {
     philippines: { code: 'philippines', label: 'Philippines', currency: 'php' },
     onshore:     { code: 'onshore',     label: 'Onshore',     currency: 'nzd' },
     offshore:    { code: 'offshore',    label: 'Offshore',    currency: 'nzd' },
+    english:     { code: 'english',     label: 'English',     currency: 'nzd' },
 };
 
 // Currency metadata keyed by code — drives the fee symbol + locale in the UI.
@@ -1594,6 +1644,7 @@ const CURRENCIES = {
 const BANK_PRESETS = {
     rcbc:  { label: 'RCBC',  heading: 'Payment for School Enrollment and Documentation Fee',              bank_name: 'RCBC', account_name: 'Dinah Suarin',          account_number: '9045440503' },
     anz:   { label: 'ANZ',   heading: 'Payment for Documentation, School Enrolment, and Visa Application Fee', bank_name: 'ANZ',  account_name: 'EMPLOYMENT PATHWAYS LTD', account_number: '06-0185-0987269-01' },
+    bpi:   { label: 'BPI',   heading: 'PAYMENT DETAILS',                                                  bank_name: 'BPI',  account_name: 'Dinah Suarin',          account_number: '9269224808' },
     other: { label: 'Other', heading: '',                                                                 bank_name: '',     account_name: '',                     account_number: '' },
 };
 
@@ -1605,7 +1656,10 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // Category chosen before the doc type — filters which doc types show and
     // sets the currency automatically (Philippines = PhP, Onshore/Offshore = NZ$).
     const [category, setCategory] = useState('philippines');
-    const currency = (CATEGORIES[category] || CATEGORIES.philippines).currency;
+    // Currency: a document type may pin its own (e.g. Offshore - Philippines is
+    // always Php even under the English category); otherwise the category sets it.
+    const currency = (DOC_TYPES.find((t) => t.value === type)?.currency)
+        || (CATEGORIES[category] || CATEGORIES.philippines).currency;
     const cur = CURRENCIES[currency] || CURRENCIES.php;
     // Editable bank details (consultancy agreements). A preset fills the
     // fields; every field stays editable. RCBC default = unchanged docs.
@@ -1613,6 +1667,23 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     const applyBankPreset = (preset) => setBank((b) => ({ ...b, preset, ...BANK_PRESETS[preset] }));
     const setBankField = (key, val) => setBank((b) => ({ ...b, [key]: val }));
     const [leadSearch, setLeadSearch] = useState('');
+    // Server-side search results for the current query — the page's `picker`
+    // prop is a capped roster, so a lead late in the alphabet isn't in it; this
+    // finds any eligible lead. Keyed by the query it answered so stale results
+    // aren't shown after the box changes.
+    const [remote, setRemote] = useState({ q: '', leads: [] });
+    useEffect(() => {
+        const q = leadSearch.trim();
+        if (! q) return;
+        let cancelled = false;
+        const t = setTimeout(() => {
+            fetch(`/admin/leads/doc-picker-search?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } })
+                .then((r) => (r.ok ? r.json() : { leads: [] }))
+                .then((d) => { if (! cancelled) setRemote({ q, leads: d.leads || [] }); })
+                .catch(() => { if (! cancelled) setRemote({ q, leads: [] }); });
+        }, 250);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [leadSearch]);
     const [programSearch, setProgramSearch] = useState('');
     const [pickedProgramIds, setPickedProgramIds] = useState([]);
     // Per-program "why this program" reasons, keyed by program id.
@@ -1623,6 +1694,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // consultancy scenarios. Defaults come from the selected DOC_TYPE.
     const [schoolFee, setSchoolFee] = useState(100000);
     const [englishFee, setEnglishFee] = useState(DEFAULT_ENGLISH_FEE);
+    // Offshore - Philippines carries a second, USD-priced PTE Examination fee.
+    const [pteFee, setPteFee] = useState(240);
     // Preview iframe loading state — flipped to true whenever the URL
     // changes, back to false when the iframe fires `onLoad`. Gives staff
     // a spinner instead of a suspicious white A4 while dompdf renders.
@@ -1660,11 +1733,16 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // while they flip around within the same scenario.
     useEffect(() => {
         const meta = DOC_TYPES.find((t) => t.value === type);
-        setSchoolFee(meta?.defaultSchoolFee ?? 100000);
+        // For the English engagement the single package fee reuses schoolFee.
+        setSchoolFee(meta?.defaultSchoolFee ?? meta?.defaultEnglishFee ?? 100000);
         setEnglishFee(DEFAULT_ENGLISH_FEE);
-        // Offshore uses the ANZ bank block by default; PH consultancy uses RCBC.
+        setPteFee(meta?.defaultPteFee ?? 240);
+        // Offshore uses the ANZ bank block; English agreements use BPI; other
+        // PH consultancy uses RCBC.
         if (type === 'consultancy_offshore') {
             setBank({ preset: 'anz', ...BANK_PRESETS.anz, reference: '' });
+        } else if (meta?.englishFee) {
+            setBank({ preset: 'bpi', ...BANK_PRESETS.bpi, reference: '' });
         } else if (meta?.backendType && ! meta.free) {
             setBank({ preset: 'rcbc', ...BANK_PRESETS.rcbc, reference: '' });
         }
@@ -1683,12 +1761,20 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     const filteredPicker = useMemo(() => {
         const q = leadSearch.trim().toLowerCase();
         if (! q) return picker.slice(0, 50);
-        return picker.filter((p) =>
+        // Immediate client-side matches from the loaded roster…
+        const client = picker.filter((p) =>
             (p.name || '').toLowerCase().includes(q)
             || (p.email || '').toLowerCase().includes(q)
             || (p.lead_id || '').toLowerCase().includes(q)
-        ).slice(0, 50);
-    }, [picker, leadSearch]);
+        );
+        // …plus server results for this query (leads beyond the capped roster),
+        // deduped by id. Falls back to the client list until the fetch returns.
+        if (remote.q.trim().toLowerCase() === q) {
+            const seen = new Set(remote.leads.map((l) => l.id));
+            return [...remote.leads, ...client.filter((c) => ! seen.has(c.id))].slice(0, 50);
+        }
+        return client.slice(0, 50);
+    }, [picker, leadSearch, remote]);
 
     // Proposal path saves a program shortlist; every other type kicks off
     // the templated PDF generator. Keep both paths behind the same
@@ -1739,7 +1825,19 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                     bank_reference: bank.reference,
                     notify: wantNotify,
                 }
-                : { currency, notify: wantNotify });
+                : (isEnglishType
+                    ? {
+                        currency,
+                        english_fee: schoolFee,
+                        ...(typeMeta?.hasPte ? { pte_fee: pteFee } : {}),
+                        bank_heading: bank.heading,
+                        bank_name: bank.bank_name,
+                        bank_account_name: bank.account_name,
+                        bank_account_number: bank.account_number,
+                        bank_reference: bank.reference,
+                        notify: wantNotify,
+                    }
+                    : { currency, notify: wantNotify }));
 
         const finish = () => {
             setSubmitting(false);
@@ -1810,6 +1908,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
 
     // Consultancy = has a fee/bank panel (excludes the free onshore engagement).
     const isConsultancyType = CONSULTANCY_TYPES.has(type);
+    const isEnglishType = type === 'english_engagement' || type === 'english_offshore';
     // Any agreement whose generate endpoint self-emails the client (all
     // consultancy scenarios + onshore + offshore) — so the modal skips the
     // second notify POST for these.
@@ -1829,7 +1928,18 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         // Currency rides on every preview (not just consultancy) so the symbol
         // updates live for English Engagement too.
         if (! isConsultancyType) {
-            return `${base}?${new URLSearchParams({ currency }).toString()}`;
+            // English engagement carries its editable package fee into the preview.
+            const q = { currency };
+            if (isEnglishType) {
+                q.english_fee = String(schoolFee || 0);
+                q.bank_heading = bank.heading || '';
+                q.bank_name = bank.bank_name || '';
+                q.bank_account_name = bank.account_name || '';
+                q.bank_account_number = bank.account_number || '';
+                q.bank_reference = bank.reference || '';
+            }
+            if (typeMeta?.hasPte) q.pte_fee = String(pteFee || 0);
+            return `${base}?${new URLSearchParams(q).toString()}`;
         }
         const params = new URLSearchParams({
             school_enrolment_fee: String(schoolFee || 0),
@@ -1843,7 +1953,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
             bank_reference: bank.reference || '',
         });
         return `${base}?${params.toString()}`;
-    }, [leadId, type, isConsultancyType, schoolFee, englishFee, typeMeta, currency, bank]);
+    }, [leadId, type, isConsultancyType, schoolFee, englishFee, pteFee, typeMeta, currency, bank]);
 
     // Reset the loading flag every time the URL swings — the iframe's
     // onLoad callback will clear it once the new content is painted.
@@ -1944,21 +2054,17 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             automatically (Philippines = PhP, Onshore/Offshore = NZ$). */}
                         <div className="px-5 py-4 border-b border-gray-100">
                             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Category</div>
-                            <div className="grid grid-cols-3 gap-2">
-                                {Object.values(CATEGORIES).map((c) => (
-                                    <button
-                                        key={c.code}
-                                        type="button"
-                                        onClick={() => { setCategory(c.code); setType(''); }}
-                                        className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[13px] font-semibold transition-colors ${
-                                            category === c.code
-                                                ? 'border-gray-900 bg-gray-900 text-white'
-                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
-                                        }`}
-                                    >
-                                        {c.label}
-                                    </button>
-                                ))}
+                            <div className="relative">
+                                <select
+                                    value={category}
+                                    onChange={(e) => { setCategory(e.target.value); setType(''); }}
+                                    className="w-full appearance-none pl-3 pr-9 py-2 rounded-lg text-sm bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 transition-all font-semibold text-gray-900"
+                                >
+                                    {Object.values(CATEGORIES).map((c) => (
+                                        <option key={c.code} value={c.code}>{c.label}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                             <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
                                 Sets the available documents and the currency ({cur.short}). Amounts aren&rsquo;t converted.
@@ -1999,8 +2105,8 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             </p>
                         </div>
 
-                        {/* Fees section — consultancy only */}
-                        {isConsultancyType && (
+                        {/* Fees section — consultancy + English engagement */}
+                        {(isConsultancyType || isEnglishType) && (
                             <div className="px-5 py-4 border-b border-gray-100">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Fees · {cur.short}</div>
@@ -2009,10 +2115,29 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                                         LIVE
                                     </span>
                                 </div>
-                                {typeMeta?.singleFee ? (
-                                    // Single package fee (offshore / onshore). The "Zero fees"
-                                    // variant just defaults this to 0 — staff can still type an
-                                    // amount, and $0 keeps the waived wording in the document.
+                                {typeMeta?.hasPte ? (
+                                    // Offshore - Philippines: an English Review package (Php) plus
+                                    // a separate PTE Examination fee (USD), both editable.
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <FeeInput
+                                            label="English Review"
+                                            value={schoolFee}
+                                            onChange={setSchoolFee}
+                                            step={500}
+                                            symbol={cur.symbol}
+                                        />
+                                        <FeeInput
+                                            label="PTE Examination Fee"
+                                            value={pteFee}
+                                            onChange={setPteFee}
+                                            step={10}
+                                            symbol="US$"
+                                        />
+                                    </div>
+                                ) : (typeMeta?.singleFee || isEnglishType) ? (
+                                    // Single package fee (offshore / onshore / offshore-english).
+                                    // The "Zero fees" variant defaults this to 0 — staff can still
+                                    // type an amount, and $0 keeps the waived wording.
                                     <>
                                         <FeeInput
                                             label="Package fee"
@@ -2054,13 +2179,13 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             </div>
                         )}
 
-                        {/* Bank details section — consultancy only. A preset fills
-                            the fields; every field stays editable. "Other" blanks
-                            them for a fully custom bank. */}
-                        {isConsultancyType && (
+                        {/* Bank details section — consultancy + English agreements.
+                            A preset fills the fields; every field stays editable.
+                            "Other" blanks them for a fully custom bank. */}
+                        {(isConsultancyType || isEnglishType) && (
                             <div className="px-5 py-4 border-b border-gray-100">
                                 <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 mb-2">Bank details</div>
-                                <div className="grid grid-cols-3 gap-2 mb-3">
+                                <div className="grid grid-cols-4 gap-2 mb-3">
                                     {Object.entries(BANK_PRESETS).map(([key, p]) => (
                                         <button
                                             key={key}

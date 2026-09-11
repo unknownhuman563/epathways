@@ -667,6 +667,55 @@ class SalesController extends Controller
                 ->map($mapRow)
                 ->values();
 
+            // Consultancy agreements still IN verification (pending / verified)
+            // have no generated PDF yet — but staff should still see them on the
+            // Agreements tab as "For verification" entries (in addition to the
+            // verification queue). Skip any lead already shown with a real doc.
+            $shownIds = $agreements->pluck('id');
+            $pendingConsultancy = Lead::whereNotNull('consultancy_review')
+                ->whereIn('consultancy_review->status', ['pending', 'verified'])
+                ->with('faceImage')
+                ->orderByDesc('updated_at')
+                ->get()
+                ->reject(fn (Lead $l) => $shownIds->contains($l->id))
+                ->map(function (Lead $l) {
+                    $review = is_array($l->consultancy_review) ? $l->consultancy_review : [];
+                    $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
+                        'email' => $l->email,
+                        'phone' => $l->phone,
+                        'stage' => $l->stage,
+                        'status' => $l->status,
+                        'documents' => [[
+                            'id' => 'review-'.$l->id,
+                            'checklist_key' => 'agree.consultancy',
+                            'type' => 'Consultancy Agreement',
+                            'variant' => $review['scenario'] ?? null,
+                            'applicant_mode' => $review['applicant_mode'] ?? 'single',
+                            'original_name' => $review['scenario_label'] ?? 'Consultancy Agreement',
+                            'size' => null,
+                            'created_at' => $review['submitted_at'] ?? null,
+                            'note' => null,
+                            'notes' => [],
+                            'uploader' => null,
+                            // Flags the Agreements table to show the verification
+                            // status instead of a download / lifecycle badge.
+                            'pending_verification' => true,
+                            'verification_status' => $review['status'] ?? 'pending', // pending | verified
+                            'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+                        ]],
+                        'documents_count' => 1,
+                        'latest_generated_at' => $review['submitted_at'] ?? null,
+                    ];
+                });
+
+            $agreements = $agreements->concat($pendingConsultancy)->values();
+
             // Tab: Proposals — leads with a program shortlist saved. Each
             // row exposes the picked programs (id + title) so the frontend
             // can render badges without a second lookup.
@@ -942,6 +991,54 @@ class SalesController extends Controller
                 'programs' => collect(),
             ]);
         }
+    }
+
+    /**
+     * Server-side lead search for the "+ New" proposal/agreement picker. The
+     * page ships an initial roster (first 500), but on a large dataset a lead
+     * late in the alphabet is cut off — so the modal searches here instead of
+     * filtering the capped list client-side, making ANY eligible lead findable.
+     */
+    public function docPickerSearch(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+
+        $leads = Lead::query()
+            ->where(function ($w) {
+                $w->where(function ($p) {
+                    $p->where('is_student', false)
+                        ->where('is_immigration_case', false)
+                        ->where('is_accommodation_client', false)
+                        ->where('is_english_student', false);
+                })
+                    ->orWhere('is_student', true)
+                    ->orWhereIn('source', ['free-assessment', 'education-enrolment']);
+            })
+            ->when($q !== '', function ($w) use ($q) {
+                $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%';
+                // Full-name concat differs by driver (MySQL prod / sqlite tests).
+                $concat = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite'
+                    ? "(first_name || ' ' || last_name)"
+                    : "CONCAT(first_name, ' ', last_name)";
+                $w->where(function ($s) use ($like, $concat) {
+                    $s->where('first_name', 'like', $like)
+                        ->orWhere('last_name', 'like', $like)
+                        ->orWhereRaw("{$concat} like ?", [$like])
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('lead_id', 'like', $like);
+                });
+            })
+            ->orderBy('first_name')
+            ->limit(50)
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'email'])
+            ->map(fn (Lead $l) => [
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'email' => $l->email,
+            ]);
+
+        return response()->json(['leads' => $leads]);
     }
 
     /** Which portal prefix served this request (drives the frontend base URL). */

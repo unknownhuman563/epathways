@@ -37,7 +37,7 @@ class ProgramVerificationController extends Controller
             })
             ->orderByDesc('updated_at')
             ->limit(300)
-            ->with(['documents:id,lead_id,checklist_key,status'])
+            ->with(['documents:id,lead_id,checklist_key,status', 'agent:id,name'])
             ->get();
 
         // Resolve every program + staff name referenced, in two queries.
@@ -98,6 +98,20 @@ class ProgramVerificationController extends Controller
                         'edited' => (bool) ($m['edited'] ?? false),
                         // Internal staff note (private) vs. the client-facing reason.
                         'note' => trim((string) ($m['note'] ?? '')) ?: null,
+                        // Threaded per-programme notes — the SAME thread the
+                        // Proposals tab uses, so notes/replies added there are
+                        // visible (and repliable) here and vice versa.
+                        'notes' => collect(is_array($m['notes'] ?? null) ? $m['notes'] : [])
+                            ->map(fn ($n) => [
+                                'id' => $n['id'] ?? (string) \Illuminate\Support\Str::uuid(),
+                                'tag' => $n['tag'] ?? 'note',
+                                'body' => $n['body'] ?? '',
+                                'author' => $n['author'] ?? 'Staff',
+                                'role' => $n['role'] ?? null,
+                                'created_at' => $n['created_at'] ?? null,
+                                'actioned_at' => $n['actioned_at'] ?? null,
+                                'replies' => array_values(is_array($n['replies'] ?? null) ? $n['replies'] : []),
+                            ])->values(),
                         'reason' => trim((string) ($reasons[(string) $p->id] ?? '')) ?: null,
                         'is_first_choice' => (int) $l->preferred_program_id === (int) $p->id,
                     ];
@@ -109,6 +123,7 @@ class ProgramVerificationController extends Controller
             return [
                 'id' => $l->id,
                 'lead_id' => $l->lead_id,
+                'agent' => optional($l->agent)->name,
                 'name' => trim("{$l->first_name} {$l->last_name}") ?: '—',
                 'initials' => $this->initials("{$l->first_name} {$l->last_name}"),
                 'email' => $l->email,
