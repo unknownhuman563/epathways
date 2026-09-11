@@ -160,6 +160,52 @@ function ProgramAddPicker({ options = [], excludeIds = [], disabled = false, onP
     );
 }
 
+// The student's actual enrolment programs + schools (multi-select on the
+// education student modal, stored delimited). Shown as two lists so every
+// selected program and school is visible. Only rendered when there's data.
+function EnrolmentProgramsCard({ programText, schoolText }) {
+    const split = (t) => (t && String(t).trim() ? String(t).split(" · ").map((s) => s.trim()).filter(Boolean) : []);
+    const programs = split(programText);
+    const schools = split(schoolText);
+    if (programs.length === 0 && schools.length === 0) return null;
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3 bg-gradient-to-br from-gray-50 to-white">
+                <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <GraduationCap size={16} strokeWidth={2.25} />
+                </div>
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-0.5">Enrolment</p>
+                    <h2 className="text-base font-bold text-gray-900 tracking-tight">Programs &amp; schools</h2>
+                </div>
+            </div>
+            <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5"><BookOpen size={12} /> Programs · {programs.length}</p>
+                    {programs.length === 0 ? <p className="text-sm text-gray-300">—</p> : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {programs.map((p, i) => (
+                                <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-lg bg-gray-100 text-gray-800 text-[12px] font-medium border border-gray-200">{p}</span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5"><Building2 size={12} /> Schools · {schools.length}</p>
+                    {schools.length === 0 ? <p className="text-sm text-gray-300">—</p> : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {schools.map((s, i) => (
+                                <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 text-[12px] font-medium border border-indigo-200">{s}</span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // Read-only mirror of the tracker's program shortlist for staff: lists the
 // programs offered to this lead and highlights (green) the one the client
 // chose from their tracker. Rendered on the Lead Stats tab under the AI card.
@@ -1027,6 +1073,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 </div>
 
                 <ProposedProgramsCard proposal={proposal} leadId={backendLead.id} programOptions={programOptions} />
+                <EnrolmentProgramsCard programText={studyPlan.preferred_course} schoolText={backendLead.student_school || backendLead.school?.name} />
                 <AICapabilityHero lead={backendLead} />
                 <TagsPanel leadId={backendLead.id} tags={tags} allTags={allTags} />
 

@@ -845,23 +845,27 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 )}
                                             </td>
 
-                                            {/* Program */}
-                                            <td className="px-3 py-2.5">
+                                            {/* Program — one line per selected program */}
+                                            <td className="px-3 py-2.5 align-top">
                                                 {s.program ? (
-                                                    <span className="text-gray-700 truncate block max-w-[200px]" title={s.program}>
-                                                        {s.program}
-                                                    </span>
+                                                    <div className="flex flex-col gap-0.5 max-w-[220px]">
+                                                        {s.program.split(" · ").map((p, i) => (
+                                                            <span key={i} className="text-gray-700 text-[12px] leading-tight truncate" title={p}>{p}</span>
+                                                        ))}
+                                                    </div>
                                                 ) : (
                                                     <span className="text-gray-300">—</span>
                                                 )}
                                             </td>
 
-                                            {/* School */}
-                                            <td className="px-3 py-2.5">
-                                                {s.school ? (
-                                                    <span className="text-gray-700 truncate block max-w-[180px]" title={s.school}>
-                                                        {s.school}
-                                                    </span>
+                                            {/* School — one line per selected school */}
+                                            <td className="px-3 py-2.5 align-top">
+                                                {(s.school || s.school_name) ? (
+                                                    <div className="flex flex-col gap-0.5 max-w-[200px]">
+                                                        {(s.school || s.school_name).split(" · ").map((sc, i) => (
+                                                            <span key={i} className="text-gray-700 text-[12px] leading-tight truncate" title={sc}>{sc}</span>
+                                                        ))}
+                                                    </div>
                                                 ) : (
                                                     <span className="text-gray-300">—</span>
                                                 )}
