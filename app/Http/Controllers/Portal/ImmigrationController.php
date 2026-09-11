@@ -1586,6 +1586,44 @@ class ImmigrationController extends Controller
      * stage automation with the deadline as {{rfi_deadline}} and the PDFs
      * attached to the email. Mirrors recordOutcome() with those additions.
      */
+    /**
+     * Read INZ's RFI letter(s) and return the documents INZ is requesting, so
+     * the RFI modal can show them as an editable list before staff confirms.
+     *
+     * This is a DRAFTING AID (CLAUDE.md AI constraints): it only reads the
+     * uploaded PDF(s) and extracts what the letter literally names — it does not
+     * store anything, change the stage, or notify the client. Nothing reaches
+     * the client until staff confirm the list on the main RFI submit. Degrades
+     * to an empty list (with a flag) for scanned PDFs or when AI is off, so the
+     * staff member can just type the documents manually.
+     */
+    public function analyzeRfi(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $request->validate([
+            'documents' => ['required', 'array', 'max:20'],
+            'documents.*' => ['file', 'mimes:pdf', 'max:10240'],
+        ]);
+
+        // Parse straight from the uploaded temp files — no need to persist here;
+        // the real RFI submit stores them.
+        $paths = [];
+        foreach ((array) $request->file('documents', []) as $file) {
+            if ($file instanceof \Illuminate\Http\UploadedFile && $file->getRealPath()) {
+                $paths[] = $file->getRealPath();
+            }
+        }
+
+        $result = app(\App\Services\Immigration\RfiDocumentExtractor::class)->extract($paths);
+
+        $lead->recordStaffActivity('Analysed RFI letter'.(
+            $result['ai_used'] ? ' ('.count($result['documents']).' document(s) found)' : ''
+        ));
+
+        return response()->json($result);
+    }
+
     public function requestForInformation(\Illuminate\Http\Request $request, $id)
     {
         $lead = Lead::immigrationCase()->findOrFail($id);
@@ -1596,6 +1634,13 @@ class ImmigrationController extends Controller
             'documents' => ['nullable', 'array', 'max:20'],
             'documents.*' => ['file', 'mimes:pdf', 'max:10240'],
             'notify' => ['nullable', 'boolean'],
+            // The documents INZ asked for, confirmed by staff from the AI-extracted
+            // list in the modal. Each becomes a LeadDocumentRequest the client
+            // uploads against — origin 'rfi' groups them under "Request Information".
+            'requested_documents' => ['nullable', 'array', 'max:25'],
+            'requested_documents.*.label' => ['required', 'string', 'max:120'],
+            'requested_documents.*.description' => ['nullable', 'string', 'max:500'],
+            'requested_documents.*.required' => ['nullable', 'boolean'],
         ]);
 
         $stage = 'Request for Information';
@@ -1662,6 +1707,32 @@ class ImmigrationController extends Controller
             $attachments[] = ['path' => $path, 'name' => $name];
         }
 
+        // The documents INZ asked for — staff confirmed these from the AI-read
+        // list in the modal. Each becomes a request the client uploads against
+        // (origin 'rfi' groups them under "Request Information" on the Documents
+        // tab and the client portal). Deduped by label against existing RFI
+        // requests so re-opening the modal doesn't create duplicates.
+        $requestedLabels = [];
+        $existingRfi = $lead->documentRequests()->where('origin', 'rfi')
+            ->pluck('label')->map(fn ($l) => mb_strtolower(trim((string) $l)))->all();
+        foreach ((array) ($data['requested_documents'] ?? []) as $item) {
+            $label = trim((string) ($item['label'] ?? ''));
+            if ($label === '' || in_array(mb_strtolower($label), $existingRfi, true)) {
+                continue;
+            }
+            $existingRfi[] = mb_strtolower($label);
+            \App\Models\LeadDocumentRequest::create([
+                'lead_id' => $lead->id,
+                'label' => $label,
+                'description' => trim((string) ($item['description'] ?? '')) ?: null,
+                'required' => array_key_exists('required', $item) ? (bool) $item['required'] : true,
+                'origin' => 'rfi',
+                'requested_by' => auth()->id(),
+                'requested_at' => now(),
+            ]);
+            $requestedLabels[] = $label;
+        }
+
         // Record the note (with the deadline) on the case timeline.
         $user = auth()->user();
         \App\Models\LeadNote::create([
@@ -1679,7 +1750,14 @@ class ImmigrationController extends Controller
             app(\App\Services\EmailAutomationService::class)->fire(
                 'immigration.stage.'.\Illuminate\Support\Str::slug($stage, '_'),
                 $lead,
-                ['stage' => $stage, 'status_detail' => $note, 'rfi_deadline' => $deadline->format('j M Y')],
+                [
+                    'stage' => $stage,
+                    'status_detail' => $note,
+                    'rfi_deadline' => $deadline->format('j M Y'),
+                    // {{document_list}} lets the RFI template spell out exactly
+                    // what the client must upload; blank when none were extracted.
+                    'document_list' => implode(', ', $requestedLabels),
+                ],
                 $attachments,
             );
         }

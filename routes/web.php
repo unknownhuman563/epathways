@@ -972,6 +972,9 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.documents.request.destroy');
         Route::post('/admin/leads/{leadId}/documents/requests/{requestId}/resend', [LeadDocumentController::class, 'resendRequest'])
             ->name('admin.leads.documents.request.resend');
+        // Staff upload a file against a request (client handed it over directly).
+        Route::post('/admin/leads/{leadId}/documents/requests/{requestId}/upload', [LeadDocumentController::class, 'staffRequestUpload'])
+            ->name('admin.leads.documents.request.upload');
         Route::post('/admin/leads/{leadId}/documents/{docId}/status', [LeadDocumentController::class, 'updateStatus'])
             ->name('admin.leads.documents.status');
         Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
@@ -1735,6 +1738,7 @@ Route::middleware(['auth'])->group(function () {
             // Request for Information — moves to "Request for Information" with a
             // response deadline, attached RFI PDF(s) shared to the case, and the
             // configured RFI stage automation (PDFs attached to the email).
+            Route::post('/cases/{id}/rfi/analyze', [ImmigrationController::class, 'analyzeRfi'])->name('cases.rfi.analyze');
             Route::post('/cases/{id}/rfi', [ImmigrationController::class, 'requestForInformation'])->name('cases.rfi');
             // Inline visa-type update from the Cases table.
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');

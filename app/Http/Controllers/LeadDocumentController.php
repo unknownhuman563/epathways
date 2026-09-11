@@ -570,6 +570,49 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Staff upload a file AGAINST a document request — for when the client hands
+     * a requested document to staff directly (email, in person) instead of
+     * uploading it themselves. The file is tied to the request (request_id) so it
+     * fulfils that row, exactly as a client upload would.
+     */
+    public function staffRequestUpload(Request $request, $leadId, $requestId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $docRequest = LeadDocumentRequest::where('lead_id', $lead->id)->findOrFail($requestId);
+
+        $request->validate([
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => UploadValidation::document(),
+        ]);
+
+        try {
+            foreach ($request->file('files') as $file) {
+                $path = $file->store("lead-documents/{$lead->id}", self::DISK);
+
+                LeadDocument::create([
+                    'lead_id' => $lead->id,
+                    'request_id' => $docRequest->id,
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'mime' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'status' => LeadDocument::STATUS_SUBMITTED,
+                    'uploaded_by' => Auth::id(),
+                ]);
+            }
+
+            $n = count($request->file('files'));
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+            return back()->with('success', "{$n} ".($n === 1 ? 'file' : 'files').' uploaded on behalf of the client.');
+        } catch (\Throwable $e) {
+            Log::error('Staff request upload failed', ['lead_id' => $leadId, 'request_id' => $requestId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not upload that file.']);
+        }
+    }
+
+    /**
      * Generate a templated agreement (Blade -> PDF) and attach it to the
      * lead's documents under the matching checklist key. Routes by key:
      *   agree.consultancy        — Consultancy Agreement (Single | Partner)
@@ -1883,10 +1926,36 @@ class LeadDocumentController extends Controller
 
     // ── LEAD (own portal) ───────────────────────────────────────────────────
 
-    public function leadIndex()
+    /**
+     * The client whose portal is being viewed. Normally the signed-in lead;
+     * for an admin/super-admin previewing the client portal, the preview lead
+     * (same session key the tracker/requirements preview uses).
+     */
+    private function portalLead(): ?Lead
     {
         $user = Auth::user();
-        $lead = $user?->lead;
+        if ($user?->lead) {
+            return $user->lead;
+        }
+        if ($user && $user->isAtLeast('admin')) {
+            $id = request('preview_lead') ?: session('lead_portal_preview_id');
+            if ($id && ($lead = Lead::find($id))) {
+                session(['lead_portal_preview_id' => $lead->id]);
+
+                return $lead;
+            }
+
+            return Lead::whereHas('portalUser')->latest()->first()
+                ?? Lead::where('is_immigration_case', true)->latest()->first()
+                ?? Lead::latest()->first();
+        }
+
+        return null;
+    }
+
+    public function leadIndex()
+    {
+        $lead = $this->portalLead();
         abort_unless($lead, 403);
 
         $requests = $lead->documentRequests()
@@ -1898,6 +1967,9 @@ class LeadDocumentController extends Controller
                 'label' => $r->label,
                 'description' => $r->description,
                 'required' => $r->required,
+                // 'rfi' groups these under a "Request Information" section the
+                // client uploads their INZ-requested documents into.
+                'origin' => $r->origin,
                 'requested_at' => $r->requested_at,
                 'latest_document' => $r->latestDocument ? $this->docSerialize($r->latestDocument) : null,
             ]);
@@ -1926,6 +1998,32 @@ class LeadDocumentController extends Controller
                 'created_at' => $f->created_at,
             ])->values());
 
+        // The case's own visa-type checklist, grouped by category — the SAME
+        // list staff review on the case profile, so what the client uploads
+        // lines up with what the adviser expects. Hidden items and the special
+        // rows shown elsewhere are pulled out: 'rfi' → Request Information
+        // section; 'svf' (the Visa Information Form) → its own first row under
+        // Immigration Team.
+        $checklist = [];
+        $vifItem = null;
+        if ($lead->is_immigration_case) {
+            $grouped = app(\App\Services\Immigration\CaseChecklistService::class)->groupedByCategory($lead);
+            foreach ($grouped as $category => $items) {
+                foreach ($items as $it) {
+                    if (($it['key'] ?? null) === 'svf' && empty($it['hidden'])) {
+                        $vifItem = $it;
+                    }
+                }
+                $visible = array_values(array_filter(
+                    $items,
+                    fn ($i) => empty($i['hidden']) && ! in_array($i['key'] ?? null, ['rfi', 'svf'], true),
+                ));
+                if ($visible) {
+                    $checklist[$category] = $visible;
+                }
+            }
+        }
+
         return inertia('portal/lead/Documents', [
             'lead' => [
                 'id' => $lead->id,
@@ -1933,9 +2031,16 @@ class LeadDocumentController extends Controller
                 'first_name' => $lead->first_name,
                 'last_name' => $lead->last_name,
                 'agreements_acknowledged_at' => $lead->agreements_acknowledged_at,
+                // RFI response deadline (if the case is in Request for Information)
+                // — shown on the client's Documents page so they know the due date.
+                'rfi_deadline' => optional($lead->rfi_deadline)->toDateString(),
             ],
             'requests' => $requests,
             'shared_by_staff' => $sharedByStaff,
+            // The Visa Information Form checklist item — rendered first under
+            // Immigration Team (same function as the "Student Visa Information Form").
+            'vifItem' => $vifItem,
+            'checklist' => $checklist,
             'checklistFiles' => $checklistFiles,
             'sectionVerifications' => $lead->section_verifications ?? [],
         ]);

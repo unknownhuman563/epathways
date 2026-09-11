@@ -2,14 +2,14 @@ import DashboardLayout from "./DashboardLayout";
 import { usePage, router } from "@inertiajs/react";
 import { LayoutDashboard, User, Users, FileText, Eye, ClipboardList } from "lucide-react";
 
-// Lead Portal sidebar. Documents = the tracker's checklist view; Dashboard =
-// overview; Family = dependants. Profile sits with Settings in the account
-// group at the foot of the sidebar.
+// Lead Portal sidebar. Documents = the case document workspace (requested docs,
+// Immigration Team, RFI, and the visa checklist); Dashboard = overview; Family =
+// dependants. Profile sits with Settings in the account group at the foot.
 const LEAD_NAV = [
-    { name: "Dashboard",  href: "/portal/lead/dashboard",    icon: <LayoutDashboard size={20} /> },
-    { name: "Forms",      href: "/portal/lead/forms",        icon: <ClipboardList size={20} /> },
-    { name: "Documents",  href: "/portal/lead/requirements", icon: <FileText size={20} /> },
-    { name: "Family",     href: "/portal/lead/family",       icon: <Users size={20} /> },
+    { name: "Dashboard",  href: "/portal/lead/dashboard",  icon: <LayoutDashboard size={20} /> },
+    { name: "Forms",      href: "/portal/lead/forms",      icon: <ClipboardList size={20} /> },
+    { name: "Documents",  href: "/portal/lead/documents",  icon: <FileText size={20} /> },
+    { name: "Family",     href: "/portal/lead/family",     icon: <Users size={20} /> },
 ];
 
 // Account links pinned to the bottom, directly above Settings.
