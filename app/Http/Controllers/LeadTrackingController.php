@@ -267,36 +267,7 @@ class LeadTrackingController extends Controller
         $p = \App\Models\Program::with('school:id,name')->find($program);
         abort_if(! $p, 404);
 
-        return response()->json(['program' => [
-            'id' => $p->id,
-            'title' => $p->title,
-            'institution' => $p->institution ?: optional($p->school)->name,
-            'location' => $p->location,
-            'level' => $p->level,
-            'category' => $p->category,
-            'industry' => $p->industry,
-            'price_text' => $p->price_text,
-            'image_url' => $p->image ? Storage::disk('public')->url($p->image) : null,
-            'description' => $p->description,
-            'intake_months' => $p->intake_months,
-            'duration_months' => $p->duration_months,
-            'credits' => $p->credits,
-            'residency_points' => $p->residency_points,
-            'hours_per_week' => $p->hours_per_week,
-            'entry_requirements' => $p->entry_requirements,
-            'english_requirements' => $p->english_requirements,
-            'specialization' => $p->specialization,
-            'employment_outcomes' => $p->employment_outcomes,
-            'post_study' => $p->post_study,
-            'other_benefits' => $p->other_benefits,
-            'tuition_fee' => $p->tuition_fee,
-            'tuition_fee_notes' => $p->tuition_fee_notes,
-            'tuition_fees' => $p->tuition_fees,
-            'insurance_fee' => $p->insurance_fee,
-            'visa_processing_fee' => $p->visa_processing_fee,
-            'living_expense' => $p->living_expense,
-            'accommodation' => $p->accommodation,
-        ]]);
+        return response()->json(['program' => $p->detailPayload()]);
     }
 
     /**

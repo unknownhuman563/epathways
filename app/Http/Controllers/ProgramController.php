@@ -159,6 +159,18 @@ class ProgramController extends Controller
         return $programs;
     }
 
+    /**
+     * Full program detail as JSON for the staff-side ProgramDetailsModal (the
+     * lead profile's Programs cards). Any authenticated staff member can read a
+     * program's catalogue info — it's the same content shown on the public site.
+     */
+    public function detailsJson($id)
+    {
+        $program = Program::with('school:id,name')->findOrFail($id);
+
+        return response()->json(['program' => $program->detailPayload()]);
+    }
+
     public function publicShow(Program $program)
     {
         abort_if($program->status !== 'published', 404);

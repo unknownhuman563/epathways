@@ -357,6 +357,10 @@ Route::middleware(['throttle:tracker', 'tracker.enabled'])->group(function () {
     Route::get('/track/{code}/programs/{program}', [LeadTrackingController::class, 'programDetails'])->name('track.program.details');
     Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
 
+    // Full program detail (JSON) for the staff-side ProgramDetailsModal on the
+    // lead profile — any authenticated staff/agent can read catalogue info.
+    Route::middleware('auth')->get('/admin/programs/{id}/details', [ProgramController::class, 'detailsJson'])->name('admin.programs.details');
+
     // Build 11.D Phase 3 — Agreement signing. tracker_signing_token in the
     // URL is the bearer credential for the agreement; the controller
     // validates that it belongs to the lead resolved from {code}, so a
