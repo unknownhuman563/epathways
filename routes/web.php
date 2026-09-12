@@ -771,23 +771,26 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'analytics'])->name('analytics');
         });
 
-        // Lead Portal invitations — admin approval / rejection / revocation.
-        // Gated by the Portal Invitations module (admins + super always pass via
-        // admin_default; grantable to others). Sales requests are separate below.
-        Route::middleware('module:portal_invitation')->group(function () {
-            Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
-                ->name('admin.portal-invitations');
-            Route::post('/admin/leads/{id}/portal-invitation/approve', [LeadPortalInvitationController::class, 'approve'])
-                ->name('admin.portal-invitation.approve');
-            Route::post('/admin/leads/{id}/portal-invitation/reject', [LeadPortalInvitationController::class, 'reject'])
-                ->name('admin.portal-invitation.reject');
-            Route::post('/admin/leads/{id}/portal-invitation/revoke', [LeadPortalInvitationController::class, 'revoke'])
-                ->name('admin.portal-invitation.revoke');
-            Route::post('/admin/leads/{id}/portal-invitation/generate-credentials', [LeadPortalInvitationController::class, 'generateCredentials'])
-                ->name('admin.portal-invitation.generate-credentials');
-            Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
-                ->name('admin.portal-invitation.reset-password');
-        });
+    });
+
+    // Lead Portal invitations — admin approval / rejection / revocation.
+    // Module-gated (NOT portal:admin) so the "Portal Invitations" module can be
+    // granted to non-admin staff via Module Management and they can actually
+    // reach the page; admins/super pass via the module's admin_default. Sales
+    // requests are separate below.
+    Route::middleware('module:portal_invitation')->group(function () {
+        Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
+            ->name('admin.portal-invitations');
+        Route::post('/admin/leads/{id}/portal-invitation/approve', [LeadPortalInvitationController::class, 'approve'])
+            ->name('admin.portal-invitation.approve');
+        Route::post('/admin/leads/{id}/portal-invitation/reject', [LeadPortalInvitationController::class, 'reject'])
+            ->name('admin.portal-invitation.reject');
+        Route::post('/admin/leads/{id}/portal-invitation/revoke', [LeadPortalInvitationController::class, 'revoke'])
+            ->name('admin.portal-invitation.revoke');
+        Route::post('/admin/leads/{id}/portal-invitation/generate-credentials', [LeadPortalInvitationController::class, 'generateCredentials'])
+            ->name('admin.portal-invitation.generate-credentials');
+        Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
+            ->name('admin.portal-invitation.reset-password');
     });
 
     // Consultation bookings — admin + education (education triages/converts

@@ -1,6 +1,13 @@
 import { Link, usePage, router } from "@inertiajs/react";
 import { useState, useEffect } from "react";
-import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft, Sparkles, LayoutGrid, GraduationCap, Languages, Globe, Building2, Building, Wallet, UserRound, Users } from "lucide-react";
+import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft, Sparkles, LayoutGrid, GraduationCap, Languages, Globe, Building2, Building, Wallet, UserRound, Users, KeyRound } from "lucide-react";
+
+// Admin-area restricted modules that, when granted via Module Management, should
+// surface as a sidebar link for a NON-admin staffer (admins already see them in
+// the admin sidebar). Keyed by the module key from config/modules.php.
+const MODULE_NAV = {
+    portal_invitation: { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} /> },
+};
 
 // A distinct icon per department portal for the sidebar "Portals" group.
 const PORTAL_ICONS = {
@@ -54,12 +61,24 @@ export default function DashboardLayout({
     const portals = props.auth?.portals || [];
     const currentPortal = portals.find((p) => url.startsWith(`/portal/${p.key}/`));
 
-    // When a user can reach more than one portal, append a collapsible
-    // "Portals" group to the sidebar listing each one they have access to.
-    const navWithPortals = portals.length > 1
-        ? [
-            ...nav,
-            {
+    // Admin-area modules granted to a NON-admin staffer via Module Management —
+    // surface each as a sidebar link so an enabled module actually shows up in
+    // their account. Admins/super already see these in the admin sidebar.
+    const grantedModules = props.auth?.modules || [];
+    const isPrivileged = user?.role === "admin" || user?.role === "super_admin";
+    const moduleExtras = isPrivileged
+        ? []
+        : Object.entries(MODULE_NAV)
+            .filter(([key]) => grantedModules.includes(key))
+            .map(([, item]) => item);
+
+    // Append a "Tools" section for granted admin modules, plus a collapsible
+    // "Portals" group when the user can reach more than one portal.
+    const navWithPortals = [
+        ...nav,
+        ...(moduleExtras.length > 0 ? [{ section: true, name: "Tools" }, ...moduleExtras] : []),
+        ...(portals.length > 1
+            ? [{
                 name: "Portals",
                 icon: <LayoutGrid size={20} />,
                 children: portals.map((p) => ({
@@ -67,9 +86,9 @@ export default function DashboardLayout({
                     href: p.href,
                     icon: portalIcon(p.key),
                 })),
-            },
-        ]
-        : nav;
+            }]
+            : []),
+    ];
 
     // Match `/leads` against `/leads/123` (lead detail) but NOT against
     // `/leads/proposals-agreements` — otherwise sibling children share
