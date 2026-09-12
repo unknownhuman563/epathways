@@ -75,6 +75,7 @@ class EducationController extends Controller
                 'studentStats' => $studentStats,
                 'recentStudents' => $recentStudents,
                 'recentPrograms' => $recentPrograms,
+                'intakeMonitoring' => $this->intakeMonitoring(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Education dashboard failed', ['error' => $e->getMessage()]);
@@ -84,7 +85,74 @@ class EducationController extends Controller
                 'studentStats' => array_fill_keys(['total_with_plan', 'this_month', 'qualified', 'enrolled'], 0),
                 'recentStudents' => collect(),
                 'recentPrograms' => collect(),
+                'intakeMonitoring' => [],
             ]);
+        }
+    }
+
+    /**
+     * Intake monitoring — every student in the Students register (Education +
+     * English + student-visa Immigration), grouped by their intake MONTH so the
+     * dashboard can show each month's cohort. The intake is the free-text
+     * `preferred_intake` on the study plan (e.g. "31 August 2026"); we best-effort
+     * parse it to a month, and anything unparseable falls into "Unscheduled".
+     *
+     * @return array<int, array{key:string,label:string,count:int,rows:array}>
+     */
+    private function intakeMonitoring(): array
+    {
+        $students = Lead::inStudentsRegister()
+            ->with(['studyPlans:id,lead_id,preferred_course,preferred_intake', 'school:id,name'])
+            ->get(['id', 'first_name', 'last_name', 'residence_country', 'education_stage', 'immigration_stage', 'english_stage', 'status', 'is_immigration_case', 'student_school', 'school_id']);
+
+        $groups = [];
+        foreach ($students as $l) {
+            $plan = $l->studyPlans->first();
+            $intakeRaw = $plan?->preferred_intake;
+            [$key, $label, $sort] = $this->parseIntakeMonth($intakeRaw);
+
+            $groups[$key] ??= ['key' => $key, 'label' => $label, 'sort' => $sort, 'rows' => []];
+            $groups[$key]['rows'][] = [
+                'id' => $l->id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                // Effective department status — education first, then the visa
+                // or English sub-stage, then the raw sales status.
+                'status' => $l->education_stage ?: ($l->immigration_stage ?: ($l->english_stage ?: $l->status)),
+                'location' => $l->residence_country,
+                'intake' => $intakeRaw,
+                'school' => $l->student_school ?: optional($l->school)->name,
+                'program' => $plan?->preferred_course,
+            ];
+        }
+
+        // Chronological by intake month; "Unscheduled" sinks to the bottom.
+        usort($groups, fn ($a, $b) => $a['sort'] <=> $b['sort']);
+        foreach ($groups as &$g) {
+            usort($g['rows'], fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+            $g['count'] = count($g['rows']);
+            unset($g['sort']);
+        }
+
+        return array_values($groups);
+    }
+
+    /**
+     * Best-effort parse of a free-text intake string into a month bucket.
+     *
+     * @return array{0:string,1:string,2:int} [key, label, sortValue]
+     */
+    private function parseIntakeMonth(?string $raw): array
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return ['unscheduled', 'Unscheduled', PHP_INT_MAX];
+        }
+        try {
+            $d = \Illuminate\Support\Carbon::parse($raw);
+
+            return [$d->format('Y-m'), $d->format('F Y'), (int) $d->format('Ym')];
+        } catch (\Throwable $e) {
+            return ['unscheduled', 'Unscheduled', PHP_INT_MAX];
         }
     }
 

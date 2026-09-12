@@ -1,5 +1,6 @@
+import { Fragment, useState } from "react";
 import { Head, Link } from "@inertiajs/react";
-import { GraduationCap, Users, BookOpen, CheckCircle2, ArrowUpRight } from "lucide-react";
+import { GraduationCap, Users, BookOpen, CheckCircle2, ArrowUpRight, CalendarDays } from "lucide-react";
 
 const STATUS_STYLES = {
     New: "bg-blue-100 text-blue-700 border-blue-200",
@@ -17,7 +18,7 @@ const statusClass = (s) => STATUS_STYLES[s] || "bg-gray-100 text-gray-700 border
 const programStatusClass = (s) => PROGRAM_STATUS[s] || "bg-gray-100 text-gray-700 border-gray-200";
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
-export default function EducationDashboard({ programStats = {}, studentStats = {}, recentStudents = [], recentPrograms = [] }) {
+export default function EducationDashboard({ programStats = {}, studentStats = {}, recentStudents = [], recentPrograms = [], intakeMonitoring = [] }) {
     const cards = [
         { label: "Programs", value: programStats.total ?? 0, icon: <GraduationCap className="w-5 h-5" />, dark: true, foot: <span className="text-xs text-gray-400">{programStats.published ?? 0} published · {programStats.draft ?? 0} draft</span> },
         { label: "Students", value: studentStats.total_with_plan ?? 0, icon: <Users className="w-5 h-5" />, foot: <span className="text-xs text-gray-400">+{studentStats.this_month ?? 0} this month</span> },
@@ -42,65 +43,94 @@ export default function EducationDashboard({ programStats = {}, studentStats = {
                 ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Recent students */}
-                <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
-                    <div className="px-6 py-5 flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-gray-900">Recent students</h2>
-                        <Link href="/admin/leads" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">All leads →</Link>
+            {/* Intake monitoring — students grouped by their intake month */}
+            <IntakeMonitoring groups={intakeMonitoring} />
+        </div>
+    );
+}
+
+function IntakeMonitoring({ groups = [] }) {
+    const [active, setActive] = useState("all");
+    const total = groups.reduce((n, g) => n + (g.count || 0), 0);
+    const visible = active === "all" ? groups : groups.filter((g) => g.key === active);
+
+    return (
+        <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
+            <div className="px-6 py-5 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2.5">
+                    <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><CalendarDays size={18} /></span>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900">Intake monitoring</h2>
+                        <p className="text-xs text-gray-400">{total} student{total === 1 ? "" : "s"} across {groups.length} intake month{groups.length === 1 ? "" : "s"}</p>
                     </div>
+                </div>
+                <Link href="/portal/education/students" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">All students →</Link>
+            </div>
+
+            {groups.length === 0 ? (
+                <div className="px-6 py-12 text-center text-gray-400 text-sm">No student intakes to monitor yet.</div>
+            ) : (
+                <>
+                    {/* Month filter chips */}
+                    <div className="px-6 pb-3 flex flex-wrap gap-1.5">
+                        <MonthChip on={active === "all"} onClick={() => setActive("all")} label="All months" count={total} />
+                        {groups.map((g) => (
+                            <MonthChip key={g.key} on={active === g.key} onClick={() => setActive(g.key)} label={g.label} count={g.count} />
+                        ))}
+                    </div>
+
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="bg-gray-50/50 border-y border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    <th className="px-6 py-3">Student</th>
-                                    <th className="px-6 py-3">Preferred course</th>
-                                    <th className="px-6 py-3">Level</th>
+                                    <th className="px-6 py-3">Name</th>
                                     <th className="px-6 py-3">Status</th>
-                                    <th className="px-6 py-3">Created</th>
+                                    <th className="px-6 py-3">Location</th>
+                                    <th className="px-6 py-3">Intake</th>
+                                    <th className="px-6 py-3">School / Program</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {recentStudents.length === 0 ? (
-                                    <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400 text-sm">No students yet.</td></tr>
-                                ) : recentStudents.map((s) => (
-                                    <tr key={s.id} className="hover:bg-gray-50/40">
-                                        <td className="px-6 py-3"><div className="font-semibold text-gray-900 text-sm">{s.name}</div><div className="text-xs text-gray-400">{s.email || "—"}</div></td>
-                                        <td className="px-6 py-3 text-sm text-gray-600">{s.course || "—"}</td>
-                                        <td className="px-6 py-3 text-sm text-gray-600">{s.level || "—"}</td>
-                                        <td className="px-6 py-3"><span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${statusClass(s.status)}`}>{s.status}</span></td>
-                                        <td className="px-6 py-3 text-sm text-gray-500">{fmtDate(s.created_at)}</td>
-                                    </tr>
+                                {visible.map((g) => (
+                                    <Fragment key={g.key}>
+                                        {active === "all" && (
+                                            <tr>
+                                                <td colSpan={5} className="px-6 py-2 bg-gray-50/70 border-y border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                                                    {g.label} · {g.count}
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {g.rows.map((r) => (
+                                            <tr key={r.id} className="hover:bg-gray-50/40">
+                                                <td className="px-6 py-3 font-semibold text-gray-900 text-sm">{r.name}</td>
+                                                <td className="px-6 py-3">
+                                                    {r.status ? <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${statusClass(r.status)}`}>{r.status}</span> : <span className="text-gray-300">—</span>}
+                                                </td>
+                                                <td className="px-6 py-3 text-sm text-gray-600">{r.location || "—"}</td>
+                                                <td className="px-6 py-3 text-sm text-gray-600 whitespace-nowrap">{r.intake || "—"}</td>
+                                                <td className="px-6 py-3">
+                                                    <div className="text-sm text-gray-700">{r.school || "—"}</div>
+                                                    {r.program && <div className="text-xs text-gray-400">{r.program}</div>}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </Fragment>
                                 ))}
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                {/* Recent programs */}
-                <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden flex flex-col">
-                    <div className="px-6 py-5 flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-gray-900">Programs</h2>
-                        <Link href="/admin/programs" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Manage →</Link>
-                    </div>
-                    <ul className="divide-y divide-gray-50">
-                        {recentPrograms.length === 0 ? (
-                            <li className="px-6 py-8 text-center text-gray-400 text-sm">No programs yet.</li>
-                        ) : recentPrograms.map((p) => (
-                            <li key={p.id} className="px-6 py-3 flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <p className="font-semibold text-gray-900 text-sm truncate">{p.title}</p>
-                                    <p className="text-xs text-gray-400 truncate">{p.slug}</p>
-                                </div>
-                                <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[11px] font-bold border ${programStatusClass(p.status)}`}>{p.status}</span>
-                            </li>
-                        ))}
-                    </ul>
-                    <Link href="/admin/programs" className="m-4 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
-                        Open program catalog <ArrowUpRight size={15} />
-                    </Link>
-                </div>
-            </div>
+                </>
+            )}
         </div>
+    );
+}
+
+function MonthChip({ on, onClick, label, count }) {
+    return (
+        <button type="button" onClick={onClick}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors ${on ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+            {label}
+            <span className={`text-[10px] rounded-full px-1.5 py-0.5 tabular-nums ${on ? "bg-white/20" : "bg-white text-gray-500"}`}>{count}</span>
+        </button>
     );
 }
