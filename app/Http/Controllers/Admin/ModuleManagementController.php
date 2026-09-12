@@ -17,6 +17,20 @@ use Illuminate\Validation\Rule;
  */
 class ModuleManagementController extends Controller
 {
+    /**
+     * Department portals a staff user can be granted access to beyond their own
+     * role. Keys are portal keys (a subset of User::PORTAL_ROLES). A user always
+     * keeps their own role's portal; these are the EXTRA ones.
+     */
+    private const GRANTABLE_PORTALS = [
+        'sales' => 'Sales',
+        'education' => 'Education',
+        'english' => 'English',
+        'immigration' => 'Immigration',
+        'accommodation' => 'Accommodation',
+        'finance' => 'Finance',
+    ];
+
     public function index(Request $request)
     {
         $restricted = config('modules.restricted', []);
@@ -44,7 +58,7 @@ class ModuleManagementController extends Controller
         $users = User::query()
             ->whereNotIn('role', [User::ROLE_LEAD, User::ROLE_REVOKED_LEAD])
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'role', 'module_permissions'])
+            ->get(['id', 'name', 'email', 'role', 'module_permissions', 'portal_access'])
             ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -52,16 +66,58 @@ class ModuleManagementController extends Controller
                 'role' => $u->role,
                 // Super admins implicitly hold every module + feature.
                 'is_super_admin' => $u->isSuperAdmin(),
+                // Admins already reach every portal — nothing extra to grant.
+                'is_admin' => $u->isAdmin(),
                 'modules' => $u->isSuperAdmin()
                     ? $validKeys
                     : array_values(array_intersect((array) ($u->module_permissions ?? []), $validKeys)),
+                // Extra portals granted beyond the user's role (never includes
+                // their own role's portal — that's implicit).
+                'portals' => array_values(array_intersect(
+                    (array) ($u->portal_access ?? []),
+                    array_keys(self::GRANTABLE_PORTALS)
+                )),
             ])
             ->values();
+
+        $portals = collect(self::GRANTABLE_PORTALS)
+            ->map(fn ($label, $key) => ['key' => $key, 'label' => $label])
+            ->values()
+            ->all();
 
         return inertia('admin/ModuleManagement', [
             'modules' => $modules,
             'users' => $users,
+            'portals' => $portals,
         ]);
+    }
+
+    /**
+     * Grant a staff user access to extra department portals (beyond their own
+     * role). A user's own role portal is always available and is never stored
+     * here. Admins already reach everything, so this is a no-op for them.
+     */
+    public function updatePortals(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'portals' => ['array'],
+            'portals.*' => [Rule::in(array_keys(self::GRANTABLE_PORTALS))],
+        ]);
+
+        if ($user->isAdmin()) {
+            return back()->with('error', 'Admins already have access to every portal.');
+        }
+
+        // Keep valid, de-duped keys; drop the user's own role portal (implicit).
+        $granted = array_values(array_unique(array_intersect(
+            $data['portals'] ?? [],
+            array_keys(self::GRANTABLE_PORTALS)
+        )));
+        $granted = array_values(array_filter($granted, fn ($p) => $p !== $user->role));
+
+        $user->update(['portal_access' => $granted]);
+
+        return back()->with('success', "Portal access updated for {$user->name}.");
     }
 
     public function update(Request $request, User $user)

@@ -521,6 +521,9 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.module-management');
         Route::post('/admin/module-management/{user}', [\App\Http\Controllers\Admin\ModuleManagementController::class, 'update'])
             ->name('admin.module-management.update');
+        // Grant a user access to extra department portals (beyond their role).
+        Route::post('/admin/module-management/{user}/portals', [\App\Http\Controllers\Admin\ModuleManagementController::class, 'updatePortals'])
+            ->name('admin.module-management.portals');
     });
 
     // Agents module — restricted (default super-admin-only, grantable per user
