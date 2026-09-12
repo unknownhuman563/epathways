@@ -195,9 +195,9 @@ function PipelineChart({ pipeline = [], selected, onSelect }) {
                     >
                         <div className="flex items-center gap-3">
                             {/* Label column */}
-                            <div className="w-40 sm:w-52 shrink-0 flex items-center gap-2">
+                            <div className="w-44 sm:w-64 shrink-0 flex items-center gap-2">
                                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isSel ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-700"}`}>{p.num}</span>
-                                <span className={`text-[12px] font-semibold truncate ${isSel ? "text-blue-800" : "text-gray-800"}`}>{p.stage}</span>
+                                <span className={`text-[12px] font-semibold leading-tight ${isSel ? "text-blue-800" : "text-gray-800"}`}>{p.stage}</span>
                             </div>
                             {/* Bar column */}
                             <div className="flex-1 flex items-center gap-2 min-w-0">
