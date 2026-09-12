@@ -552,7 +552,10 @@ class EducationController extends Controller
      */
     public function updateStudentField(\Illuminate\Http\Request $request, int $id)
     {
-        $lead = Lead::where('is_student', true)->findOrFail($id);
+        // Match the Students page universe, not just is_student — English
+        // learners and student-visa Immigration cases show on the list too and
+        // must be editable (they aren't flagged is_student).
+        $lead = Lead::inStudentsRegister()->findOrFail($id);
 
         $data = $request->validate([
             'payment' => 'nullable|string|max:191',
@@ -747,7 +750,10 @@ class EducationController extends Controller
      */
     public function updateStudent(\Illuminate\Http\Request $request, int $id)
     {
-        $lead = Lead::where('is_student', true)->findOrFail($id);
+        // Match the Students page universe, not just is_student — English
+        // learners and student-visa Immigration cases show on the list too and
+        // must be editable (they aren't flagged is_student).
+        $lead = Lead::inStudentsRegister()->findOrFail($id);
         $data = $this->validateStudentPayload($request, $lead->id);
 
         try {
@@ -843,7 +849,10 @@ class EducationController extends Controller
      */
     public function destroyStudent(int $id)
     {
-        $lead = Lead::where('is_student', true)->findOrFail($id);
+        // Match the Students page universe, not just is_student — English
+        // learners and student-visa Immigration cases show on the list too and
+        // must be editable (they aren't flagged is_student).
+        $lead = Lead::inStudentsRegister()->findOrFail($id);
         try {
             $lead->delete();
 

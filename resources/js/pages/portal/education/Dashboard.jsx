@@ -15,6 +15,63 @@ const PROGRAM_STATUS = {
     archived: "bg-red-100 text-red-700 border-red-200",
 };
 const statusClass = (s) => STATUS_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
+
+// Intake status chips reuse the exact palettes from the Students page — sales
+// statuses + Education / English / Immigration department stages — so the
+// dashboard reads the same as the Students list.
+const INTAKE_STATUS_STYLES = {
+    // Sales pipeline statuses
+    "New Leads": "bg-rose-100 text-rose-800 border-rose-200",
+    "Contact Attempted": "bg-orange-100 text-orange-800 border-orange-200",
+    "Contacted for Booking": "bg-yellow-100 text-yellow-800 border-yellow-200",
+    "Booking Confirmation": "bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Missed the Meeting": "bg-pink-100 text-pink-800 border-pink-200",
+    "Qualified but Not Ready": "bg-slate-100 text-slate-700 border-slate-200",
+    "Qualified but No Funds": "bg-slate-100 text-slate-700 border-slate-200",
+    Qualified: "bg-amber-100 text-amber-800 border-amber-200",
+    "Booked Consultation": "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "Did Not Book Consultation": "bg-stone-100 text-stone-700 border-stone-200",
+    "No Show": "bg-teal-100 text-teal-800 border-teal-200",
+    "Consultation Done": "bg-purple-100 text-purple-800 border-purple-200",
+    "Proposal Sent": "bg-sky-100 text-sky-800 border-sky-200",
+    "Program Selected": "bg-teal-100 text-teal-800 border-teal-200",
+    "Consultancy Agreement Sent": "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Consultancy Agreement Signed": "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "Consultancy Agreement": "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "English Pro": "bg-emerald-50 text-emerald-700 border-emerald-200",
+    "Visa Process": "bg-lime-100 text-lime-800 border-lime-200",
+    "Not Qualified": "bg-red-100 text-red-700 border-red-200",
+    "Work Pathway / Other": "bg-blue-100 text-blue-800 border-blue-200",
+    // English department sub-stages
+    "PTE Review": "bg-purple-100 text-purple-800 border-purple-200",
+    "DIY Review": "bg-violet-100 text-violet-800 border-violet-200",
+    "For PTE Mocktest": "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+    "For PTE Exam": "bg-pink-100 text-pink-800 border-pink-200",
+    // Immigration department sub-stages
+    "For Assessment": "bg-amber-100 text-amber-800 border-amber-200",
+    Endorsed: "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Request for Information": "bg-orange-100 text-orange-800 border-orange-200",
+    "Approved in Principle": "bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Decline Visa": "bg-red-100 text-red-700 border-red-200",
+    // Education department stages (current 15-stage set + legacy labels)
+    "New Lead": "bg-rose-100 text-rose-800 border-rose-200",
+    "Pre-Screening Done": "bg-cyan-100 text-cyan-800 border-cyan-200",
+    "For Proposal": "bg-amber-100 text-amber-800 border-amber-200",
+    "Engagement Sent": "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Goal Setting Done": "bg-purple-100 text-purple-800 border-purple-200",
+    "Endorsed to School": "bg-sky-100 text-sky-800 border-sky-200",
+    "School Enrolment": "bg-sky-100 text-sky-800 border-sky-200",
+    "School Enrollment": "bg-green-100 text-green-800 border-green-200",
+    "Conditional Offer": "bg-amber-100 text-amber-800 border-amber-200",
+    "Unconditional Offer": "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "Endorsed to Immigration": "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Visa Lodged": "bg-violet-100 text-violet-800 border-violet-200",
+    "Approved Visa": "bg-green-100 text-green-800 border-green-200",
+    "Started Course": "bg-teal-100 text-teal-800 border-teal-200",
+    "For Relodgement": "bg-orange-100 text-orange-800 border-orange-200",
+    "Declined Visa": "bg-red-100 text-red-700 border-red-200",
+};
+const intakeStatusClass = (s) => INTAKE_STATUS_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
 const programStatusClass = (s) => PROGRAM_STATUS[s] || "bg-gray-100 text-gray-700 border-gray-200";
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
@@ -104,7 +161,7 @@ function IntakeMonitoring({ groups = [] }) {
                                             <tr key={r.id} className="hover:bg-gray-50/40">
                                                 <td className="px-6 py-3 font-semibold text-gray-900 text-sm">{r.name}</td>
                                                 <td className="px-6 py-3">
-                                                    {r.status ? <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${statusClass(r.status)}`}>{r.status}</span> : <span className="text-gray-300">—</span>}
+                                                    {r.status ? <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${intakeStatusClass(r.status)}`}>{r.status}</span> : <span className="text-gray-300">—</span>}
                                                 </td>
                                                 <td className="px-6 py-3 text-sm text-gray-600">{r.location || "—"}</td>
                                                 <td className="px-6 py-3 text-sm text-gray-600 whitespace-nowrap">{r.intake || "—"}</td>

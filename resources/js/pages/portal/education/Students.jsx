@@ -518,25 +518,40 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     };
 
     const tabConfig = TAB_STAGE_CONFIG[view];
+    const searching = search.trim().length > 0;
+
+    // When a search is active the three tabs act as one — resolve each result
+    // to its own primary department (Immigration > English > Education) so its
+    // status chip stays correct even though it surfaced from another tab.
+    const primaryDeptOf = (s) => {
+        const set = departmentsOf(s);
+        if (set.has("immigration")) return "immigration";
+        if (set.has("english")) return "english";
+        return "education";
+    };
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         const rows = students.filter((s) => {
-            // Department tab — membership, not single-owner. A student the
-            // Immigration team also handles stays under Education (and shows
-            // under Immigration too) rather than dropping off this tab.
+            if (q) {
+                // A search spans ALL three department tabs — a name that lives
+                // under English or Immigration still surfaces here.
+                // Intake is matched both raw ("2026-05-11") and formatted
+                // ("11 May 2026") so either spelling finds it; school covers the
+                // FK name too.
+                const hay = `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.school_name || ""} ${s.intake || ""} ${fmtIntake(s.intake)} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase();
+                return hay.includes(q);
+            }
+            // No search — scope to the active department tab. Membership, not
+            // single-owner: a student the Immigration team also handles stays
+            // under Education (and shows under Immigration too).
             if (! departmentsOf(s).has(view)) return false;
             // Stage pill — matches against the tab's own stage column.
             if (stageFilter !== "All") {
                 const stage = s[tabConfig.field];
                 if (stage !== stageFilter) return false;
             }
-            if (!q) return true;
-            // Intake is matched both raw ("2026-05-11") and formatted
-            // ("11 May 2026") so either spelling finds it; school covers the
-            // FK name too.
-            const hay = `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.school_name || ""} ${s.intake || ""} ${fmtIntake(s.intake)} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase();
-            return hay.includes(q);
+            return true;
         });
 
         const dir = sortDir === "asc" ? 1 : -1;
@@ -548,6 +563,26 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
             return 0;
         });
     }, [students, search, stageFilter, view, sortKey, sortDir, tabConfig.field]);
+
+    // Auto-switch tabs on search: if the active tab holds no match but another
+    // department does, jump to the first department that does — so searching a
+    // name that lives under English/Immigration surfaces it (and highlights the
+    // right tab) without switching by hand.
+    useEffect(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return;
+        const matches = (s) => `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.school_name || ""} ${s.intake || ""} ${fmtIntake(s.intake)} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase().includes(q);
+        if (students.some((s) => departmentsOf(s).has(view) && matches(s))) return;
+        for (const d of ["education", "english", "immigration"]) {
+            if (students.some((s) => departmentsOf(s).has(d) && matches(s))) {
+                setView(d);
+                setStageFilter("All");
+                setPage(1);
+                return;
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, students]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const safePage = Math.min(page, totalPages);
@@ -812,6 +847,11 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                         ) : s.lead_id ? (
                                                             <div className="text-[10px] text-gray-400 font-mono truncate">{s.lead_id}</div>
                                                         ) : null}
+                                                        {(s.agent_name || s.referral) && (
+                                                            <div className="flex items-center gap-1 text-[10px] text-indigo-500 truncate" title="Referring agent">
+                                                                <Users size={10} className="text-indigo-300 flex-shrink-0" /> {s.agent_name || s.referral}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </Link>
                                                 </div>
@@ -825,18 +865,26 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 chip surfaces the staff member who created
                                                 or endorsed this record. */}
                                             <td className="px-3 py-2.5 relative">
-                                                <StagePicker
-                                                    leadId={s.id}
-                                                    field={tabConfig.field}
-                                                    stages={tabConfig.stages}
-                                                    styler={tabConfig.styler}
-                                                    heading={tabConfig.label}
-                                                    value={s[tabConfig.field] || ""}
-                                                    fallbackLabel={view === "education" ? s.status : null}
-                                                    open={openStageMenuId === s.id}
-                                                    onToggle={() => setOpenStageMenuId(openStageMenuId === s.id ? null : s.id)}
-                                                    onClose={() => setOpenStageMenuId(null)}
-                                                />
+                                                {(() => {
+                                                    // While searching, show each result under its own
+                                                    // department's stage set (so a match from another tab
+                                                    // keeps a meaningful status chip).
+                                                    const rc = searching ? TAB_STAGE_CONFIG[primaryDeptOf(s)] : tabConfig;
+                                                    return (
+                                                        <StagePicker
+                                                            leadId={s.id}
+                                                            field={rc.field}
+                                                            stages={rc.stages}
+                                                            styler={rc.styler}
+                                                            heading={rc.label}
+                                                            value={s[rc.field] || ""}
+                                                            fallbackLabel={rc.field === "education_stage" ? s.status : null}
+                                                            open={openStageMenuId === s.id}
+                                                            onToggle={() => setOpenStageMenuId(openStageMenuId === s.id ? null : s.id)}
+                                                            onClose={() => setOpenStageMenuId(null)}
+                                                        />
+                                                    );
+                                                })()}
                                             </td>
 
                                             {/* Programme & School — program name with its school underneath, paired per line */}
