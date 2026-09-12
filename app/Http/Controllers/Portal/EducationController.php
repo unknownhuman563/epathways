@@ -19,6 +19,20 @@ class EducationController extends Controller
 
     private const LEAD_STATUSES = Lead::STAGES;
 
+    /**
+     * Sales stages hidden from the education Leads picker and the report — these
+     * are department-conversion statuses (English / School / Visa), not stages a
+     * lead is manually moved through. They stay in Lead::STAGES so existing leads
+     * that already hold them still validate; they are just not offered or charted.
+     */
+    private const HIDDEN_LEAD_STAGES = ['English Pro', 'School Enrollment', 'Visa Process'];
+
+    /** The selectable lead stages — Lead::STAGES minus the hidden conversion ones. */
+    private function leadStageOptions(): array
+    {
+        return array_values(array_filter(Lead::STAGES, fn ($s) => ! in_array($s, self::HIDDEN_LEAD_STAGES, true)));
+    }
+
     /** Education overview: programs, students (study-plan leads), recent intakes. */
     public function dashboard()
     {
@@ -105,7 +119,7 @@ class EducationController extends Controller
 
             return inertia('portal/education/Leads', [
                 'portal' => 'education',
-                'statuses' => self::LEAD_STATUSES,
+                'statuses' => $this->leadStageOptions(),
                 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
                 'staffOptions' => $this->dashboardStaff(),
                 'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
@@ -122,7 +136,7 @@ class EducationController extends Controller
 
             return inertia('portal/education/Leads', [
                 'portal' => 'education',
-                'statuses' => self::LEAD_STATUSES,
+                'statuses' => $this->leadStageOptions(),
                 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
                 'staffOptions' => $this->dashboardStaff(),
                 'leads' => collect(),
@@ -1040,14 +1054,19 @@ class EducationController extends Controller
                 ->whereNull('english_stage')
                 ->whereNull('immigration_stage')
                 ->where(fn ($q) => $q->where('stage', '!=', 'English Pro')->orWhereNull('stage'))
-                ->get(['id', 'first_name', 'last_name', 'status', 'stage_updated_at', 'referral', 'student_school']);
+                ->get(['id', 'first_name', 'last_name', 'status', 'stage_updated_at', 'referral', 'student_school'])
+                // Drop the department-conversion statuses — they aren't part of
+                // the sales funnel and aren't offered in the Leads picker.
+                ->reject(fn ($l) => in_array($l->status, self::HIDDEN_LEAD_STAGES, true))
+                ->values();
 
             // Canonical sales order first, then any other status value present in
             // the data (legacy labels like "Submitted"), so nothing is dropped.
+            $canonicalStages = $this->leadStageOptions();
             $extraStatuses = $leads->pluck('status')->filter()
-                ->reject(fn ($s) => in_array($s, Lead::STAGES, true))
+                ->reject(fn ($s) => in_array($s, $canonicalStages, true))
                 ->unique()->values()->all();
-            $pipeStages = array_merge(Lead::STAGES, $extraStatuses);
+            $pipeStages = array_merge($canonicalStages, $extraStatuses);
 
             $byStage = [];
             foreach ($pipeStages as $s) {

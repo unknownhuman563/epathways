@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Head, router } from "@inertiajs/react";
 import { BookOpen, CheckCircle2, FileText, PencilLine, Save, X, RefreshCw, GraduationCap, Users, UserPlus, ClipboardList } from "lucide-react";
 
@@ -32,6 +32,23 @@ export default function EducationReports({ range = {}, pipeline = [], summary = 
     // A value is either a stage name (pipeline card) or a "__key" (summary card).
     const [selectedStage, setSelectedStage] = useState(null);
     const go = (preset, extra = {}) => router.get("/portal/education/reports", { preset, ...extra }, { preserveScroll: true, preserveState: true });
+
+    // Cap the reveal panel to the graph's height (desktop only) so the two
+    // columns stay uniform — the client list then scrolls inside the panel
+    // instead of stretching the row taller than the graph.
+    const graphRef = useRef(null);
+    const [graphH, setGraphH] = useState(null);
+    useEffect(() => {
+        const el = graphRef.current;
+        if (!el) return;
+        const mq = window.matchMedia("(min-width: 1024px)");
+        const update = () => setGraphH(mq.matches ? el.offsetHeight : null);
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        window.addEventListener("resize", update);
+        return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+    }, [pipeline, selectedStage]);
 
     // Resolve the open card to a { title, rows } list.
     const openList = useMemo(() => {
@@ -104,67 +121,36 @@ export default function EducationReports({ range = {}, pipeline = [], summary = 
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400">{error}</div>
             ) : (
                 <>
-                    {/* Summary cards — clickable to reveal their list */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <Stat icon={UserPlus} value={summary.new_students} label="New students" sub="Enrolled this period" dark selected={selectedStage === "__new_students"} onClick={() => setSelectedStage(selectedStage === "__new_students" ? null : "__new_students")} />
-                        <Stat icon={GraduationCap} value={summary.total_students} label="Total students" sub="All enrolled" selected={selectedStage === "__total_students"} onClick={() => setSelectedStage(selectedStage === "__total_students" ? null : "__total_students")} />
-                        <Stat icon={Users} value={summary.new_leads} label="New leads" sub="Added this period" selected={selectedStage === "__new_leads"} onClick={() => setSelectedStage(selectedStage === "__new_leads" ? null : "__new_leads")} />
-                        <Stat icon={ClipboardList} value={summary.register} label="In the pipeline" sub="Active leads" selected={selectedStage === "__register"} onClick={() => setSelectedStage(selectedStage === "__register" ? null : "__register")} />
-                    </div>
-
-                    {/* Section 01 — Pipeline overview (15 numbered stages) */}
-                    <Section n="01" title="Pipeline position">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                            {pipeline.map((p) => {
-                                const active = p.moved > 0 && !p.outside;
-                                const selected = selectedStage === p.stage;
-                                return (
-                                    <button
-                                        key={p.stage}
-                                        type="button"
-                                        onClick={() => setSelectedStage(selected ? null : p.stage)}
-                                        title="Click to see this stage's clients"
-                                        className={`text-left rounded-2xl border shadow-sm p-4 transition-all ${selected ? "ring-2 ring-blue-500 ring-offset-1" : ""} ${active ? "bg-blue-700 border-blue-700 text-white" : "bg-white border-gray-100 hover:border-blue-300 hover:shadow-md"}`}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${active ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"}`}>{p.num}</span>
-                                            <span className={`text-3xl font-black tabular-nums leading-none ${active ? "text-white" : "text-gray-900"}`}>{p.count}</span>
-                                        </div>
-                                        <p className={`text-[12.5px] font-bold mt-2 ${active ? "text-white" : "text-gray-900"}`}>{p.stage}</p>
-                                        <p className={`text-[10.5px] mt-1 ${p.outside ? "text-amber-500" : active ? "text-white/70" : "text-gray-400"}`}>
-                                            {p.outside ? "Outside process" : p.moved > 0 ? `+${p.moved} this period` : "No change"}
-                                        </p>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <p className="mt-2 text-[11px] text-gray-400">Click any stage card to see its client list below.</p>
-                    </Section>
-
-                    {/* Section 02 — Client register (revealed by clicking a stage) */}
-                    <Section n="02" title="Client register">
-                        {!openList ? (
-                            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
-                                <p className="text-sm font-semibold text-gray-500">Pick a card to see its clients</p>
-                                <p className="text-[12px] text-gray-400 mt-1">Click any summary or pipeline card above and its list of clients appears here.</p>
-                            </div>
-                        ) : (
-                            <>
-                                <StageCard stage={openList.title} rows={openList.rows} onClose={() => setSelectedStage(null)} />
-                                <p className="mt-3 flex items-center gap-1.5 text-[11px] text-gray-400"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" /> Moved during {range.label?.toLowerCase()}</p>
-                            </>
-                        )}
-                    </Section>
-
-                    {/* Section 03 — Education (the students register, broken down by
+                    {/* Section 01 — Education (the students register, broken down by
                         department: Education / English / Immigration, each under its
                         own real status set) */}
-                    <Section n="03" title="Education">
+                    <Section n="01" title="Education">
                         <DepartmentBreakdown departments={departments} />
                     </Section>
 
-                    {/* Section 04 — ePortal Programs */}
-                    <Section n="04" title="ePortal Programs">
+                    {/* Section 02 — Pipeline overview. Graph only by default; a
+                        client-list panel opens to the right when a bar is clicked. */}
+                    <Section n="02" title="Pipeline position">
+                        <div className="flex flex-col lg:flex-row gap-4 items-start">
+                            <div className="w-full min-w-0 lg:flex-1">
+                                <div ref={graphRef}>
+                                    <PipelineChart pipeline={pipeline} selected={selectedStage} onSelect={(s) => setSelectedStage(selectedStage === s ? null : s)} />
+                                </div>
+                                <p className="mt-2 text-[11px] text-gray-400">Click any bar to open that stage's client list on the right.</p>
+                            </div>
+                            {openList && (
+                                <div className="w-full lg:w-96 shrink-0">
+                                    <div className="flex flex-col" style={graphH ? { height: graphH } : undefined}>
+                                        <StageCard stage={openList.title} rows={openList.rows} singleCol fill onClose={() => setSelectedStage(null)} />
+                                    </div>
+                                    <p className="mt-3 flex items-center gap-1.5 text-[11px] text-gray-400"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" /> Moved during {range.label?.toLowerCase()}</p>
+                                </div>
+                            )}
+                        </div>
+                    </Section>
+
+                    {/* Section 03 — ePortal Programs */}
+                    <Section n="03" title="ePortal Programs">
                         <div className="grid grid-cols-3 gap-3">
                             <Stat icon={BookOpen} value={programs.total} label="Total programs" sub="In the catalogue" />
                             <Stat icon={CheckCircle2} value={programs.published} label="Published" sub="Live on the site" />
@@ -172,8 +158,8 @@ export default function EducationReports({ range = {}, pipeline = [], summary = 
                         </div>
                     </Section>
 
-                    {/* Section 05 — Conclusion */}
-                    <Section n="05" title="Conclusion">
+                    {/* Section 04 — Conclusion */}
+                    <Section n="04" title="Conclusion">
                         <ConclusionCard conclusion={conclusion} />
                     </Section>
 
@@ -182,6 +168,55 @@ export default function EducationReports({ range = {}, pipeline = [], summary = 
                     </p>
                 </>
             )}
+        </div>
+    );
+}
+
+// Section 01 pipeline as a horizontal bar graph. Each stage is a clickable
+// bar sized to its share of the largest stage; selecting one reveals its
+// client list below. Terminal ("outside process") stages are amber.
+function PipelineChart({ pipeline = [], selected, onSelect }) {
+    const max = Math.max(1, ...pipeline.map((p) => p.count));
+    if (pipeline.length === 0) {
+        return <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-400">No leads in the pipeline for this period.</div>;
+    }
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 space-y-1.5">
+            {pipeline.map((p) => {
+                const isSel = selected === p.stage;
+                const pct = Math.max(2, Math.round((p.count / max) * 100));
+                return (
+                    <button
+                        key={p.stage}
+                        type="button"
+                        onClick={() => onSelect(p.stage)}
+                        title="Click to see this stage's clients"
+                        className={`group w-full text-left rounded-lg px-2 py-1.5 transition-colors ${isSel ? "bg-blue-50" : "hover:bg-gray-50"}`}
+                    >
+                        <div className="flex items-center gap-3">
+                            {/* Label column */}
+                            <div className="w-40 sm:w-52 shrink-0 flex items-center gap-2">
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isSel ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-700"}`}>{p.num}</span>
+                                <span className={`text-[12px] font-semibold truncate ${isSel ? "text-blue-800" : "text-gray-800"}`}>{p.stage}</span>
+                            </div>
+                            {/* Bar column */}
+                            <div className="flex-1 flex items-center gap-2 min-w-0">
+                                <div className="flex-1 h-6 rounded-md bg-gray-100 overflow-hidden">
+                                    <div className="h-full rounded-md transition-all" style={{ width: `${pct}%`, backgroundColor: "#4f39f6" }} />
+                                </div>
+                                <span className={`w-12 text-right text-[15px] font-black tabular-nums ${isSel ? "text-blue-800" : "text-gray-900"}`}>{p.count}</span>
+                                {p.moved > 0 && !p.outside && (
+                                    <span className="hidden sm:inline text-[10px] font-bold text-blue-600 w-12 shrink-0">+{p.moved}</span>
+                                )}
+                                {p.outside && (
+                                    <span className="hidden sm:inline text-[10px] font-bold text-amber-500 w-12 shrink-0">Outside</span>
+                                )}
+                                {p.moved === 0 && !p.outside && <span className="hidden sm:inline w-12 shrink-0" />}
+                            </div>
+                        </div>
+                    </button>
+                );
+            })}
         </div>
     );
 }
@@ -214,6 +249,22 @@ function DepartmentBreakdown({ departments = {} }) {
     const open = openStage ? dept.stages.find((s) => s.stage === openStage) || null : null;
     const switchTo = (k) => { setActive(k); setOpenStage(null); };
 
+    // Cap the reveal panel to the cards' height so the two columns stay uniform
+    // (desktop only), the same as the pipeline graph.
+    const cardsRef = useRef(null);
+    const [cardsH, setCardsH] = useState(null);
+    useEffect(() => {
+        const el = cardsRef.current;
+        if (!el) return;
+        const mq = window.matchMedia("(min-width: 1024px)");
+        const update = () => setCardsH(mq.matches ? el.offsetHeight : null);
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        window.addEventListener("resize", update);
+        return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+    }, [active, openStage, dept.stages.length]);
+
     if (keys.length === 0) {
         return <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-400">No department data.</div>;
     }
@@ -236,43 +287,49 @@ function DepartmentBreakdown({ departments = {} }) {
                 <span className="ml-auto pr-2 text-[12px] text-gray-400">{dept.moved} moved in period</span>
             </div>
 
-            {/* Status cards for the active department — only statuses that
-                actually hold clients are shown */}
-            {dept.stages.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-400">No {meta.label.toLowerCase()} clients in this period.</div>
-            ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {dept.stages.map((s) => {
-                    const selected = openStage === s.stage;
-                    return (
-                        <button key={s.stage} type="button" onClick={() => setOpenStage(selected ? null : s.stage)}
-                            title="Click to see clients at this status"
-                            className={`text-left rounded-2xl border shadow-sm p-4 bg-white transition-all ${selected ? `ring-2 ${meta.ring} ring-offset-1 border-transparent` : "border-gray-100 hover:border-gray-300 hover:shadow-md"}`}>
-                            <div className="flex items-center justify-between">
-                                <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${meta.chip}`}>{s.moved > 0 ? `+${s.moved}` : "—"}</span>
-                                <span className="text-3xl font-black tabular-nums leading-none text-gray-900">{s.count}</span>
-                            </div>
-                            <p className="text-[12.5px] font-bold mt-2 text-gray-900">{s.stage}</p>
-                        </button>
-                    );
-                })}
+            {/* Status cards on the left; the client list opens as a panel on the
+                right when a card is clicked (matching the pipeline position). */}
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
+                <div className="w-full min-w-0 lg:flex-1" ref={cardsRef}>
+                    {dept.stages.length === 0 ? (
+                        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-400">No {meta.label.toLowerCase()} clients in this period.</div>
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {dept.stages.map((s) => {
+                                const selected = openStage === s.stage;
+                                return (
+                                    <button key={s.stage} type="button" onClick={() => setOpenStage(selected ? null : s.stage)}
+                                        title="Click to see clients at this status"
+                                        className={`text-left rounded-2xl border shadow-sm p-4 bg-white transition-all ${selected ? `ring-2 ${meta.ring} ring-offset-1 border-transparent` : "border-gray-100 hover:border-gray-300 hover:shadow-md"}`}>
+                                        <div className="flex items-center justify-between">
+                                            <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${meta.chip}`}>{s.moved > 0 ? `+${s.moved}` : "—"}</span>
+                                            <span className="text-3xl font-black tabular-nums leading-none text-gray-900">{s.count}</span>
+                                        </div>
+                                        <p className="text-[12.5px] font-bold mt-2 text-gray-900">{s.stage}</p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                    <p className="mt-2 text-[11px] text-gray-400">Click any status card to open its client list on the right.</p>
+                </div>
+                {open && (
+                    <div className="w-full lg:w-96 shrink-0">
+                        <div className="flex flex-col" style={cardsH ? { height: cardsH } : undefined}>
+                            <StageCard stage={`${meta.label} · ${open.stage}`} rows={open.clients} headClass={meta.head} singleCol fill onClose={() => setOpenStage(null)} />
+                        </div>
+                    </div>
+                )}
             </div>
-            )}
-
-            {open ? (
-                <StageCard stage={`${meta.label} · ${open.stage}`} rows={open.clients} headClass={meta.head} onClose={() => setOpenStage(null)} />
-            ) : (
-                <p className="text-[11px] text-gray-400">Click any status card to see its clients below.</p>
-            )}
         </div>
     );
 }
 
-function StageCard({ stage, rows = [], onClose, headClass = "bg-blue-700" }) {
+function StageCard({ stage, rows = [], onClose, headClass = "bg-blue-700", singleCol = false, fill = false }) {
     const list = Array.isArray(rows) ? rows : [];
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className={`px-4 py-3 ${headClass} text-white flex items-center justify-between`}>
+        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${fill ? "flex-1 min-h-0 flex flex-col" : ""}`}>
+            <div className={`px-4 py-3 ${headClass} text-white flex items-center justify-between shrink-0`}>
                 <div className="flex items-center gap-2">
                     <h4 className="text-[14px] font-bold">{stage}</h4>
                     <span className="text-[11px] font-bold bg-white/20 rounded-full px-2 py-0.5 tabular-nums">{list.length}</span>
@@ -284,7 +341,7 @@ function StageCard({ stage, rows = [], onClose, headClass = "bg-blue-700" }) {
             {list.length === 0 ? (
                 <p className="px-4 py-8 text-center text-[12.5px] text-gray-300">No clients on this stage.</p>
             ) : (
-                <ul className="divide-y divide-gray-50 max-h-[460px] overflow-y-auto sm:columns-2 sm:divide-y-0">
+                <ul className={`divide-y divide-gray-50 overflow-y-auto ${fill ? "flex-1 min-h-0" : singleCol ? "max-h-[70vh]" : "max-h-[460px] sm:columns-2 sm:divide-y-0"}`}>
                     {list.map((r) => (
                         <li key={r.id} className="px-4 py-2 flex items-center gap-2 border-b border-gray-50 break-inside-avoid">
                             {r.moved && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
