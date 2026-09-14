@@ -2296,13 +2296,13 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                     {/* Email opt-in — sits on the left of the footer.
                         Disabled when the chosen lead has no email since
                         the notify endpoint would fail. */}
-                    {isConsultancyType ? (
-                        // Consultancy agreements go through verification first — the
-                        // client is emailed only once a reviewer approves it, so
-                        // there's no "email now" opt-in here.
+                    {(isConsultancyType || isEnglishType) ? (
+                        // Consultancy AND English agreements go through verification
+                        // first — the client is emailed only once a reviewer approves
+                        // it, so there's no "email now" opt-in here.
                         <span className="flex items-center gap-2 text-xs text-gray-500">
                             <ShieldCheck size={13} className="text-emerald-600" />
-                            Submits for consultancy verification — the client is emailed once it's approved.
+                            Submits for verification — the client is emailed once it's approved.
                         </span>
                     ) : (
                         <label className={`flex items-center gap-2 text-xs ${canNotify ? 'text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}>
@@ -2351,7 +2351,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                         >
                             {submitting ? <Loader size={14} className="animate-spin" /> : <Plus size={14} />}
-                            {(isProposalType || isConsultancyType) ? 'Submit for verification' : 'Generate'}
+                            {(isProposalType || isConsultancyType || isEnglishType) ? 'Submit for verification' : 'Generate'}
                         </button>
                     </div>
                 </div>

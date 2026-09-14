@@ -34,7 +34,7 @@ class ConsultancyVerificationController extends Controller
             })
             ->orderByDesc('updated_at')
             ->limit(300)
-            ->with(['documents' => fn ($q) => $q->where('checklist_key', 'agree.consultancy')
+            ->with(['documents' => fn ($q) => $q->whereIn('checklist_key', ['agree.consultancy', 'agree.engagement_english'])
                 ->where('source', 'generated')->latest()])
             ->get();
 

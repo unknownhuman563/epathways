@@ -27,26 +27,27 @@ class AgreementGenerator
      * English Engagement Agreement — PTE preparation services. No variant
      * (just one template). Stored against checklist_key='agree.engagement_english'.
      */
-    public function englishEngagement(Lead $lead, string $currency = 'php', array $overrides = []): LeadDocument
+    /**
+     * Shared payload for the English Engagement (Philippines) agreement — used
+     * by both the PDF generator and the live verification preview so they stay
+     * pixel-identical.
+     */
+    public function buildEnglishEngagementPayload(Lead $lead, string $currency = 'php', array $overrides = []): array
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '');
         $today = now();
-        $dateLine = $today->format('jS').' day of '.$today->format('F Y');
-
-        // Company signatory — pre-sign with the current staff member.
         $signer = Auth::user();
-
         $currency = $currency === 'nzd' ? 'nzd' : 'php';
 
-        $payload = [
+        return [
             'client_name' => $clientName,
             'client_reference' => $clientReference ?: 'ClientName',
             'signer_name' => $signer?->name ?: 'Neil Bryan Escaner',
             'signer_mobile' => $signer?->phone ?: '+63945 107 6871',
             'signer_signature' => method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null,
             'generated_at' => $today,
-            'generated_at_formatted' => $dateLine,
+            'generated_at_formatted' => $today->format('jS').' day of '.$today->format('F Y'),
             'currency' => $currency,
             'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
             // Staff-editable prices: the English Review package (defaults 14,500)
@@ -54,6 +55,12 @@ class AgreementGenerator
             'english_fee' => (int) ($overrides['english_fee'] ?? 14500),
             'pte_fee' => (int) ($overrides['pte_fee'] ?? 240),
         ] + $this->englishBankVars($overrides);
+    }
+
+    public function englishEngagement(Lead $lead, string $currency = 'php', array $overrides = []): LeadDocument
+    {
+        $payload = $this->buildEnglishEngagementPayload($lead, $currency, $overrides);
+        $clientName = $payload['client_name'];
 
         $pdf = Pdf::loadView('agreements.engagement-english', $payload)->setPaper('a4');
         $binary = $pdf->output();
@@ -102,7 +109,8 @@ class AgreementGenerator
      * (NZD, single editable package fee). Same document bucket as the English
      * engagement, different template.
      */
-    public function englishOffshore(Lead $lead, string $currency = 'nzd', array $overrides = []): LeadDocument
+    /** Shared payload for the English Offshore (NZD) agreement — PDF + preview. */
+    public function buildEnglishOffshorePayload(Lead $lead, string $currency = 'nzd', array $overrides = []): array
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '');
@@ -110,7 +118,7 @@ class AgreementGenerator
         $signer = Auth::user();
         $currency = $currency === 'php' ? 'php' : 'nzd';
 
-        $payload = [
+        return [
             'client_name' => $clientName,
             'client_reference' => $clientReference ?: 'ClientName',
             'signer_name' => $signer?->name ?: 'Neil Bryan Escaner',
@@ -122,6 +130,12 @@ class AgreementGenerator
             'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
             'english_fee' => (int) ($overrides['english_fee'] ?? 550),
         ] + $this->englishBankVars($overrides);
+    }
+
+    public function englishOffshore(Lead $lead, string $currency = 'nzd', array $overrides = []): LeadDocument
+    {
+        $payload = $this->buildEnglishOffshorePayload($lead, $currency, $overrides);
+        $clientName = $payload['client_name'];
 
         $pdf = Pdf::loadView('agreements.engagement-english-offshore', $payload)->setPaper('a4');
         $binary = $pdf->output();

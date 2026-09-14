@@ -21,6 +21,10 @@ class ConsultancyReviewService
         'english_proficiency' => 'English Proficiency',
         'inz_voucher' => 'INZ Visa Application Fee (voucher)',
         'package' => 'Package Fee',
+        // English Proficiency (IELTS/PTE) agreements.
+        'english_review' => 'English Review',
+        'pte_exam' => 'PTE Examination Fee',
+        'english_package' => 'English Review & Exam (Package)',
     ];
 
     /** A short human label for the chosen agreement variant. */
@@ -34,6 +38,8 @@ class ConsultancyReviewService
             'consultancy_offshore' => 'Offshore',
             'consultancy_offshore_zero' => 'Offshore — Zero fees',
             'consultancy_onshore' => 'Onshore engagement (free)',
+            'english_engagement' => 'English — Offshore (Philippines)',
+            'english_offshore' => 'English — Offshore',
             default => 'Consultancy Agreement',
         };
     }
@@ -46,6 +52,9 @@ class ConsultancyReviewService
     {
         $school = static::posInt($overrides['school_enrolment_fee'] ?? null);
         $english = static::posInt($overrides['english_proficiency_fee'] ?? null);
+        // English (IELTS/PTE) agreements edit their own fee fields.
+        $englishFee = static::posInt($overrides['english_fee'] ?? null);
+        $pteFee = static::posInt($overrides['pte_fee'] ?? null);
 
         $item = fn (string $key, ?int $amount) => [
             'key' => $key,
@@ -68,6 +77,13 @@ class ConsultancyReviewService
             'consultancy_offshore_zero' => [$item('package', $school ?? 0)],
             // Onshore engagement is free — no fee items, just an overall review.
             'consultancy_onshore' => [],
+            // English — Offshore (Philippines): English Review + PTE exam fee.
+            'english_engagement' => [
+                $item('english_review', $englishFee ?? 14500),
+                $item('pte_exam', $pteFee ?? 240),
+            ],
+            // English — Offshore: single NZD package fee.
+            'english_offshore' => [$item('english_package', $englishFee ?? 550)],
             default => [],
         };
     }
@@ -137,6 +153,17 @@ class ConsultancyReviewService
         if (($v = $amt('package')) !== null) {
             $out['school_enrolment_fee'] = $v;
         }
+        // English agreements: map the reviewer's edited amounts back to the
+        // english_fee / pte_fee overrides the English generators read.
+        if (($v = $amt('english_review')) !== null) {
+            $out['english_fee'] = $v;
+        }
+        if (($v = $amt('english_package')) !== null) {
+            $out['english_fee'] = $v;
+        }
+        if (($v = $amt('pte_exam')) !== null) {
+            $out['pte_fee'] = $v;
+        }
 
         return $out;
     }
@@ -147,6 +174,12 @@ class ConsultancyReviewService
         if ($type === 'consultancy_onshore') {
             $payload = $g->buildOnshoreEngagementPayload($lead, $overrides);
             $view = 'agreements.onshore-engagement';
+        } elseif ($type === 'english_engagement') {
+            $payload = $g->buildEnglishEngagementPayload($lead, $overrides['currency'] ?? 'php', $overrides);
+            $view = 'agreements.engagement-english';
+        } elseif ($type === 'english_offshore') {
+            $payload = $g->buildEnglishOffshorePayload($lead, $overrides['currency'] ?? 'nzd', $overrides);
+            $view = 'agreements.engagement-english-offshore';
         } elseif ($type === 'consultancy_offshore' || $type === 'consultancy_offshore_zero') {
             $payload = $g->buildOffshorePayload($lead, $type === 'consultancy_offshore_zero' ? array_merge($overrides, ['zero_fees' => true]) : $overrides);
             $view = 'agreements.consultancy-offshore';
@@ -164,6 +197,10 @@ class ConsultancyReviewService
     {
         if ($type === 'consultancy_onshore') {
             $g->onshoreEngagement($lead, $overrides);
+        } elseif ($type === 'english_engagement') {
+            $g->englishEngagement($lead, $overrides['currency'] ?? 'php', $overrides);
+        } elseif ($type === 'english_offshore') {
+            $g->englishOffshore($lead, $overrides['currency'] ?? 'nzd', $overrides);
         } elseif ($type === 'consultancy_offshore_zero') {
             $g->consultancyOffshore($lead, array_merge($overrides, ['zero_fees' => true]));
         } elseif ($type === 'consultancy_offshore') {

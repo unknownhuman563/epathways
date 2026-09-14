@@ -685,12 +685,16 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)) {
-                // Consultancy agreements go through verification BEFORE any PDF
-                // exists: submitting only snapshots the scenario + fees + bank
-                // details onto the lead. The reviewer previews it live; the PDF
-                // is generated and attached only on approval, then posted to the
-                // client's tracking link.
+            $isEnglishAgreement = in_array($type, ['english_engagement', 'english_offshore'], true);
+
+            if ($consultancyScenario !== null
+                || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)
+                || $isEnglishAgreement) {
+                // Consultancy AND English agreements go through verification
+                // BEFORE any PDF exists: submitting only snapshots the scenario +
+                // fees + bank details onto the lead. The reviewer previews it
+                // live; the PDF is generated and attached only on approval, then
+                // posted to the client's tracking link.
                 \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
 
                 // Notify via the Education "Consultancy agreement submitted for
@@ -702,18 +706,12 @@ class LeadDocumentController extends Controller
                     'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
                 ]);
 
-                return back()->with('success', "Consultancy Agreement submitted for verification — {$lead->first_name} {$lead->last_name}.");
-            } elseif ($type === 'english_engagement') {
-                $generator->englishEngagement($lead, $overrides['currency'] ?? 'php', $overrides);
-                $friendly = 'English Engagement';
-            } elseif ($type === 'english_offshore') {
-                $generator->englishOffshore($lead, $overrides['currency'] ?? 'nzd', $overrides);
-                $friendly = 'English Engagement';
-            } else {
-                return back()->withErrors(['error' => "Unknown document type: {$type}"]);
+                $label = $isEnglishAgreement ? 'English agreement' : 'Consultancy Agreement';
+
+                return back()->with('success', "{$label} submitted for verification — {$lead->first_name} {$lead->last_name}.");
             }
 
-            return back()->with('success', "{$friendly} generated for {$lead->first_name} {$lead->last_name}.");
+            return back()->withErrors(['error' => "Unknown document type: {$type}"]);
         } catch (\Throwable $e) {
             Log::error('Unified document generation failed', [
                 'lead_id' => $leadId,
