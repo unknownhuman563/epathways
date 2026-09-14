@@ -715,6 +715,13 @@ class SalesController extends Controller
                         // scenario's default fee total.
                         'total_amount' => $this->agreementTotal($l, $d->checklist_key, $d->source_variant),
                         'currency_symbol' => $this->agreementCurrencySymbol($d->checklist_key, $d->source_variant),
+                        // True when this doc's agreement was approved in the
+                        // verification queue — the Agreements tab shows "Sent"
+                        // even for older leads whose pipeline status predates
+                        // the approve→sent stage bump.
+                        'review_approved' => (is_array($l->consultancy_review)
+                            && ($l->consultancy_review['status'] ?? null) === 'approved'
+                            && ($l->consultancy_review['scenario'] ?? null) === $this->variantToFeeType($d->checklist_key, $d->source_variant)),
                         'original_name' => $d->original_name,
                         'size' => $d->size,
                         'created_at' => optional($d->created_at)->toIso8601String(),

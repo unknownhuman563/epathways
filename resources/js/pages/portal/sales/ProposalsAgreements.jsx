@@ -888,7 +888,9 @@ function agreementBadge(doc, lead) {
             : { label: 'For verification', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
     }
     if (lead.status === 'Consultancy Agreement Signed') return { label: 'Signed', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-    if (lead.status === 'Consultancy Agreement Sent')   return { label: 'Sent',   cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+    // An approved agreement is live with the client → "Sent", even if the
+    // lead's pipeline status predates the approve→sent stage bump.
+    if (lead.status === 'Consultancy Agreement Sent' || doc.review_approved) return { label: 'Sent', cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
     return { label: 'Generated', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
 }
 

@@ -322,6 +322,14 @@ class ConsultancyVerificationController extends Controller
         $review['emailed'] = $sendEmail;
         unset($review['changes_requested']);
         $lead->consultancy_review = $review;
+
+        // Advance the lead's pipeline: an approved agreement is now live with
+        // the client (posted to their tracker, and emailed unless opted out),
+        // so the Agreements tab reads "Sent" rather than "Generated". Don't
+        // downgrade a lead that's already marked Signed.
+        if ($lead->status !== 'Consultancy Agreement Signed') {
+            $lead->status = 'Consultancy Agreement Sent';
+        }
         $lead->save();
 
         // Now generate the final PDF (with the reviewer's confirmed fees) and
