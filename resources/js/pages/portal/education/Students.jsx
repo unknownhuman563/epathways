@@ -8,7 +8,7 @@ import {
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
     ChevronDown, Check, TrendingUp, Globe,
-    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound, Flag,
+    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound, Flag, Briefcase,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import AddEditStudentModal from "./AddEditStudentModal";
@@ -837,8 +837,11 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                         </AvatarPhoto>
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">
-                                                            {s.name}
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">
+                                                                {s.name}
+                                                            </div>
+                                                            <StudentCaseBadge student={s} />
                                                         </div>
                                                         {s.location ? (
                                                             <div className="flex items-center gap-1 text-[10px] text-gray-500 truncate">
@@ -1699,6 +1702,31 @@ function SortableTh({ label, sortKey, current, dir, onSort }) {
                 <Icon size={10} strokeWidth={2.5} className={active ? "opacity-100" : "opacity-30"} />
             </button>
         </th>
+    );
+}
+
+// Small marker next to a student's name that tells staff, at a glance, whether
+// this person is also being handled as an immigration case. A study client on a
+// Student visa legitimately sits under BOTH departments — the amber "Student +
+// Case" pill flags that dual membership; a plain indigo "Case" marks a
+// student-visa case that hasn't been converted to a student record.
+function StudentCaseBadge({ student: s }) {
+    const isCase = !! (s.is_immigration_case || s.immigration_stage);
+    if (! isCase) return null;
+
+    const dual = isCase && !! s.is_student;
+    return (
+        <span
+            className={`inline-flex items-center gap-1 flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border ${
+                dual
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-indigo-50 text-indigo-700 border-indigo-200"
+            }`}
+            title={dual ? "Both a student and an immigration case" : "Immigration case (Student visa)"}
+        >
+            <Briefcase size={9} className="flex-shrink-0" />
+            {dual ? "Student + Case" : "Case"}
+        </span>
     );
 }
 

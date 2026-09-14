@@ -170,34 +170,23 @@ class Lead extends Model
      * The Students module universe — the exact set the Education "Students"
      * page lists across its Education / English / Immigration tabs. It is:
      *   - every converted student (is_student), plus
-     *   - every English learner (english_stage set, or stage = "English Pro"),
-     *     plus
-     *   - immigration cases, but ONLY those holding a fee-paying Student visa
-     *     (so a study client shows under both Students and Immigration; Work /
-     *     Visitor / Residence cases stay out).
-     * Kept here so the Students list and the education report count the same
-     * rows — they must never drift.
+     *   - every English learner (english_stage set, or stage = "English Pro").
+     *
+     * A student who is handed to immigration keeps is_student = true (see
+     * EducationController::updateStudentField), so they stay in this register
+     * and their immigration stage is tracked under the Immigration tab — that
+     * is the "student who is also a case" the module is designed around.
+     *
+     * Pure immigration cases that were NEVER education students are deliberately
+     * excluded — they live on the Immigration Cases page, not here. Kept as a
+     * scope so the Students list and the education report count the same rows.
      */
     public function scopeInStudentsRegister($query)
     {
-        $studentVisaNames = VisaType::where('category', 'Student')->pluck('name')->all();
-
-        return $query->where(function ($q) use ($studentVisaNames) {
+        return $query->where(function ($q) {
             $q->where('is_student', true)
                 ->orWhere('stage', 'English Pro')
-                ->orWhereNotNull('english_stage')
-                ->orWhere(function ($qc) use ($studentVisaNames) {
-                    $qc->where(function ($qi) {
-                        $qi->where('is_immigration_case', true)
-                            ->orWhereNotNull('immigration_stage');
-                    })
-                        ->where(function ($qv) use ($studentVisaNames) {
-                            $qv->where('inz_visa_type', 'like', '%student%');
-                            if (! empty($studentVisaNames)) {
-                                $qv->orWhereIn('inz_visa_type', $studentVisaNames);
-                            }
-                        });
-                });
+                ->orWhereNotNull('english_stage');
         });
     }
 
