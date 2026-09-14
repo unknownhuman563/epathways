@@ -983,6 +983,9 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
 
     const canEdit = doc.checklist_key === 'agree.consultancy' || doc.checklist_key === 'agree.engagement_english';
     const canEmail = !! lead.email;
+    // English agreements can be pushed into the Consultancy Agreement
+    // Verification queue (older ones were generated straight to a PDF).
+    const isEnglishAgreement = doc.checklist_key === 'agree.engagement_english';
     // Consultancy agreements carry a Sent → Signed lifecycle staff can set by
     // hand (there's no e-sign for these generated docs). Reuses the same
     // stage endpoint the Leads list uses.
@@ -1006,6 +1009,11 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
     const handleEmail = () => {
         setOpen(false);
         onNotify(lead);
+    };
+
+    const handleSendForVerification = () => {
+        setOpen(false);
+        router.post(`/admin/leads/${lead.id}/documents/${doc.id}/to-verification`, {}, { preserveScroll: true });
     };
 
     return (
@@ -1058,6 +1066,18 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
                     >
                         <Mail size={13} className="text-gray-400" /> Email lead
                     </button>
+                    {isEnglishAgreement && (
+                        <>
+                            <div className="my-1 border-t border-gray-100" />
+                            <button
+                                type="button"
+                                onClick={handleSendForVerification}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-emerald-700 transition-colors"
+                            >
+                                <ShieldCheck size={13} className="text-gray-400" /> Send for verification
+                            </button>
+                        </>
+                    )}
                     {isConsultancy && (
                         <>
                             <div className="my-1 border-t border-gray-100" />

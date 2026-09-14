@@ -724,6 +724,49 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Move an already-generated English agreement into the Consultancy
+     * Agreement Verification queue — the ⋮ "Send for verification" row action.
+     *
+     * Older English agreements were generated straight to a PDF (before English
+     * joined the verification flow). This snapshots a fresh PENDING review for
+     * the lead so it appears in the queue; the reviewer confirms/edits the fees
+     * (they can't be recovered from the baked PDF, so they seed to the defaults)
+     * and it's the approval that regenerates the client-facing PDF.
+     */
+    public function sendEnglishToVerification(Request $request, $leadId, $documentId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $doc = LeadDocument::where('lead_id', $lead->id)->findOrFail($documentId);
+
+        abort_unless(
+            $doc->checklist_key === 'agree.engagement_english' && $doc->source === LeadDocument::SOURCE_GENERATED,
+            422,
+            'Only a generated English agreement can be sent for verification.'
+        );
+
+        // Already under review — don't clobber an in-flight review.
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        if (in_array($review['status'] ?? null, ['pending', 'verified'], true)) {
+            return back()->with('success', 'This agreement is already in the verification queue.');
+        }
+
+        // Infer the variant + currency from the stored document.
+        $type = $doc->source_variant === 'engagement-english-offshore' ? 'english_offshore' : 'english_engagement';
+        $overrides = ['currency' => $type === 'english_offshore' ? 'nzd' : 'php'];
+
+        \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
+
+        $fresh = is_array($lead->fresh()->consultancy_review) ? $lead->fresh()->consultancy_review : [];
+        $items = is_array($fresh['items'] ?? null) ? $fresh['items'] : [];
+        app(\App\Services\EmailAutomationService::class)->fire('education.consultancy.submitted', $lead->fresh(), [
+            'agreement_type' => \App\Services\ConsultancyReviewService::scenarioLabel($type),
+            'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+        ]);
+
+        return back()->with('success', "English agreement sent for verification — {$lead->first_name} {$lead->last_name}.");
+    }
+
+    /**
      * Generate one or more immigration engagement documents at once —
      * driven by the "New" flow on the Engagement workspace. Each selected
      * type is rendered to a PDF and stored against the case.

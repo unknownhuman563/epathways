@@ -1026,6 +1026,10 @@ Route::middleware(['auth'])->group(function () {
         //   proposal | consultancy_single | consultancy_partner | english_engagement
         Route::post('/admin/leads/{id}/generate/{type}', [LeadDocumentController::class, 'generateDocument'])
             ->name('admin.leads.generate');
+        // Move an already-generated English agreement into the Consultancy
+        // Agreement Verification queue (the ⋮ "Send for verification" action).
+        Route::post('/admin/leads/{id}/documents/{document}/to-verification', [LeadDocumentController::class, 'sendEnglishToVerification'])
+            ->name('admin.leads.document.to-verification');
         // Bulk generate immigration engagement documents (written agreement
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
