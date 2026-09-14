@@ -4297,8 +4297,9 @@ class ImmigrationController extends Controller
             'interim' => $named($inCase()->where('immigration_stage', 'Interim Visa Issued')->whereBetween('stage_updated_at', [$from, $to])),
             'declined' => $named($inCase()->where('immigration_stage', 'Decline Visa')->whereBetween('stage_updated_at', [$from, $to])),
             'with_inz_breakdown' => collect($withInzStages)
-                ->map(fn ($s) => ['stage' => $s, 'count' => $count($s)])
-                ->push(['stage' => 'Unassigned INZ status', 'count' => 0])
+                // Include the named cases per state so the report can reveal WHO
+                // is in each INZ queue (shown on hover).
+                ->map(fn ($s) => ['stage' => $s, 'count' => $count($s), 'cases' => $named($inCase()->where('immigration_stage', $s))])
                 ->filter(fn ($r) => $r['count'] > 0)
                 ->values(),
         ];
