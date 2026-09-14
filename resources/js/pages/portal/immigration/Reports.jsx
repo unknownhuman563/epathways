@@ -128,9 +128,9 @@ export default function ImmigrationReports({
             {/* ── 04 · Decision outcomes ─────────────────────────────────── */}
             <DeckHeader n="04" eyebrow="Updates and reporting" title="Decision outcomes" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <OutcomeCard icon={<Award size={18} />} value={(outcomes.approved || []).length} label="Visas approved" hint={outcomes.approved?.length ? outcomes.approved.map((o) => o.visa).filter(Boolean).slice(0, 2).join(", ") : "None in the period"} tone="emerald" />
-                <OutcomeCard icon={<Clock size={18} />} value={(outcomes.interim || []).length} label="Interim visa granted" hint={outcomes.interim?.[0]?.visa || "—"} tone="teal" />
-                <OutcomeCard icon={<Ban size={18} />} value={(outcomes.declined || []).length} label="Visa declined" hint={outcomes.declined?.[0]?.visa || "—"} tone="rose" />
+                <OutcomeCard icon={<Award size={18} />} value={(outcomes.approved || []).length} label="Visas approved" items={outcomes.approved} hint={outcomes.approved?.length ? outcomes.approved.map((o) => o.visa).filter(Boolean).slice(0, 2).join(", ") : "None in the period"} tone="emerald" />
+                <OutcomeCard icon={<Clock size={18} />} value={(outcomes.interim || []).length} label="Interim visa granted" items={outcomes.interim} hint={outcomes.interim?.[0]?.visa || "—"} tone="teal" />
+                <OutcomeCard icon={<Ban size={18} />} value={(outcomes.declined || []).length} label="Visa declined" items={outcomes.declined} align="right" hint={outcomes.declined?.[0]?.visa || "—"} tone="rose" />
             </div>
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
                 <div className="flex items-center gap-2.5 mb-4">
@@ -143,12 +143,14 @@ export default function ImmigrationReports({
                 {(outcomes.with_inz_breakdown || []).length === 0 ? (
                     <p className="text-[12px] text-gray-400">Nothing with INZ right now.</p>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
-                        {outcomes.with_inz_breakdown.map((b) => (
-                            <div key={b.stage} className="flex items-center gap-3 py-1">
-                                <span className="text-lg font-bold text-teal-700 tabular-nums w-8 text-right">{b.count}</span>
-                                <span className="text-[13px] text-gray-700">{b.stage}</span>
-                            </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
+                        {outcomes.with_inz_breakdown.map((b, i) => (
+                            <HoverNames key={b.stage} items={b.cases} align={i % 2 === 1 ? "right" : "left"}>
+                                <div className="flex items-center gap-3 py-1.5 rounded-lg hover:bg-gray-50 px-1 -mx-1">
+                                    <span className="text-lg font-bold text-teal-700 tabular-nums w-8 text-right">{b.count}</span>
+                                    <span className="text-[13px] text-gray-700">{b.stage}</span>
+                                </div>
+                            </HoverNames>
                         ))}
                     </div>
                 )}
@@ -324,20 +326,64 @@ function NamedCard({ icon, title, count, meta, items = [], showDate = false, sho
     );
 }
 
-function OutcomeCard({ icon, value, label, hint, tone = "teal" }) {
+// A hover-reveal panel listing the named cases behind a figure — so staff can
+// see WHO the cases are without leaving the report. `align` flips it to the
+// right edge for cards near the right of the grid.
+function NamesPopover({ items = [], align = "left" }) {
+    return (
+        <div className={`absolute z-30 top-full mt-1.5 ${align === "right" ? "right-0" : "left-0"} w-72 max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl p-2`}>
+            <p className="px-2 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                {items.length} case{items.length === 1 ? "" : "s"}
+            </p>
+            <ul className="space-y-0.5">
+                {items.map((it) => (
+                    <li key={it.id} className="text-[12px] px-2 py-1 rounded hover:bg-gray-50 flex items-start gap-1.5">
+                        <span className="mt-1 w-1 h-1 rounded-full bg-gray-300 flex-shrink-0" />
+                        <span className="min-w-0">
+                            <span className="font-medium text-gray-800">{it.name}</span>
+                            {it.visa && <span className="text-gray-500"> — {it.visa}</span>}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+// Wraps any trigger so hovering it reveals the named cases behind it.
+function HoverNames({ items = [], align = "left", children, className = "" }) {
+    const [open, setOpen] = useState(false);
+    const has = items && items.length > 0;
+    return (
+        <div
+            className={`relative ${has ? "cursor-help" : ""} ${className}`}
+            onMouseEnter={() => has && setOpen(true)}
+            onMouseLeave={() => setOpen(false)}
+        >
+            {children}
+            {open && has && <NamesPopover items={items} align={align} />}
+        </div>
+    );
+}
+
+function OutcomeCard({ icon, value, label, hint, items = [], align = "left", tone = "teal" }) {
     const map = {
         emerald: { bg: "bg-emerald-50", text: "text-emerald-600", card: "bg-white border-gray-100" },
         teal:    { bg: "bg-teal-50", text: "text-teal-700", card: "bg-white border-gray-100" },
         rose:    { bg: "bg-rose-50", text: "text-rose-600", card: "bg-rose-50/40 border-rose-100" },
     }[tone];
     const zero = value === 0;
+    const has = items && items.length > 0;
     return (
-        <div className={`rounded-2xl border shadow-sm p-5 ${map.card}`}>
-            <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${zero ? "bg-gray-100 text-gray-400" : `${map.bg} ${map.text}`}`}>{icon}</span>
-            <p className={`text-3xl font-bold tabular-nums mt-3 ${zero ? "text-gray-400" : map.text}`}>{zero ? "None" : value}</p>
-            <p className="text-[13px] font-bold text-gray-800 mt-0.5">{label}</p>
-            {hint && <p className="text-[11px] text-gray-400 mt-0.5 truncate" title={hint}>{hint}</p>}
-        </div>
+        <HoverNames items={items} align={align}>
+            <div className={`rounded-2xl border shadow-sm p-5 transition-shadow ${map.card} ${has ? "hover:shadow-md" : ""}`}>
+                <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${zero ? "bg-gray-100 text-gray-400" : `${map.bg} ${map.text}`}`}>{icon}</span>
+                <p className={`text-3xl font-bold tabular-nums mt-3 ${zero ? "text-gray-400" : map.text}`}>{zero ? "None" : value}</p>
+                <p className="text-[13px] font-bold text-gray-800 mt-0.5">{label}</p>
+                {hint && <p className="text-[11px] text-gray-400 mt-0.5 truncate" title={hint}>{hint}</p>}
+                {has && <p className="text-[10px] text-gray-300 mt-1.5">Hover to see who</p>}
+            </div>
+        </HoverNames>
     );
 }
 
