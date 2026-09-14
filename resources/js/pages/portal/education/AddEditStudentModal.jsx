@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { router } from "@inertiajs/react";
-import { X, Save, AlertTriangle, GraduationCap, ChevronDown, Search } from "lucide-react";
+import { X, Save, AlertTriangle, GraduationCap, ChevronDown, Search, UserPlus, Users, Briefcase, Check } from "lucide-react";
 
 // Add / edit student modal — used from the Students page.
 // • Add mode: posts to /portal/education/students
@@ -122,6 +122,14 @@ export default function AddEditStudentModal({
     // Per-program school, keyed by program title (aligned to program_text).
     const [schoolByProgram, setSchoolByProgram] = useState({});
 
+    // "Add from existing person" mode — search a lead/case not yet a student
+    // and flag them as a student instead of creating a duplicate row.
+    const [mode, setMode] = useState("new");          // "new" | "existing"
+    const [linkedLead, setLinkedLead] = useState(null); // chosen existing lead
+    const [searchQ, setSearchQ] = useState("");
+    const [searchResults, setSearchResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+
     // Seed on open. We don't pull preferred_course / intake / english_test
     // from the student row because the listing serializer doesn't surface
     // those (they live on the study plan and aren't shown in the table).
@@ -140,6 +148,10 @@ export default function AddEditStudentModal({
             } catch { /* malformed JSON in storage — ignore */ }
             setForm({ ...blankForm(), ...(draft || {}) });
             setSchoolByProgram(buildSchoolMap(draft?.program_text || "", null, programOptions, schoolOptions));
+            setMode("new");
+            setLinkedLead(null);
+            setSearchQ("");
+            setSearchResults([]);
             setErrors({});
             return;
         }
@@ -205,7 +217,51 @@ export default function AddEditStudentModal({
         catch { /* quota exceeded or storage unavailable — silent */ }
     }, [open, editing, form]);
 
+    // Debounced typeahead for the "add from existing" picker.
+    useEffect(() => {
+        if (! open || editing || mode !== "existing" || linkedLead) return;
+        const q = searchQ.trim();
+        setSearching(true);
+        const t = setTimeout(() => {
+            fetch(`/portal/education/students/search-existing?q=${encodeURIComponent(q)}`, {
+                headers: { Accept: "application/json" },
+                credentials: "same-origin",
+            })
+                .then((r) => (r.ok ? r.json() : { leads: [] }))
+                .then((d) => setSearchResults(Array.isArray(d.leads) ? d.leads : []))
+                .catch(() => setSearchResults([]))
+                .finally(() => setSearching(false));
+        }, 250);
+        return () => clearTimeout(t);
+    }, [open, editing, mode, linkedLead, searchQ]);
+
     if (! open) return null;
+
+    // Prefill identity/contact from the chosen existing person, then let staff
+    // fill the study details. The link endpoint won't overwrite with blanks.
+    const chooseExisting = (lead) => {
+        setLinkedLead(lead);
+        setSearchResults([]);
+        setForm((f) => ({
+            ...f,
+            first_name:  lead.first_name  ?? "",
+            middle_name: lead.middle_name ?? "",
+            last_name:   lead.last_name   ?? "",
+            suffix:      lead.suffix      ?? "",
+            gender:      lead.gender      ?? "",
+            email:       lead.email       ?? "",
+            phone:       lead.phone       ?? "",
+            referral:    lead.referral    ?? "",
+            agent_id:    lead.agent_id != null ? String(lead.agent_id) : "",
+            location:    lead.location    ?? "",
+        }));
+    };
+
+    const clearExisting = () => {
+        setLinkedLead(null);
+        setSearchQ("");
+        setSearchResults([]);
+    };
 
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
     const setVal = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -235,11 +291,19 @@ export default function AddEditStudentModal({
 
     const submit = (e) => {
         e?.preventDefault?.();
+        // Guard: "add from existing" needs a chosen person.
+        if (! editing && mode === "existing" && ! linkedLead) {
+            setErrors({ lead_id: "Pick an existing person to add as a student, or switch to New person." });
+            return;
+        }
         setSaving(true);
         setErrors({});
+        const linking = ! editing && mode === "existing" && linkedLead;
         const url = editing
             ? `/portal/education/students/${student.id}/update`
-            : `/portal/education/students`;
+            : linking
+                ? `/portal/education/students/link-existing`
+                : `/portal/education/students`;
 
         // Translate the UI's department + stage pair into the right
         // *_stage column on the wire. The two columns the user *didn't*
@@ -270,6 +334,9 @@ export default function AddEditStudentModal({
         payload.school_id = firstSchool
             ? (schoolOptions.find((s) => s.name?.toLowerCase() === firstSchool.toLowerCase())?.id ?? null)
             : null;
+
+        // Linking an existing person → tell the server which lead to flag.
+        if (linking) payload.lead_id = linkedLead.id;
 
         router.post(url, payload, {
             preserveScroll: true,
@@ -332,6 +399,116 @@ export default function AddEditStudentModal({
                         </div>
                     )}
 
+                    {/* Add mode — create only. Choose between a brand-new
+                        person and flagging someone who already exists (an
+                        immigration case, a sales lead) as a student. */}
+                    {! editing && (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => { setMode("new"); clearExisting(); }}
+                                    className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                        mode === "new"
+                                            ? "border-indigo-400 bg-white ring-1 ring-indigo-200"
+                                            : "border-gray-200 bg-white/60 hover:bg-white"
+                                    }`}
+                                >
+                                    <UserPlus size={16} className={mode === "new" ? "text-indigo-600" : "text-gray-400"} />
+                                    <span>
+                                        <span className="block text-[12px] font-semibold text-gray-900">New person</span>
+                                        <span className="block text-[10px] text-gray-500">Create a brand-new student</span>
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setMode("existing")}
+                                    className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                        mode === "existing"
+                                            ? "border-indigo-400 bg-white ring-1 ring-indigo-200"
+                                            : "border-gray-200 bg-white/60 hover:bg-white"
+                                    }`}
+                                >
+                                    <Users size={16} className={mode === "existing" ? "text-indigo-600" : "text-gray-400"} />
+                                    <span>
+                                        <span className="block text-[12px] font-semibold text-gray-900">Add from existing</span>
+                                        <span className="block text-[10px] text-gray-500">Already in immigration or leads</span>
+                                    </span>
+                                </button>
+                            </div>
+
+                            {mode === "existing" && ! linkedLead && (
+                                <div className="mt-3">
+                                    <div className="relative">
+                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            autoFocus
+                                            value={searchQ}
+                                            onChange={(e) => setSearchQ(e.target.value)}
+                                            placeholder="Search by name, email or lead ID…"
+                                            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-[13px] focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
+                                        />
+                                    </div>
+                                    <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-gray-100 bg-white divide-y divide-gray-50">
+                                        {searching && (
+                                            <div className="px-3 py-3 text-[12px] text-gray-400">Searching…</div>
+                                        )}
+                                        {! searching && searchResults.length === 0 && (
+                                            <div className="px-3 py-3 text-[12px] text-gray-400">
+                                                {searchQ.trim() ? "No matching person who isn't already a student." : "Start typing to find someone."}
+                                            </div>
+                                        )}
+                                        {searchResults.map((lead) => (
+                                            <button
+                                                type="button"
+                                                key={lead.id}
+                                                onClick={() => chooseExisting(lead)}
+                                                className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-indigo-50/50"
+                                            >
+                                                <span className="min-w-0">
+                                                    <span className="block text-[13px] font-semibold text-gray-900 truncate">{lead.name}</span>
+                                                    <span className="block text-[10px] text-gray-500 truncate">
+                                                        {[lead.lead_id, lead.email].filter(Boolean).join(" · ")}
+                                                    </span>
+                                                </span>
+                                                {(lead.is_immigration_case || lead.immigration_stage) && (
+                                                    <span className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                        <Briefcase size={9} /> Case
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {mode === "existing" && linkedLead && (
+                                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <Check size={15} className="text-emerald-600 flex-shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="text-[12px] font-semibold text-emerald-900 truncate">
+                                                Linking existing person: {linkedLead.name}
+                                            </div>
+                                            <div className="text-[10px] text-emerald-700 truncate">
+                                                {[linkedLead.lead_id, (linkedLead.is_immigration_case || linkedLead.immigration_stage) ? "already an immigration case" : null].filter(Boolean).join(" · ")} — one record, no duplicate
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="button" onClick={clearExisting} className="flex-shrink-0 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 underline">
+                                        Change
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Detail sections — hidden while picking an existing
+                        person so staff choose someone first, then fill study
+                        details. Always shown for New person and edit. */}
+                    {! (! editing && mode === "existing" && ! linkedLead) && (
+                    <>
                     {/* Identity */}
                     <Section title="Identity">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -480,6 +657,8 @@ export default function AddEditStudentModal({
                             <textarea value={form.internal_note} onChange={set("internal_note")} rows={3} maxLength={5000} className={`${ICls} resize-y`} placeholder="Latest update, next action, blockers…" />
                         </Field>
                     </Section>
+                    </>
+                    )}
                 </form>
 
                 {/* Footer */}

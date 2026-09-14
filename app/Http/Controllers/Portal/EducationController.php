@@ -745,6 +745,159 @@ class EducationController extends Controller
     }
 
     /**
+     * Typeahead for the "Add from existing person" mode of the New Student
+     * modal. Returns leads that are NOT yet students (immigration cases, sales
+     * leads, anyone) so staff can flag an existing person as a student instead
+     * of creating a duplicate Lead row. Matches name / email / lead_id.
+     */
+    public function searchExistingLeads(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+
+        $leads = Lead::query()
+            ->where('is_student', false)
+            ->when($q !== '', function ($w) use ($q) {
+                $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%';
+                // Full-name concat differs by driver (MySQL prod / sqlite tests).
+                $concat = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite'
+                    ? "(first_name || ' ' || last_name)"
+                    : "CONCAT(first_name, ' ', last_name)";
+                $w->where(function ($s) use ($like, $concat) {
+                    $s->where('first_name', 'like', $like)
+                        ->orWhere('last_name', 'like', $like)
+                        ->orWhereRaw("{$concat} like ?", [$like])
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('lead_id', 'like', $like);
+                });
+            })
+            ->orderBy('first_name')
+            ->limit(50)
+            ->get(['id', 'lead_id', 'first_name', 'middle_name', 'last_name', 'suffix', 'gender', 'email', 'phone', 'referral', 'agent_id', 'residence_country', 'is_immigration_case', 'immigration_stage', 'inz_visa_type'])
+            ->map(fn (Lead $l) => [
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'first_name' => $l->first_name,
+                'middle_name' => $l->middle_name,
+                'last_name' => $l->last_name,
+                'suffix' => $l->suffix,
+                'gender' => $l->gender,
+                'email' => $l->email,
+                'phone' => $l->phone,
+                'referral' => $l->referral,
+                'agent_id' => $l->agent_id,
+                'location' => $l->residence_country,
+                // Context chip so staff recognise where the person came from.
+                'is_immigration_case' => (bool) $l->is_immigration_case,
+                'immigration_stage' => $l->immigration_stage,
+                'inz_visa_type' => $l->inz_visa_type,
+            ]);
+
+        return response()->json(['leads' => $leads]);
+    }
+
+    /**
+     * Flag an EXISTING lead (an immigration case, sales lead, etc.) as a
+     * student — the "add from immigration" path. This links, it does NOT copy:
+     * the same Lead row gains is_student=true so the person keeps one record
+     * across departments (documents, tasks, tracking link stay unified). Any
+     * immigration data on the row is preserved. Study details entered in the
+     * modal are merged in the same way storeStudent seeds a brand-new student.
+     */
+    public function linkExistingStudent(Request $request)
+    {
+        $leadId = $request->validate([
+            'lead_id' => 'required|integer|exists:leads,id',
+        ])['lead_id'];
+
+        $lead = Lead::findOrFail($leadId);
+
+        if ($lead->is_student) {
+            return back()->with('error', 'That person is already a student.');
+        }
+
+        $data = $this->validateStudentPayload($request, $lead->id);
+
+        try {
+            // Profile fields — only overwrite when the modal actually sent a
+            // value, so we never wipe existing immigration-side data with blanks.
+            $lead->fill(array_filter([
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'middle_name' => $data['middle_name'] ?? null,
+                'suffix' => $data['suffix'] ?? null,
+                'gender' => $data['gender'] ?? null,
+                'email' => $data['email'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'referral' => $data['referral'] ?? null,
+                'agent_id' => $data['agent_id'] ?? null,
+                'residence_country' => $data['location'] ?? null,
+            ], fn ($v) => $v !== null && $v !== ''));
+
+            // Student-side fields + the flag that puts them in the register.
+            $lead->fill([
+                'student_payment' => $data['payment'] ?? $lead->student_payment,
+                'student_coop' => $data['coop'] ?? $lead->student_coop,
+                'student_oop' => $data['oop'] ?? $lead->student_oop,
+                'student_comments' => $data['internal_note'] ?? $lead->student_comments,
+                'school_id' => $data['school_id'] ?? $lead->school_id,
+                'student_school' => $data['school_text'] ?? $lead->student_school,
+                'is_student' => true,
+                'student_converted_at' => now(),
+                'student_converted_by' => auth()->id(),
+            ]);
+
+            // Seed an Education stage only if they aren't already on one — an
+            // immigration case handed to education still needs a study stage to
+            // surface under the Education tab, but we won't clobber an existing.
+            if (empty($lead->education_stage)) {
+                $lead->education_stage = $data['education_stage'] ?? Lead::EDUCATION_STAGE_DEFAULT;
+                if ($lead->education_stage) {
+                    $lead->pushStageHistory('education', $lead->education_stage);
+                }
+            } elseif (! empty($data['education_stage']) && $data['education_stage'] !== $lead->education_stage) {
+                $lead->education_stage = $data['education_stage'];
+                $lead->pushStageHistory('education', $lead->education_stage);
+            }
+
+            $lead->stage_updated_at = now();
+            $lead->stage_updated_by = auth()->id();
+            if (empty($lead->date_of_engagement)) {
+                $lead->date_of_engagement = $data['date_of_engagement'] ?? now()->toDateString();
+            }
+            $lead->save();
+
+            // Study plan — reuse the existing one if the lead already has study
+            // details (e.g. from a prior assessment), else create it.
+            if (! empty($data['program_text']) || ! empty($data['intake']) || ! empty($data['english_test'])) {
+                $firstTitle = ! empty($data['program_text'])
+                    ? trim(explode(' · ', $data['program_text'])[0])
+                    : null;
+                $program = $firstTitle
+                    ? \App\Models\Program::where('title', $firstTitle)->first()
+                    : null;
+
+                \App\Models\LeadStudyPlan::updateOrCreate(
+                    ['lead_id' => $lead->id],
+                    array_filter([
+                        'preferred_course' => $data['program_text'] ?? null,
+                        'program_schools' => $data['program_schools'] ?? null,
+                        'qualification_level' => $program?->level ?? null,
+                        'preferred_intake' => $data['intake'] ?? null,
+                        'english_test_type' => $data['english_test'] ?? null,
+                    ], fn ($v) => $v !== null && $v !== '')
+                );
+            }
+
+            return back()->with('success', "{$lead->lead_id} is now a student.");
+        } catch (\Throwable $e) {
+            Log::error('Education link existing student failed', ['error' => $e->getMessage(), 'lead' => $leadId]);
+
+            return back()->with('error', 'Could not add that person as a student.');
+        }
+    }
+
+    /**
      * Update an existing student row from the same modal. Touches the
      * lead's profile fields, school FK, and (if present) the study plan.
      */

@@ -641,13 +641,6 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                         Pipeline · {filtered.length} {filtered.length === 1 ? "student" : "students"}
                     </p>
                 </div>
-                <button
-                    type="button"
-                    onClick={openNewStudent}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm"
-                >
-                    <UserPlus size={15} /> New student
-                </button>
             </div>
 
             {/* Stage distribution — small line graph for Education only. */}
@@ -741,6 +734,19 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                     </div>
                 </div>
             </div>
+
+            {/* New student — placed below the toolbar, above the table. */}
+            {! readOnly && (
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={openNewStudent}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm"
+                    >
+                        <UserPlus size={15} /> New student
+                    </button>
+                </div>
+            )}
 
             {/* Table — always rendered now; the `view` state selects the
                 department tab rather than swapping into a kanban. */}

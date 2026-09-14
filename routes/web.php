@@ -1515,6 +1515,10 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
             // Add / edit / soft-delete student rows from the Students page.
             Route::post('/students', [EducationController::class, 'storeStudent'])->name('students.store');
+            // "Add from existing person" — search leads not yet students, then
+            // flag the chosen one as a student (links, does not duplicate).
+            Route::get('/students/search-existing', [EducationController::class, 'searchExistingLeads'])->name('students.search-existing');
+            Route::post('/students/link-existing', [EducationController::class, 'linkExistingStudent'])->name('students.link-existing');
             Route::post('/students/{id}/update', [EducationController::class, 'updateStudent'])->name('students.update');
             Route::post('/students/{id}/destroy', [EducationController::class, 'destroyStudent'])->name('students.destroy');
             // Schools catalog — same SchoolController as /admin/schools,
