@@ -558,6 +558,95 @@ class SalesController extends Controller
     }
 
     /**
+     * Human document-type label for an agreement — the specific scenario/variant
+     * (e.g. "Standard · 150,000", "Offshore - Philippines") rather than the
+     * generic bucket. Works for both live docs (variant "consultancy:key:mode"
+     * or "engagement-english[-offshore]") and pending reviews (scenario like
+     * "consultancy_std_150" / "english_engagement").
+     */
+    private function agreementTypeLabel(string $checklistKey, ?string $variant): string
+    {
+        if ($checklistKey === 'agree.proposal') {
+            return 'Study Proposal';
+        }
+        if ($checklistKey === 'agree.engagement_english') {
+            return in_array($variant, ['engagement-english-offshore', 'english_offshore'], true)
+                ? 'Offshore - English'
+                : 'Offshore - Philippines';
+        }
+        if ($checklistKey === 'agree.consultancy') {
+            $key = str_starts_with((string) $variant, 'consultancy:')
+                ? (explode(':', (string) $variant)[1] ?? null)
+                : str_replace('consultancy_', '', (string) $variant);
+
+            return match ($key) {
+                'std_150' => 'Standard · 150,000',
+                'voucher_150' => 'With Voucher · 150,000',
+                'std_100' => 'Standard · 100,000',
+                'english_100' => 'With English · 100,000',
+                'offshore' => 'Standard · Offshore',
+                'offshore_zero' => 'Standard · Offshore — Zero fees',
+                'onshore' => 'Onshore Engagement',
+                default => 'Consultancy Agreement',
+            };
+        }
+
+        return ucfirst(str_replace(['agree.', '_'], ['', ' '], $checklistKey));
+    }
+
+    /** Agreement variant/scenario → the ConsultancyReviewService fee-item type. */
+    private function variantToFeeType(string $checklistKey, ?string $variant): ?string
+    {
+        if ($checklistKey === 'agree.engagement_english') {
+            return in_array($variant, ['engagement-english-offshore', 'english_offshore'], true)
+                ? 'english_offshore'
+                : 'english_engagement';
+        }
+        if ($checklistKey === 'agree.consultancy') {
+            // Live docs: "consultancy:std_150:single"; pending: "consultancy_std_150".
+            if (str_starts_with((string) $variant, 'consultancy:')) {
+                return 'consultancy_'.(explode(':', (string) $variant)[1] ?? '');
+            }
+
+            return $variant ?: null;
+        }
+
+        return null; // proposals have no fee total
+    }
+
+    /** NZ$ for offshore / English-offshore agreements, Php otherwise. */
+    private function agreementCurrencySymbol(string $checklistKey, ?string $variant): string
+    {
+        $type = $this->variantToFeeType($checklistKey, $variant);
+
+        return in_array($type, ['consultancy_offshore', 'consultancy_offshore_zero', 'english_offshore'], true)
+            ? 'NZ$'
+            : 'Php';
+    }
+
+    /**
+     * Fee total for one agreement doc. Prefers the lead's stored review amounts
+     * when its scenario matches this doc (those carry the reviewer's edits);
+     * otherwise falls back to the scenario's default fee total.
+     */
+    private function agreementTotal(Lead $l, string $checklistKey, ?string $variant): ?int
+    {
+        $type = $this->variantToFeeType($checklistKey, $variant);
+        if ($type === null) {
+            return null;
+        }
+
+        $review = is_array($l->consultancy_review) ? $l->consultancy_review : [];
+        if (($review['scenario'] ?? null) === $type && is_array($review['items'] ?? null)) {
+            return array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $review['items']));
+        }
+
+        $items = \App\Services\ConsultancyReviewService::feeItems($type, []);
+
+        return array_sum(array_map(fn ($it) => (int) ($it['amount'] ?? 0), $items));
+    }
+
+    /**
      * GET /portal/{role}/leads/proposals-agreements — sidebar page listing
      * every lead that has at least one generated Proposal or Agreement
      * (checklist_key in the agreement bucket + source='generated'). The
@@ -601,7 +690,7 @@ class SalesController extends Controller
                 ->get();
 
             $mapRow = function (Lead $l) {
-                $docs = $l->documents->map(function ($d) {
+                $docs = $l->documents->map(function ($d) use ($l) {
                     // source_variant now carries the applicant mode as a
                     // third segment (e.g. "consultancy:std_150:couple").
                     // Older rows will have only 2 segments — default to
@@ -615,14 +704,17 @@ class SalesController extends Controller
                     return [
                         'id' => $d->id,
                         'checklist_key' => $d->checklist_key,
-                        'type' => match ($d->checklist_key) {
-                            'agree.proposal' => 'Proposal',
-                            'agree.consultancy' => 'Consultancy Agreement',
-                            'agree.engagement_english' => 'English Engagement',
-                            default => ucfirst(str_replace(['agree.', '_'], ['', ' '], $d->checklist_key)),
-                        },
+                        // Specific document type (the scenario/variant), not the
+                        // generic bucket — e.g. "Standard · 150,000",
+                        // "Offshore - Philippines".
+                        'type' => $this->agreementTypeLabel($d->checklist_key, $d->source_variant),
                         'variant' => $d->source_variant,
                         'applicant_mode' => $applicantMode,
+                        // Fee total for the Total column — the lead's verified
+                        // review amounts when they match this doc, else the
+                        // scenario's default fee total.
+                        'total_amount' => $this->agreementTotal($l, $d->checklist_key, $d->source_variant),
+                        'currency_symbol' => $this->agreementCurrencySymbol($d->checklist_key, $d->source_variant),
                         'original_name' => $d->original_name,
                         'size' => $d->size,
                         'created_at' => optional($d->created_at)->toIso8601String(),
@@ -681,6 +773,11 @@ class SalesController extends Controller
                 ->map(function (Lead $l) {
                     $review = is_array($l->consultancy_review) ? $l->consultancy_review : [];
                     $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+                    $scenario = $review['scenario'] ?? null;
+                    // English agreements now go through this queue too — reflect
+                    // their real document bucket + type, not "Consultancy".
+                    $isEnglish = in_array($scenario, ['english_engagement', 'english_offshore'], true);
+                    $key = $isEnglish ? 'agree.engagement_english' : 'agree.consultancy';
 
                     return [
                         'id' => $l->id,
@@ -693,8 +790,8 @@ class SalesController extends Controller
                         'status' => $l->status,
                         'documents' => [[
                             'id' => 'review-'.$l->id,
-                            'checklist_key' => 'agree.consultancy',
-                            'type' => 'Consultancy Agreement',
+                            'checklist_key' => $key,
+                            'type' => $this->agreementTypeLabel($key, $scenario),
                             'variant' => $review['scenario'] ?? null,
                             'applicant_mode' => $review['applicant_mode'] ?? 'single',
                             'original_name' => $review['scenario_label'] ?? 'Consultancy Agreement',
@@ -708,6 +805,7 @@ class SalesController extends Controller
                             'pending_verification' => true,
                             'verification_status' => $review['status'] ?? 'pending', // pending | verified
                             'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+                            'currency_symbol' => ($review['currency'] ?? 'php') === 'nzd' ? 'NZ$' : 'Php',
                         ]],
                         'documents_count' => 1,
                         'latest_generated_at' => $review['submitted_at'] ?? null,

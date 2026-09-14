@@ -809,22 +809,27 @@ function DocumentNoteThread({ docId, notes = [] }) {
 function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
     const [sort, setSort] = useState('needs'); // 'needs' | 'newest'
 
-    // One row per generated (or pending) agreement document.
-    const flat = useMemo(() => rows.flatMap((r) => r.documents.map((d) => ({ ...d, lead: r }))), [rows]);
-    const byNewest = (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    // One row per PERSON — a lead's agreements are stacked inside their row
+    // (re-generations no longer split into separate rows).
+    const leadRows = useMemo(
+        () => rows.map((r) => ({ ...r, documents: [...(r.documents || [])].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)) })),
+        [rows],
+    );
+    const byNewest = (a, b) => new Date(b.latest_generated_at || 0) - new Date(a.latest_generated_at || 0);
+    const hasPending = (r) => (r.documents || []).some((d) => d.pending_verification);
 
     const groups = useMemo(() => {
         if (sort === 'newest') {
-            return [{ key: 'all', rows: [...flat].sort(byNewest) }];
+            return [{ key: 'all', rows: [...leadRows].sort(byNewest) }];
         }
-        const pending = flat.filter((d) => d.pending_verification).sort(byNewest);
-        const live = flat.filter((d) => ! d.pending_verification).sort(byNewest);
+        const pending = leadRows.filter(hasPending).sort(byNewest);
+        const live = leadRows.filter((r) => ! hasPending(r)).sort(byNewest);
 
         return [
             { key: 'pending', label: 'Needs verification', sub: 'action sits with ePathways', tone: 'amber', rows: pending },
             { key: 'live', label: 'Generated & sent', sub: 'live agreements', tone: 'gray', rows: live },
         ];
-    }, [flat, sort]);
+    }, [leadRows, sort]);
 
     return (
         <div className="text-xs">
@@ -846,6 +851,7 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
                     <span>Document</span>
                     <span>Notes</span>
                 </div>
+                <div className="w-[110px] shrink-0">Total amount</div>
                 <div className="w-[140px] shrink-0">Status &amp; created</div>
                 <div className="w-[32px] shrink-0 text-right">Actions</div>
             </div>
@@ -860,37 +866,39 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
                             <span className="text-[11px] text-gray-400">· {g.sub}</span>
                         </div>
                     )}
-                    {g.rows.map((d) => (
-                        <DocumentRow key={d.id} doc={d} portalBase={portalBase} fmtSize={fmtSize} fmtDate={fmtDate} onNotify={onNotify} onEdit={onEdit} />
+                    {g.rows.map((lead) => (
+                        <DocumentRow key={lead.id} lead={lead} portalBase={portalBase} fmtSize={fmtSize} fmtDate={fmtDate} onNotify={onNotify} onEdit={onEdit} />
                     ))}
                 </div>
             )))}
 
-            {flat.length === 0 && (
+            {leadRows.length === 0 && (
                 <div className="p-12 text-center text-gray-400 text-sm">No agreements yet.</div>
             )}
         </div>
     );
 }
 
-function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
-    const { lead } = doc;
-    const mode = doc.applicant_mode; // 'single' | 'couple' | null
-    // A consultancy agreement still IN verification — no PDF yet, shown here
-    // alongside its entry in the verification queue.
-    const pending = doc.pending_verification;
-    // Agreement lifecycle, read off the lead's pipeline stage: Generated (just
-    // created) → Sent (staff notified the lead) → Signed (staff marked signed).
-    const agreeStatus = pending
-        ? (doc.verification_status === 'verified'
+// Lifecycle badge for one agreement — pending reviews show their verification
+// state; live agreements read the lead's pipeline stage.
+function agreementBadge(doc, lead) {
+    if (doc.pending_verification) {
+        return doc.verification_status === 'verified'
             ? { label: 'Verified',         cls: 'bg-blue-50 text-blue-700 border-blue-200' }
-            : { label: 'For verification', cls: 'bg-amber-50 text-amber-700 border-amber-200' })
-      : lead.status === 'Consultancy Agreement Signed' ? { label: 'Signed',    cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
-      : lead.status === 'Consultancy Agreement Sent'   ? { label: 'Sent',      cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
-      :                                                   { label: 'Generated', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
+            : { label: 'For verification', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+    }
+    if (lead.status === 'Consultancy Agreement Signed') return { label: 'Signed', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+    if (lead.status === 'Consultancy Agreement Sent')   return { label: 'Sent',   cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+    return { label: 'Generated', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
+}
+
+// One row per PERSON — the profile shows once on the left, and each of the
+// lead's agreements is stacked on the right (document · notes · status · ⋮).
+function DocumentRow({ lead, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
+    const docs = lead.documents || [];
     return (
         <div className="flex flex-col md:flex-row md:items-stretch gap-4 px-4 py-4 border-b border-gray-100 hover:bg-gray-50/40 transition-colors">
-            {/* Profile */}
+            {/* Profile — once for the person */}
             <div className="md:w-[210px] shrink-0 flex items-start gap-2.5">
                 <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200 shrink-0">
                     {lead.avatar_url
@@ -902,59 +910,89 @@ function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                     <div className="text-[10px] text-gray-400 font-mono">{lead.lead_id}</div>
                     {lead.email && <div className="text-[11px] text-gray-600 truncate max-w-[190px] mt-1">{lead.email}</div>}
                     {lead.phone && <div className="text-[11px] text-gray-500 truncate max-w-[190px]">{lead.phone}</div>}
+                    {docs.length > 1 && (
+                        <div className="text-[10px] text-gray-400 mt-1">{docs.length} agreements</div>
+                    )}
                 </div>
             </div>
 
-            {/* Document + Notes (aligned) */}
-            <div className="flex-1 min-w-0">
-                <div className="grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] max-md:grid-cols-1 gap-x-6 gap-y-3 items-start">
-                    {/* Document */}
-                    <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <FileText size={13} className="text-gray-400 shrink-0" />
-                            <span className="text-[13px] font-semibold text-gray-900">{doc.type}</span>
-                            {mode && (
-                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                    mode === 'couple'
-                                        ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                                        : 'bg-blue-50 text-blue-700 border border-blue-100'
-                                }`}>
-                                    {mode}
+            {/* Agreements — one sub-row per document, columns aligned to the header */}
+            <div className="flex-1 min-w-0 flex flex-col divide-y divide-gray-100">
+                {docs.map((doc) => {
+                    const mode = doc.applicant_mode; // 'single' | 'couple' | null
+                    const pending = doc.pending_verification;
+                    const badge = agreementBadge(doc, lead);
+                    // Generic document category, shown under the specific type.
+                    const category = doc.checklist_key === 'agree.engagement_english'
+                        ? 'English agreement'
+                        : doc.checklist_key === 'agree.proposal'
+                            ? 'Study proposal'
+                            : 'Consultancy agreement';
+                    return (
+                        <div key={doc.id} className="flex flex-col md:flex-row md:items-stretch gap-4 py-3 first:pt-0 last:pb-0">
+                            {/* Document + Notes (aligned) */}
+                            <div className="flex-1 min-w-0">
+                                <div className="grid grid-cols-[minmax(190px,1fr)_minmax(260px,1.15fr)] max-md:grid-cols-1 gap-x-6 gap-y-3 items-start">
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <FileText size={13} className="text-gray-400 shrink-0" />
+                                            <span className="text-[13px] font-semibold text-gray-900">{doc.type}</span>
+                                            {mode && (
+                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                                    mode === 'couple'
+                                                        ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                                        : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                                }`}>
+                                                    {mode}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[11px] text-gray-500 mt-0.5 ml-[21px]">{category}</div>
+                                    </div>
+                                    <div>
+                                        {pending
+                                            ? <span className="text-[11px] text-gray-400 italic">Notes in verification</span>
+                                            : <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Total amount */}
+                            <div className="md:w-[110px] shrink-0 whitespace-nowrap">
+                                {doc.total_amount != null ? (
+                                    <span className="text-[13px] font-bold text-gray-900">
+                                        {doc.currency_symbol || 'Php'} {Number(doc.total_amount).toLocaleString()}
+                                    </span>
+                                ) : (
+                                    <span className="text-[11px] text-gray-300">—</span>
+                                )}
+                            </div>
+
+                            {/* Status & created */}
+                            <div className="md:w-[140px] shrink-0 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${badge.cls}`}>
+                                    {badge.label}
                                 </span>
-                            )}
+                                <div className="text-[11px] text-gray-500 mt-1.5">{fmtDate(doc.created_at)}</div>
+                                {doc.uploader?.name && (
+                                    <div className="text-[10px] text-gray-400">by {doc.uploader.name}</div>
+                                )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="md:w-[32px] shrink-0 md:text-right">
+                                {pending ? (
+                                    <Link href="/consultancy-verification"
+                                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
+                                        <ShieldCheck size={12} /> Review
+                                    </Link>
+                                ) : (
+                                    <DocumentRowActions doc={doc} lead={lead} onNotify={onNotify} onEdit={onEdit} />
+                                )}
+                            </div>
                         </div>
-                        <div className="text-[11px] text-gray-400 mt-0.5 ml-[21px]">{pending ? doc.original_name : fmtSize(doc.size)}</div>
-                    </div>
-                    {/* Notes */}
-                    <div>
-                        {pending
-                            ? <span className="text-[11px] text-gray-400 italic">Notes in verification</span>
-                            : <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />}
-                    </div>
-                </div>
-            </div>
-
-            {/* Status & created */}
-            <div className="md:w-[140px] shrink-0 whitespace-nowrap">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${agreeStatus.cls}`}>
-                    {agreeStatus.label}
-                </span>
-                <div className="text-[11px] text-gray-500 mt-1.5">{fmtDate(doc.created_at)}</div>
-                {doc.uploader?.name && (
-                    <div className="text-[10px] text-gray-400">by {doc.uploader.name}</div>
-                )}
-            </div>
-
-            {/* Actions */}
-            <div className="md:w-[32px] shrink-0 md:text-right">
-                {pending ? (
-                    <Link href="/consultancy-verification"
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
-                        <ShieldCheck size={12} /> Review
-                    </Link>
-                ) : (
-                    <DocumentRowActions doc={doc} lead={lead} onNotify={onNotify} onEdit={onEdit} />
-                )}
+                    );
+                })}
             </div>
         </div>
     );
