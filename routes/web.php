@@ -1493,6 +1493,7 @@ Route::middleware(['auth'])->group(function () {
 
             // WORK
             Route::get('/students', [EducationController::class, 'students'])->name('students');
+            Route::get('/students/intake-monitoring', [EducationController::class, 'intakeMonitoring'])->name('students.intake-monitoring');
             Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
             // Add / edit / soft-delete student rows from the Students page.
             Route::post('/students', [EducationController::class, 'storeStudent'])->name('students.store');

@@ -459,6 +459,80 @@ class EducationController extends Controller
     }
 
     /**
+     * Intake monitoring — every student grouped by their study-plan intake
+     * month, so staff can see how many people start each intake and who is
+     * still unscheduled. Same student universe as the Students page.
+     */
+    public function intakeMonitoring()
+    {
+        try {
+            $students = Lead::with(['studyPlans', 'school', 'faceImage'])
+                ->inStudentsRegister()
+                ->limit(1000)
+                ->get()
+                ->map(function (Lead $l) {
+                    $plan = $l->studyPlans->first();
+                    $intakeRaw = optional($plan)->preferred_intake;
+                    [$monthKey, $monthLabel, $intakeDisplay] = $this->intakeBucket($intakeRaw);
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
+                        'status' => $l->education_stage ?: ($l->status ?: null),
+                        'location' => $l->residence_country,
+                        'intake' => $intakeDisplay,
+                        'school' => optional($l->school)->name ?: $l->student_school,
+                        'program' => optional($plan)->preferred_course,
+                        'month_key' => $monthKey,
+                        'month_label' => $monthLabel,
+                    ];
+                })
+                // Chronological, with unscheduled (key '9999-99') always last.
+                ->sortBy([['month_key', 'asc'], ['name', 'asc']])
+                ->values();
+
+            return inertia('portal/education/IntakeMonitoring', [
+                'portal' => 'education',
+                'students' => $students,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Intake monitoring failed', ['error' => $e->getMessage()]);
+
+            return inertia('portal/education/IntakeMonitoring', [
+                'portal' => 'education',
+                'students' => collect(),
+            ]);
+        }
+    }
+
+    /**
+     * Resolve a free-text / dated intake value to a sortable month bucket.
+     * Returns [month_key, month_label, display]. Anything unparseable falls
+     * into the "Unscheduled" bucket (key sorts last).
+     *
+     * @return array{0:string,1:string,2:?string}
+     */
+    private function intakeBucket(?string $raw): array
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return ['9999-99', 'Unscheduled', null];
+        }
+
+        try {
+            $d = \Illuminate\Support\Carbon::parse($raw);
+
+            return [$d->format('Y-m'), $d->format('F Y'), $raw];
+        } catch (\Throwable) {
+            // Not a full date (e.g. just "November") — keep it visible but
+            // group it as unscheduled since we can't place it on a timeline.
+            return ['9999-99', 'Unscheduled', $raw];
+        }
+    }
+
+    /**
      * Inline-update one of the Students-Dashboard mirror columns from the
      * Students screen's expanded row. The frontend posts a single field at
      * a time; the validator whitelists exactly the dashboard fields so
@@ -930,9 +1004,31 @@ class EducationController extends Controller
                     'level' => $sp['qualification_level'] ?? null,
                     'intake' => $sp['preferred_intake'] ?? null,
                     'analysis_done' => $l->ai_analysis_status === 'completed',
+                    // Short AI verdict shown under the progress bar
+                    // ("AI analysed · eligible" / "· needs review").
+                    'ai_verdict' => $this->assessmentVerdict($l, $analysis),
                     'detail_url' => "/portal/education/leads/{$l->id}",
                 ];
             });
+    }
+
+    /** A short AI-eligibility verdict for the Assessments progress column. */
+    private function assessmentVerdict(Lead $l, array $analysis): ?string
+    {
+        if ($l->ai_analysis_status !== 'completed') {
+            return null;
+        }
+        foreach (['verdict', 'eligibility', 'recommendation'] as $k) {
+            if (! empty($analysis[$k]) && is_string($analysis[$k])) {
+                return (string) \Illuminate\Support\Str::of($analysis[$k])->limit(28);
+            }
+        }
+        $score = $analysis['overall_score'] ?? $analysis['eligibility_score'] ?? $analysis['score'] ?? null;
+        if ($score !== null) {
+            return (int) $score >= 60 ? 'eligible' : 'needs review';
+        }
+
+        return 'analysed';
     }
 
     /** Programs the Education team advises on — same catalogue admin manages. */

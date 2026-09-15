@@ -47,7 +47,7 @@ export default function EducationDashboard({ programStats = {}, studentStats = {
                 <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
                     <div className="px-6 py-5 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-gray-900">Recent students</h2>
-                        <Link href="/admin/leads" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">All leads →</Link>
+                        <Link href="/admin/leads" className="text-sm font-semibold text-green-700 hover:text-green-900">All leads →</Link>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
@@ -81,7 +81,7 @@ export default function EducationDashboard({ programStats = {}, studentStats = {
                 <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden flex flex-col">
                     <div className="px-6 py-5 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-gray-900">Programs</h2>
-                        <Link href="/admin/programs" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Manage →</Link>
+                        <Link href="/admin/programs" className="text-sm font-semibold text-green-700 hover:text-green-900">Manage →</Link>
                     </div>
                     <ul className="divide-y divide-gray-50">
                         {recentPrograms.length === 0 ? (
@@ -96,7 +96,7 @@ export default function EducationDashboard({ programStats = {}, studentStats = {
                             </li>
                         ))}
                     </ul>
-                    <Link href="/admin/programs" className="m-4 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
+                    <Link href="/admin/programs" className="m-4 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#14532d] text-white text-sm font-semibold hover:bg-[#0f3d21] transition-colors">
                         Open program catalog <ArrowUpRight size={15} />
                     </Link>
                 </div>
