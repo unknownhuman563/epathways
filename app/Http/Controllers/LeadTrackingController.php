@@ -1197,7 +1197,14 @@ class LeadTrackingController extends Controller
                 $scenario = $parts[1] ?? 'std_100';
                 $mode = ($parts[2] ?? 'single') === 'couple' ? 'couple' : 'single';
                 $gen = app(\App\Services\AgreementGenerator::class);
-                $opts = array_filter(['signer_id' => $doc->engagement_signer_id]);
+                // Carry the reviewer-confirmed fees (+ bank/currency) so signing
+                // re-renders with the SAME amount the agreement was approved at —
+                // not the generator's default. Without this, signing baked in the
+                // default fee and the signed PDF drifted from the saved amount.
+                $reviewOv = \App\Services\ConsultancyReviewService::overridesForGeneration(
+                    is_array($lead->consultancy_review) ? $lead->consultancy_review : []
+                );
+                $opts = array_merge($reviewOv, array_filter(['signer_id' => $doc->engagement_signer_id]));
 
                 if ($scenario === 'onshore') {
                     // Onshore engagement (free) — its own blade.
@@ -1224,10 +1231,22 @@ class LeadTrackingController extends Controller
                     $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('agreements.consultancy', $payload)
                         ->setPaper('a4')->setOption('isPhpEnabled', true)->output();
                 }
-            } else { // english engagement
-                $payload = $this->englishEngagementPreviewFor($doc, $lead, $clientSig);
+            } else { // english engagement / offshore — pick the right variant + fees
+                $scenario = match ($doc->source_variant) {
+                    'engagement-english-offshore' => 'english_offshore',
+                    'engagement-english-offshore-1000' => 'english_offshore_1000',
+                    default => 'english_engagement',
+                };
+                $ov = \App\Services\ConsultancyReviewService::overridesForGeneration(
+                    is_array($lead->consultancy_review) ? $lead->consultancy_review : []
+                );
+                [$view, $payload] = \App\Services\ConsultancyReviewService::previewPayload(
+                    app(\App\Services\AgreementGenerator::class), $lead, $scenario, $ov
+                );
+                unset($payload['preview']); // final signed PDF, not the in-flow preview
+                $payload['client_signature'] = $clientSig;
                 $payload['acknowledged'] = $acknowledged;
-                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('agreements.engagement-english', $payload)
+                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, $payload)
                     ->setPaper('a4')
                     ->output();
             }

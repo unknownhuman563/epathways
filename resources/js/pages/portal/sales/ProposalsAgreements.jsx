@@ -1860,6 +1860,9 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // changes, back to false when the iframe fires `onLoad`. Gives staff
     // a spinner instead of a suspicious white A4 while dompdf renders.
     const [previewLoading, setPreviewLoading] = useState(false);
+    // Double-confirm dialog before an amount-bearing agreement is submitted
+    // for verification — surfaces client name + amount + document type.
+    const [confirmOpen, setConfirmOpen] = useState(false);
     // Email opt-in — checked by default. When true and the chosen lead
     // has an email, the modal fires the notify endpoint right after the
     // generate/save so the client gets a nudge on the same click.
@@ -2073,6 +2076,19 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
     // consultancy scenarios + onshore + offshore) — so the modal skips the
     // second notify POST for these.
     const isAgreementType = !! typeMeta?.backendType;
+
+    // Amount-bearing types get a confirm-before-submit dialog.
+    const needsAmountConfirm = isConsultancyType || isEnglishType;
+    // Human amount summary shown in the confirm dialog + settings.
+    const amountText = useMemo(() => {
+        const n = (v) => Number(v || 0).toLocaleString(cur.locale);
+        if (typeMeta?.hasPte) return `${cur.symbol}${n(schoolFee)} · PTE US$${Number(pteFee || 0).toLocaleString()}`;
+        if (typeMeta?.singleFee || isEnglishType) return `${cur.symbol}${n(schoolFee)}`;
+        return `${cur.symbol}${n(Number(schoolFee) + Number(englishFee))}`;
+    }, [typeMeta, schoolFee, englishFee, pteFee, cur, isEnglishType]);
+    // While the live preview is still rendering the freshly-typed amount, keep
+    // the submit button read-only; it re-enables once the preview has settled.
+    const amountSettling = needsAmountConfirm && previewLoading;
 
     // Live iframe preview URL — same lead + type params the generate
     // endpoint uses, but hits the preview route which renders the Blade
@@ -2506,16 +2522,58 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                         </button>
                         <button
                             type="button"
-                            disabled={! canSubmit || submitting}
-                            onClick={submit}
+                            disabled={! canSubmit || submitting || amountSettling}
+                            onClick={() => (needsAmountConfirm ? setConfirmOpen(true) : submit())}
+                            title={amountSettling ? 'Rendering the amount — hold on…' : ''}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                         >
-                            {submitting ? <Loader size={14} className="animate-spin" /> : <Plus size={14} />}
-                            {(isProposalType || isConsultancyType || isEnglishType) ? 'Submit for verification' : 'Generate'}
+                            {submitting ? <Loader size={14} className="animate-spin" />
+                                : amountSettling ? <Loader size={14} className="animate-spin" />
+                                : <Plus size={14} />}
+                            {amountSettling ? 'Rendering…'
+                                : (isProposalType || isConsultancyType || isEnglishType) ? 'Submit for verification' : 'Generate'}
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* Double-confirm before submitting an amount-bearing agreement. */}
+            {confirmOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { e.stopPropagation(); setConfirmOpen(false); }}>
+                    <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2 mb-3">
+                            <ShieldCheck size={18} className="text-emerald-600" />
+                            <h3 className="text-base font-bold text-gray-900">Confirm before submitting</h3>
+                        </div>
+                        <p className="text-[12px] text-gray-500 mb-3">Please double-check these details — this goes to verification.</p>
+                        <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 text-sm">
+                            <div className="flex items-start justify-between gap-3 px-3 py-2">
+                                <span className="text-gray-500">Client</span>
+                                <span className="font-semibold text-gray-900 text-right">{chosenLead?.name || `Lead #${leadId}`}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-3 px-3 py-2">
+                                <span className="text-gray-500">Document</span>
+                                <span className="font-semibold text-gray-900 text-right">{typeMeta?.label || currentTypeLabel}{typeMeta?.applicantMode ? ` · ${typeMeta.applicantMode}` : ''}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-3 px-3 py-2">
+                                <span className="text-gray-500">Amount</span>
+                                <span className="font-bold text-gray-900 text-right">{amountText}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 mt-4">
+                            <button type="button" onClick={() => setConfirmOpen(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                            <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => { setConfirmOpen(false); submit(); }}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-[#14532d] text-white rounded-lg text-sm font-bold hover:bg-[#0f3d21] disabled:opacity-60"
+                            >
+                                <Check size={14} /> Confirm &amp; submit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
