@@ -493,18 +493,28 @@ class EducationController extends Controller
                     $intakeRaw = optional($plan)->preferred_intake;
                     [$monthKey, $monthLabel, $intakeDisplay] = $this->intakeBucket($intakeRaw);
 
+                    // Department track (mirrors the Students tabs) and the
+                    // effective stage used for the card chip + grouping.
+                    $track = $l->is_immigration_case
+                        ? 'immigration'
+                        : (($l->is_english_student || $l->english_stage) ? 'english' : 'education');
+                    $effStage = $l->education_stage ?: ($l->immigration_stage ?: ($l->english_stage ?: $l->status));
+
                     return [
                         'id' => $l->id,
                         'lead_id' => $l->lead_id,
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
                         'avatar_url' => $l->faceImageUrl(),
-                        'status' => $l->education_stage ?: ($l->status ?: null),
+                        'status' => $effStage ?: null,
                         'location' => $l->residence_country,
                         'intake' => $intakeDisplay,
                         'school' => optional($l->school)->name ?: $l->student_school,
                         'program' => optional($plan)->preferred_course,
                         'month_key' => $monthKey,
                         'month_label' => $monthLabel,
+                        'track' => $track,
+                        // Card-grouping bucket for the "Group by Stage" view.
+                        'category' => $this->intakeCategory($track, $effStage),
                     ];
                 })
                 // Chronological, with unscheduled (key '9999-99') always last.
@@ -523,6 +533,33 @@ class EducationController extends Controller
                 'students' => collect(),
             ]);
         }
+    }
+
+    /**
+     * Stage → card-grouping bucket for the Intake Monitoring board's
+     * "Group by Stage" view: needs_attention | immigration | offers |
+     * english | started | lead_stages.
+     */
+    private function intakeCategory(string $track, ?string $stage): string
+    {
+        $s = (string) $stage;
+        if ($s === 'Started Course') {
+            return 'started';
+        }
+        if (in_array($s, ['For Relodgement', 'Declined Visa', 'Decline Visa', 'Request for Information', 'Request to Lodge', 'Missed the Meeting', 'Not Qualified'], true)) {
+            return 'needs_attention';
+        }
+        if ($track === 'immigration' || in_array($s, ['Endorsed to Immigration', 'Visa Lodged', 'Approved in Principle', 'Approved Visa', 'Endorsed', 'For Assessment', 'Interim Visa Issued', 'RFI Responded'], true)) {
+            return 'immigration';
+        }
+        if (in_array($s, ['Conditional Offer', 'Unconditional Offer', 'School Enrolment', 'School Enrollment', 'Endorsed to School'], true)) {
+            return 'offers';
+        }
+        if ($track === 'english' || in_array($s, ['English Pro', 'PTE Review', 'DIY Review', 'For PTE Mocktest', 'For PTE Exam'], true)) {
+            return 'english';
+        }
+
+        return 'lead_stages';
     }
 
     /**

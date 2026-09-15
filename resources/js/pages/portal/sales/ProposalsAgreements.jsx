@@ -159,9 +159,9 @@ export default function ProposalsAgreements({
                     <button
                         type="button"
                         onClick={() => setShowNew(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-colors shadow-sm"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
                     >
-                        <Plus size={14} /> New document
+                        <Plus size={14} className="flex-shrink-0" /> New document
                     </button>
                 </div>
             </div>
