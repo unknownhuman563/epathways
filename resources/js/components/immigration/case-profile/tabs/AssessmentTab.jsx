@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ClipboardList, Send, ExternalLink, Download } from "lucide-react";
+import { ClipboardList, Send, ExternalLink, Download, Pencil } from "lucide-react";
 import { Link } from "@inertiajs/react";
 import IntakeDownloadModal from "@/components/immigration/IntakeDownloadModal";
+import { IntakeViewModal } from "@/pages/portal/immigration/Assessments";
 
 const VISA_LABEL = {
     resident: "Resident Visa (SMC)",
@@ -36,6 +37,7 @@ const FIELD_GROUPS = {
 
 export default function AssessmentTab({ lead, intake }) {
     const [downloadOpen, setDownloadOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
 
     if (! intake) {
         return <EmptyState lead={lead} />;
@@ -65,6 +67,18 @@ export default function AssessmentTab({ lead, intake }) {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Edit — opens the full intake with per-section inline editing
+                        (same modal + save endpoint as the Visa Assessment module).
+                        Works before and after the case is converted. */}
+                    {data.id && (
+                        <button
+                            type="button"
+                            onClick={() => setEditOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-900 text-white hover:bg-black transition-colors"
+                        >
+                            <Pencil size={11} /> Edit assessment
+                        </button>
+                    )}
                     {/* Preview + download (PDF / Word) — all visa types. */}
                     {data.id && (
                         <button
@@ -75,11 +89,10 @@ export default function AssessmentTab({ lead, intake }) {
                             <Download size={11} /> Download
                         </button>
                     )}
-                    {data.assessment_id && (
+                    {/* Resident keeps its richer admin intake page as a read-only reference. */}
+                    {data.assessment_id && type === "resident" && (
                         <Link
-                            href={type === "resident"
-                                ? `/admin/immigration/resident-intakes/${data.id}`
-                                : `/portal/immigration/intakes/${type}/${data.id}`}
+                            href={`/admin/immigration/resident-intakes/${data.id}`}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
                         >
                             Open full intake <ExternalLink size={11} />
@@ -87,6 +100,13 @@ export default function AssessmentTab({ lead, intake }) {
                     )}
                 </div>
             </div>
+
+            {editOpen && data.id && (
+                <IntakeViewModal
+                    intake={{ visa_type: type, id: data.id, can_convert: false }}
+                    onClose={() => setEditOpen(false)}
+                />
+            )}
 
             {groups.map((group) => (
                 <SectionCard key={group.title} title={group.title}>
