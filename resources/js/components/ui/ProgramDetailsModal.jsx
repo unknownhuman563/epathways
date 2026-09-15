@@ -17,24 +17,26 @@ import { renderSections, hasSections } from '@/utils/programSections';
  * carry several proposal versions, and there is no reason to send every
  * program's full body text to a client who may open none of them.
  */
-export default function ProgramDetailsModal({ code, programId, onClose }) {
+export default function ProgramDetailsModal({ code, programId, endpoint, onClose }) {
     const [program, setProgram] = useState(null);
     const [error, setError] = useState(null);
+
+    // The tracker passes a code + programId (its scoped endpoint); staff pass an
+    // explicit `endpoint` (the /admin/programs/{id}/details JSON route).
+    const url = endpoint || `/track/${encodeURIComponent(code)}/programs/${programId}`;
 
     useEffect(() => {
         let cancelled = false;
         setProgram(null);
         setError(null);
 
-        fetch(`/track/${encodeURIComponent(code)}/programs/${programId}`, {
-            headers: { Accept: 'application/json' },
-        })
+        fetch(url, { headers: { Accept: 'application/json' } })
             .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
             .then((d) => { if (!cancelled) setProgram(d.program); })
             .catch(() => { if (!cancelled) setError('We could not load this program right now.'); });
 
         return () => { cancelled = true; };
-    }, [code, programId]);
+    }, [url]);
 
     // Escape to close, and hold the page still behind the modal.
     useEffect(() => {

@@ -558,6 +558,95 @@ class SalesController extends Controller
     }
 
     /**
+     * Human document-type label for an agreement — the specific scenario/variant
+     * (e.g. "Standard · 150,000", "Offshore - Philippines") rather than the
+     * generic bucket. Works for both live docs (variant "consultancy:key:mode"
+     * or "engagement-english[-offshore]") and pending reviews (scenario like
+     * "consultancy_std_150" / "english_engagement").
+     */
+    private function agreementTypeLabel(string $checklistKey, ?string $variant): string
+    {
+        if ($checklistKey === 'agree.proposal') {
+            return 'Study Proposal';
+        }
+        if ($checklistKey === 'agree.engagement_english') {
+            return in_array($variant, ['engagement-english-offshore', 'english_offshore'], true)
+                ? 'Offshore - English'
+                : 'Offshore - Philippines';
+        }
+        if ($checklistKey === 'agree.consultancy') {
+            $key = str_starts_with((string) $variant, 'consultancy:')
+                ? (explode(':', (string) $variant)[1] ?? null)
+                : str_replace('consultancy_', '', (string) $variant);
+
+            return match ($key) {
+                'std_150' => 'Standard · 150,000',
+                'voucher_150' => 'With Voucher · 150,000',
+                'std_100' => 'Standard · 100,000',
+                'english_100' => 'With English · 100,000',
+                'offshore' => 'Standard · Offshore',
+                'offshore_zero' => 'Standard · Offshore — Zero fees',
+                'onshore' => 'Onshore Engagement',
+                default => 'Consultancy Agreement',
+            };
+        }
+
+        return ucfirst(str_replace(['agree.', '_'], ['', ' '], $checklistKey));
+    }
+
+    /** Agreement variant/scenario → the ConsultancyReviewService fee-item type. */
+    private function variantToFeeType(string $checklistKey, ?string $variant): ?string
+    {
+        if ($checklistKey === 'agree.engagement_english') {
+            return in_array($variant, ['engagement-english-offshore', 'english_offshore'], true)
+                ? 'english_offshore'
+                : 'english_engagement';
+        }
+        if ($checklistKey === 'agree.consultancy') {
+            // Live docs: "consultancy:std_150:single"; pending: "consultancy_std_150".
+            if (str_starts_with((string) $variant, 'consultancy:')) {
+                return 'consultancy_'.(explode(':', (string) $variant)[1] ?? '');
+            }
+
+            return $variant ?: null;
+        }
+
+        return null; // proposals have no fee total
+    }
+
+    /** NZ$ for offshore / English-offshore agreements, Php otherwise. */
+    private function agreementCurrencySymbol(string $checklistKey, ?string $variant): string
+    {
+        $type = $this->variantToFeeType($checklistKey, $variant);
+
+        return in_array($type, ['consultancy_offshore', 'consultancy_offshore_zero', 'english_offshore'], true)
+            ? 'NZ$'
+            : 'Php';
+    }
+
+    /**
+     * Fee total for one agreement doc. Prefers the lead's stored review amounts
+     * when its scenario matches this doc (those carry the reviewer's edits);
+     * otherwise falls back to the scenario's default fee total.
+     */
+    private function agreementTotal(Lead $l, string $checklistKey, ?string $variant): ?int
+    {
+        $type = $this->variantToFeeType($checklistKey, $variant);
+        if ($type === null) {
+            return null;
+        }
+
+        $review = is_array($l->consultancy_review) ? $l->consultancy_review : [];
+        if (($review['scenario'] ?? null) === $type && is_array($review['items'] ?? null)) {
+            return array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $review['items']));
+        }
+
+        $items = \App\Services\ConsultancyReviewService::feeItems($type, []);
+
+        return array_sum(array_map(fn ($it) => (int) ($it['amount'] ?? 0), $items));
+    }
+
+    /**
      * GET /portal/{role}/leads/proposals-agreements — sidebar page listing
      * every lead that has at least one generated Proposal or Agreement
      * (checklist_key in the agreement bucket + source='generated'). The
@@ -601,7 +690,7 @@ class SalesController extends Controller
                 ->get();
 
             $mapRow = function (Lead $l) {
-                $docs = $l->documents->map(function ($d) {
+                $docs = $l->documents->map(function ($d) use ($l) {
                     // source_variant now carries the applicant mode as a
                     // third segment (e.g. "consultancy:std_150:couple").
                     // Older rows will have only 2 segments — default to
@@ -615,14 +704,24 @@ class SalesController extends Controller
                     return [
                         'id' => $d->id,
                         'checklist_key' => $d->checklist_key,
-                        'type' => match ($d->checklist_key) {
-                            'agree.proposal' => 'Proposal',
-                            'agree.consultancy' => 'Consultancy Agreement',
-                            'agree.engagement_english' => 'English Engagement',
-                            default => ucfirst(str_replace(['agree.', '_'], ['', ' '], $d->checklist_key)),
-                        },
+                        // Specific document type (the scenario/variant), not the
+                        // generic bucket — e.g. "Standard · 150,000",
+                        // "Offshore - Philippines".
+                        'type' => $this->agreementTypeLabel($d->checklist_key, $d->source_variant),
                         'variant' => $d->source_variant,
                         'applicant_mode' => $applicantMode,
+                        // Fee total for the Total column — the lead's verified
+                        // review amounts when they match this doc, else the
+                        // scenario's default fee total.
+                        'total_amount' => $this->agreementTotal($l, $d->checklist_key, $d->source_variant),
+                        'currency_symbol' => $this->agreementCurrencySymbol($d->checklist_key, $d->source_variant),
+                        // True when this doc's agreement was approved in the
+                        // verification queue — the Agreements tab shows "Sent"
+                        // even for older leads whose pipeline status predates
+                        // the approve→sent stage bump.
+                        'review_approved' => (is_array($l->consultancy_review)
+                            && ($l->consultancy_review['status'] ?? null) === 'approved'
+                            && ($l->consultancy_review['scenario'] ?? null) === $this->variantToFeeType($d->checklist_key, $d->source_variant)),
                         'original_name' => $d->original_name,
                         'size' => $d->size,
                         'created_at' => optional($d->created_at)->toIso8601String(),
@@ -666,6 +765,61 @@ class SalesController extends Controller
                 ->filter(fn ($l) => $l->documents->contains(fn ($d) => in_array($d->checklist_key, $agreementKeys, true)))
                 ->map($mapRow)
                 ->values();
+
+            // Consultancy agreements still IN verification (pending / verified)
+            // have no generated PDF yet — but staff should still see them on the
+            // Agreements tab as "For verification" entries (in addition to the
+            // verification queue). Skip any lead already shown with a real doc.
+            $shownIds = $agreements->pluck('id');
+            $pendingConsultancy = Lead::whereNotNull('consultancy_review')
+                ->whereIn('consultancy_review->status', ['pending', 'verified'])
+                ->with('faceImage')
+                ->orderByDesc('updated_at')
+                ->get()
+                ->reject(fn (Lead $l) => $shownIds->contains($l->id))
+                ->map(function (Lead $l) {
+                    $review = is_array($l->consultancy_review) ? $l->consultancy_review : [];
+                    $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+                    $scenario = $review['scenario'] ?? null;
+                    // English agreements now go through this queue too — reflect
+                    // their real document bucket + type, not "Consultancy".
+                    $isEnglish = in_array($scenario, ['english_engagement', 'english_offshore'], true);
+                    $key = $isEnglish ? 'agree.engagement_english' : 'agree.consultancy';
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
+                        'email' => $l->email,
+                        'phone' => $l->phone,
+                        'stage' => $l->stage,
+                        'status' => $l->status,
+                        'documents' => [[
+                            'id' => 'review-'.$l->id,
+                            'checklist_key' => $key,
+                            'type' => $this->agreementTypeLabel($key, $scenario),
+                            'variant' => $review['scenario'] ?? null,
+                            'applicant_mode' => $review['applicant_mode'] ?? 'single',
+                            'original_name' => $review['scenario_label'] ?? 'Consultancy Agreement',
+                            'size' => null,
+                            'created_at' => $review['submitted_at'] ?? null,
+                            'note' => null,
+                            'notes' => [],
+                            'uploader' => null,
+                            // Flags the Agreements table to show the verification
+                            // status instead of a download / lifecycle badge.
+                            'pending_verification' => true,
+                            'verification_status' => $review['status'] ?? 'pending', // pending | verified
+                            'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+                            'currency_symbol' => ($review['currency'] ?? 'php') === 'nzd' ? 'NZ$' : 'Php',
+                        ]],
+                        'documents_count' => 1,
+                        'latest_generated_at' => $review['submitted_at'] ?? null,
+                    ];
+                });
+
+            $agreements = $agreements->concat($pendingConsultancy)->values();
 
             // Tab: Proposals — leads with a program shortlist saved. Each
             // row exposes the picked programs (id + title) so the frontend
@@ -942,6 +1096,54 @@ class SalesController extends Controller
                 'programs' => collect(),
             ]);
         }
+    }
+
+    /**
+     * Server-side lead search for the "+ New" proposal/agreement picker. The
+     * page ships an initial roster (first 500), but on a large dataset a lead
+     * late in the alphabet is cut off — so the modal searches here instead of
+     * filtering the capped list client-side, making ANY eligible lead findable.
+     */
+    public function docPickerSearch(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+
+        $leads = Lead::query()
+            ->where(function ($w) {
+                $w->where(function ($p) {
+                    $p->where('is_student', false)
+                        ->where('is_immigration_case', false)
+                        ->where('is_accommodation_client', false)
+                        ->where('is_english_student', false);
+                })
+                    ->orWhere('is_student', true)
+                    ->orWhereIn('source', ['free-assessment', 'education-enrolment']);
+            })
+            ->when($q !== '', function ($w) use ($q) {
+                $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%';
+                // Full-name concat differs by driver (MySQL prod / sqlite tests).
+                $concat = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite'
+                    ? "(first_name || ' ' || last_name)"
+                    : "CONCAT(first_name, ' ', last_name)";
+                $w->where(function ($s) use ($like, $concat) {
+                    $s->where('first_name', 'like', $like)
+                        ->orWhere('last_name', 'like', $like)
+                        ->orWhereRaw("{$concat} like ?", [$like])
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('lead_id', 'like', $like);
+                });
+            })
+            ->orderBy('first_name')
+            ->limit(50)
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'email'])
+            ->map(fn (Lead $l) => [
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'email' => $l->email,
+            ]);
+
+        return response()->json(['leads' => $leads]);
     }
 
     /** Which portal prefix served this request (drives the frontend base URL). */

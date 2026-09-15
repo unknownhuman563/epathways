@@ -3,7 +3,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
     BadgeCheck, CheckCircle2, ShieldCheck, GraduationCap, Mail, Clock, Loader2,
     ExternalLink, Search, X, Check, Plus, School, CalendarDays, Send,
-    Trash2, ArrowLeftRight, DollarSign, AlertCircle, ChevronRight,
+    Trash2, ArrowLeftRight, DollarSign, AlertCircle, ChevronRight, Flag,
 } from "lucide-react";
 
 // ── Program Verification ────────────────────────────────────────────────────
@@ -133,7 +133,9 @@ function QueueCard({ p, active, onClick }) {
             <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                     <span className="text-[13px] font-bold text-gray-900 truncate">{p.name}</span>
-                    <span className="text-[10px] text-gray-400 font-mono ml-1.5">{p.lead_id}</span>
+                    {p.agent
+                        ? <span className="text-[10px] font-semibold text-violet-700 ml-1.5">· {p.agent}</span>
+                        : <span className="text-[10px] text-gray-400 font-mono ml-1.5">{p.lead_id}</span>}
                 </div>
                 <StatusPill status={p.status} small />
             </div>
@@ -210,7 +212,9 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
                             <StatusPill status={p.status} />
                         </div>
                         <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-x-3 gap-y-0.5 flex-wrap">
-                            <span className="font-mono">{p.lead_id}</span>
+                            {p.agent
+                                ? <span className="font-semibold text-violet-700">Agent · {p.agent}</span>
+                                : <span className="font-mono">{p.lead_id}</span>}
                             {p.email && <span>{p.email}</span>}
                             <span>Submitted {fmtDateTime(p.submitted_at)}{p.submitted_by ? ` by ${p.submitted_by}` : ""}</span>
                         </div>
@@ -269,8 +273,7 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                                    <th className="py-2 pl-2 pr-3">Programme</th>
-                                    <th className="py-2 px-3">School</th>
+                                    <th className="py-2 pl-2 pr-3">Programme &amp; school</th>
                                     <th className="py-2 px-3">Intake</th>
                                     <th className="py-2 px-3">Notes</th>
                                     <th className="py-2 px-3 text-right pr-2">Status</th>
@@ -280,7 +283,7 @@ function ProposalPanel({ p, catalogue, schools, leadBase }) {
                             <tbody className="divide-y divide-gray-50">
                                 {p.programs.map((row) => (
                                     <ProgramRow
-                                        key={row.id} row={row}
+                                        key={row.id} row={row} leadId={p.id}
                                         flaggedForChange={(p.changes_requested?.program_ids || []).includes(row.id)}
                                         onStatus={() => toggleRowStatus(row)}
                                         onSchool={(school) => metaUpdate({ [row.id]: { school } }, `row-${row.id}`)}
@@ -342,18 +345,14 @@ function Tab({ active, onClick, children }) {
     );
 }
 
-function ProgramRow({ row, flaggedForChange, onStatus, onSchool, onNote, onRemove, removable, schools, busy }) {
+function ProgramRow({ row, leadId, flaggedForChange, onStatus, onSchool, onNote, onRemove, removable, schools, busy }) {
     const [editingSchool, setEditingSchool] = useState(false);
-    const [editingNote, setEditingNote] = useState(false);
-    const [noteVal, setNoteVal] = useState(row.note ?? "");
     const verified = row.p_status === "verified";
-
-    const saveNote = () => { onNote(noteVal.trim()); setEditingNote(false); };
 
     return (
         <tr className="align-top group">
             <td className="py-3 pl-2 pr-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] font-semibold text-gray-900">{row.title}</span>
                     {row.level != null && (
                         <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-gray-100 text-gray-600">L{row.level}</span>
@@ -365,38 +364,25 @@ function ProgramRow({ row, flaggedForChange, onStatus, onSchool, onNote, onRemov
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-rose-50 text-rose-600 border border-rose-200">Revise</span>
                     )}
                 </div>
-            </td>
-            <td className="py-3 px-3 text-[12px] text-gray-700">
-                {editingSchool ? (
-                    <select autoFocus defaultValue={row.school || ""} onChange={(e) => { onSchool(e.target.value); setEditingSchool(false); }} onBlur={() => setEditingSchool(false)}
-                        className="px-2 py-1 border border-gray-200 rounded-md text-[12px] bg-white focus:outline-none focus:border-gray-900">
-                        <option value="">—</option>
-                        {schools.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                ) : (
-                    <button type="button" onClick={() => setEditingSchool(true)} className="hover:text-gray-900 hover:underline">
-                        {row.school || <span className="text-gray-300">Assign</span>}
-                    </button>
-                )}
+                {/* School — editable, shown under the programme name (merged column). */}
+                <div className="mt-1 text-[12px] text-gray-500">
+                    {editingSchool ? (
+                        <select autoFocus defaultValue={row.school || ""} onChange={(e) => { onSchool(e.target.value); setEditingSchool(false); }} onBlur={() => setEditingSchool(false)}
+                            className="px-2 py-1 border border-gray-200 rounded-md text-[12px] bg-white focus:outline-none focus:border-gray-900">
+                            <option value="">—</option>
+                            {schools.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    ) : (
+                        <button type="button" onClick={() => setEditingSchool(true)} className="inline-flex items-center gap-1 hover:text-gray-900 hover:underline">
+                            <School size={11} className="text-gray-400 shrink-0" />
+                            {row.school || <span className="text-gray-300">Assign school</span>}
+                        </button>
+                    )}
+                </div>
             </td>
             <td className="py-3 px-3 text-[12px] text-gray-700">{row.intake || <span className="text-gray-300">—</span>}</td>
-            <td className="py-3 px-3 max-w-[280px]">
-                {editingNote ? (
-                    <div className="flex items-start gap-1">
-                        <textarea autoFocus rows={2} value={noteVal} onChange={(e) => setNoteVal(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Escape") setEditingNote(false); }}
-                            placeholder="Internal note — staff only"
-                            className="w-full px-2 py-1 border border-gray-200 rounded-md text-[12px] focus:outline-none focus:border-gray-900 resize-y" />
-                        <button type="button" onClick={saveNote} className="text-emerald-600 mt-1 shrink-0"><Check size={14} /></button>
-                    </div>
-                ) : (
-                    <button type="button" onClick={() => { setNoteVal(row.note ?? ""); setEditingNote(true); }}
-                        className="text-left text-[12px] leading-snug hover:text-gray-900 w-full">
-                        {row.note
-                            ? <span className="text-gray-700">{row.note}</span>
-                            : <span className="text-gray-300 italic">Add note</span>}
-                    </button>
-                )}
+            <td className="py-3 px-3 max-w-[300px]">
+                <ProgramNoteThread leadId={leadId} program={row} />
             </td>
             <td className="py-3 px-3 text-right">
                 <button type="button" onClick={onStatus} disabled={busy}
@@ -597,6 +583,156 @@ function RequestChangesModal({ programs = [], onClose, onSend, busy }) {
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ── Threaded per-programme notes ─────────────────────────────────────────────
+// The SAME thread the Proposals tab uses (leads.proposed_program_meta[<program>]
+// .notes) — notes/replies added there show here and vice versa. Add / reply /
+// acknowledge, collapsed to the latest note with a "N notes" expander.
+function fmtNoteTime(iso) {
+    if (! iso) return "";
+    const d = new Date(iso);
+    const now = new Date();
+    const t = d.toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit" });
+    if (d.toDateString() === now.toDateString()) return `Today, ${t}`;
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return `Yesterday, ${t}`;
+    return `${d.toLocaleDateString("en-NZ", { day: "2-digit", month: "short" })}, ${t}`;
+}
+
+function NoteTag({ tag }) {
+    if (tag === "change_requested") {
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 shrink-0">Change requested</span>;
+    }
+    return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 shrink-0">Note</span>;
+}
+
+function NoteComposer({ value, onChange, onSubmit, onCancel, placeholder, small }) {
+    return (
+        <div>
+            <textarea autoFocus rows={small ? 2 : 2} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+                className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:border-gray-900 resize-y" />
+            <div className="flex items-center gap-2 mt-1">
+                <button type="button" onClick={onSubmit} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-900 text-white text-[11px] font-bold hover:bg-black">
+                    <Send size={11} /> Post
+                </button>
+                <button type="button" onClick={onCancel} className="text-[11px] font-semibold text-gray-500 hover:text-gray-800">Cancel</button>
+            </div>
+        </div>
+    );
+}
+
+function ProgramNoteThread({ leadId, program }) {
+    const notes = program.notes || [];
+    const vnote = (program.note || "").trim();
+    const ordered = [...notes].reverse();
+    const [expanded, setExpanded] = useState(false);
+    const [adding, setAdding] = useState(false);
+    const [body, setBody] = useState("");
+    const [replyTo, setReplyTo] = useState(null);
+    const [replyBody, setReplyBody] = useState("");
+    const base = `/admin/leads/${leadId}/program-notes/${program.id}`;
+    const send = (url, data, done) => router.post(url, data, { preserveScroll: true, onSuccess: done });
+    const addNote = () => { if (! body.trim()) return; send(base, { body, tag: "note" }, () => { setBody(""); setAdding(false); }); };
+    const reply = (id) => { if (! replyBody.trim()) return; send(`${base}/${id}/reply`, { body: replyBody }, () => { setReplyBody(""); setReplyTo(null); }); };
+    const toggle = (id) => send(`${base}/${id}/actioned`, {});
+
+    const verificationCard = vnote ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <div className="flex items-start gap-1.5">
+                <Flag size={12} className="mt-0.5 shrink-0 text-amber-500" />
+                <span className="text-[12px] font-medium leading-snug text-gray-800 [overflow-wrap:anywhere] whitespace-pre-wrap">{vnote}</span>
+            </div>
+        </div>
+    ) : null;
+
+    if (notes.length === 0) {
+        return (
+            <div className="space-y-2">
+                {verificationCard}
+                {! verificationCard && ! adding && (
+                    <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-gray-400 italic">No note on this program</span>
+                            <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                        </div>
+                    </div>
+                )}
+                {verificationCard && ! adding && (
+                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
+                )}
+                {adding && <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(""); setAdding(false); }} placeholder="Add a note on this programme…" />}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-2">
+            {verificationCard}
+            {! expanded ? (
+                (() => {
+                    const n = ordered[0];
+                    const done = !! n.actioned_at;
+                    const cr = n.tag === "change_requested";
+                    return (
+                        <div className={`rounded-lg border px-3 py-2 ${cr ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}>
+                            <div className="flex items-start gap-1.5">
+                                <Flag size={12} className={`mt-0.5 shrink-0 ${cr ? "text-rose-500" : "text-amber-500"}`} />
+                                <span className={`text-[12px] font-medium leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? "line-through text-gray-400" : "text-gray-800"}`}>{n.body}</span>
+                            </div>
+                            <div className={`text-[10px] mt-1 ml-[18px] ${cr ? "text-rose-700/80" : "text-amber-700/80"}`}>
+                                {n.author} · {fmtNoteTime(n.created_at)}
+                                {n.replies.length ? <span className="text-gray-400"> · {n.replies.length} repl{n.replies.length === 1 ? "y" : "ies"}</span> : null}
+                            </div>
+                        </div>
+                    );
+                })()
+            ) : (
+                ordered.map((n) => {
+                    const done = !! n.actioned_at;
+                    const cr = n.tag === "change_requested";
+                    return (
+                        <div key={n.id} className="text-[11px]">
+                            <div className="flex items-center gap-1.5">
+                                <NoteTag tag={n.tag} />
+                                <span className="font-bold text-gray-800 truncate">{n.author}</span>
+                                <span className="text-gray-400 whitespace-nowrap">{fmtNoteTime(n.created_at)}</span>
+                            </div>
+                            <p className={`mt-1 text-gray-700 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? "line-through text-gray-400" : ""}`}>{n.body}</p>
+                            {n.replies.map((rp) => (
+                                <div key={rp.id} className="mt-1.5 ml-3 border-l-2 border-gray-100 pl-2.5">
+                                    <span className="font-semibold text-gray-700">{rp.author}</span>
+                                    <span className="text-gray-400"> · {fmtNoteTime(rp.created_at)}</span>
+                                    <p className="text-gray-600 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap">{rp.body}</p>
+                                </div>
+                            ))}
+                            <div className="mt-1.5 flex items-center gap-3 font-semibold">
+                                <button type="button" onClick={() => toggle(n.id)} className={done ? "text-gray-400 hover:text-gray-600" : "text-emerald-700 hover:text-emerald-900"}>
+                                    {done ? "Actioned ✓" : (cr ? "Mark as actioned" : "Acknowledge")}
+                                </button>
+                                <button type="button" onClick={() => { setReplyTo(replyTo === n.id ? null : n.id); setReplyBody(""); }} className="text-gray-500 hover:text-gray-800">Reply</button>
+                            </div>
+                            {replyTo === n.id && (
+                                <div className="mt-1.5">
+                                    <NoteComposer value={replyBody} onChange={setReplyBody} onSubmit={() => reply(n.id)} onCancel={() => { setReplyBody(""); setReplyTo(null); }} placeholder="Write a reply…" small />
+                                </div>
+                            )}
+                        </div>
+                    );
+                })
+            )}
+
+            <div className="flex items-center gap-3">
+                <button type="button" onClick={() => setExpanded((v) => ! v)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-800">
+                    {expanded ? "Show less" : `${notes.length} note${notes.length === 1 ? "" : "s"}`}
+                    <ChevronRight size={12} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
+                </button>
+                {! adding && <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>}
+            </div>
+
+            {adding && <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(""); setAdding(false); }} placeholder="Add a note on this programme…" />}
         </div>
     );
 }

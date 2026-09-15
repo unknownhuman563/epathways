@@ -21,17 +21,30 @@ class Lead extends Model
      * converted to a student. Surfaced as the dropdown in the Students
      * dashboard's Status column.
      */
+    // The full education pipeline — the 15-stage management-report workflow.
+    // A student's position is tracked by `education_stage`. Stages 1–6 are the
+    // pre-enrolment lead journey, 7–13 the enrolment→course path, and 14–15 the
+    // out-of-process visa outcomes.
     public const EDUCATION_STAGES = [
-        'Endorsed to School',
+        'New Lead',
+        'Pre-Screening Done',
+        'For Proposal',
+        'Proposal Sent',
+        'Engagement Sent',
+        'Goal Setting Done',
+        'School Enrolment',
         'Conditional Offer',
         'Unconditional Offer',
         'Endorsed to Immigration',
         'Visa Lodged',
-        'Approved in Principle',
-        'Request for Information',
         'Approved Visa',
         'Started Course',
+        'For Relodgement',
+        'Declined Visa',
     ];
+
+    /** Default stage a newly-converted education student starts on. */
+    public const EDUCATION_STAGE_DEFAULT = 'School Enrolment';
 
     /**
      * Subset of EDUCATION_STAGES that hand the lead off to the Immigration
@@ -45,9 +58,9 @@ class Lead extends Model
     public const EDUCATION_STAGES_IMMIGRATION = [
         'Endorsed to Immigration',
         'Visa Lodged',
-        'Approved in Principle',
-        'Request for Information',
         'Approved Visa',
+        'For Relodgement',
+        'Declined Visa',
     ];
 
     /**
@@ -151,6 +164,30 @@ class Lead extends Model
             ->where('is_immigration_case', false)
             ->where('is_accommodation_client', false)
             ->where('is_english_student', false);
+    }
+
+    /**
+     * The Students module universe — the exact set the Education "Students"
+     * page lists across its Education / English / Immigration tabs. It is:
+     *   - every converted student (is_student), plus
+     *   - every English learner (english_stage set, or stage = "English Pro").
+     *
+     * A student who is handed to immigration keeps is_student = true (see
+     * EducationController::updateStudentField), so they stay in this register
+     * and their immigration stage is tracked under the Immigration tab — that
+     * is the "student who is also a case" the module is designed around.
+     *
+     * Pure immigration cases that were NEVER education students are deliberately
+     * excluded — they live on the Immigration Cases page, not here. Kept as a
+     * scope so the Students list and the education report count the same rows.
+     */
+    public function scopeInStudentsRegister($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_student', true)
+                ->orWhere('stage', 'English Pro')
+                ->orWhereNotNull('english_stage');
+        });
     }
 
     /**
@@ -801,18 +838,13 @@ class Lead extends Model
                 } elseif ($lead->status === 'Consultancy Agreement Signed') {
                     // Key intentionally spelled 'consultancy_signe' per template.
                     \App\Jobs\SendLeadFollowupEmail::sendKey('consultancy_signe', $lead);
-                } elseif ($lead->status === 'Proposal Sent') {
-                    // Feedback-request drip after the proposal (program_proposal)
-                    // is sent: day 1, day 2, day 5. Each is skipped at fire time
-                    // if the lead has moved on from "Proposal Sent" (e.g. chose a
-                    // program), so a responsive lead stops getting nudges.
-                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_1', 'Proposal Sent')
-                        ->delay(now()->addDays(1));
-                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_2', 'Proposal Sent')
-                        ->delay(now()->addDays(2));
-                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_3', 'Proposal Sent')
-                        ->delay(now()->addDays(5));
                 }
+                // NB: the post-proposal feedback drip (proposal_send_1/2/3) is NOT
+                // scheduled here — it's tied to the actual proposal email in
+                // LeadDocumentController (SendLeadFollowupEmail::scheduleProposalDrip),
+                // because the proposal is often emailed while the lead is already
+                // in "Proposal Sent" (verification approval), so no status
+                // transition fires.
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Stage-change follow-up failed', [
                     'lead_id' => $lead->id, 'status' => $lead->status, 'error' => $e->getMessage(),

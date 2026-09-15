@@ -9,8 +9,10 @@ import {
 // Shared stage → pill-colour map, so the STAGE dropdown here reads exactly
 // like the coloured stage pills in the Leads list.
 import { stageClass } from '@/pages/portal/sales/Leads';
+import ManualBookingModal from '@/components/bookings/ManualBookingModal';
 
-export default function Bookings({ bookings: backendBookings, stages = [] }) {
+export default function Bookings({ bookings: backendBookings, stages = [], leadPicker = [] }) {
+    const [manualOpen, setManualOpen] = useState(false);
     const [bookings, setBookings] = useState(() => {
         if (backendBookings && backendBookings.length > 0) {
             return backendBookings.map(booking => ({
@@ -159,6 +161,10 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
         <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
             <Head title="Bookings Management" />
 
+            {manualOpen && (
+                <ManualBookingModal leads={leadPicker} onClose={() => setManualOpen(false)} />
+            )}
+
             {/* Page Header & Actions */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hidden lg:flex mb-6">
                 <div>
@@ -171,7 +177,7 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
                         <FileSpreadsheet size={16} className="text-emerald-600" />
                         Export Bookings
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm">
+                    <button onClick={() => setManualOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm">
                         <Plus size={16} />
                         Log Manual Booking
                     </button>

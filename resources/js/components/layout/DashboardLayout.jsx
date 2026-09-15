@@ -1,6 +1,29 @@
 import { Link, usePage, router } from "@inertiajs/react";
 import { useState, useEffect } from "react";
-import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft, Sparkles } from "lucide-react";
+import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft, Sparkles, LayoutGrid, GraduationCap, Languages, Globe, Building2, Building, Wallet, UserRound, Users, KeyRound } from "lucide-react";
+
+// Admin-area restricted modules that, when granted via Module Management, should
+// surface as a sidebar link for a NON-admin staffer (admins already see them in
+// the admin sidebar). Keyed by the module key from config/modules.php.
+const MODULE_NAV = {
+    portal_invitation: { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} /> },
+};
+
+// A distinct icon per department portal for the sidebar "Portals" group.
+const PORTAL_ICONS = {
+    sales: Building2,
+    education: GraduationCap,
+    english: Languages,
+    immigration: Globe,
+    accommodation: Building,
+    finance: Wallet,
+    agent: UserRound,
+    sub_agent: Users,
+};
+const portalIcon = (key) => {
+    const Icon = PORTAL_ICONS[key] || LayoutGrid;
+    return <Icon size={20} />;
+};
 import NotificationBell from "@/components/NotificationBell";
 import GlobalSearchBar from "@/components/GlobalSearchBar";
 import RequestTicketButton from "@/components/RequestTicketButton";
@@ -33,6 +56,40 @@ export default function DashboardLayout({
     const { url, props } = usePage();
     const user = props.auth?.user;
 
+    // Department portals this user can switch between (their role + any granted
+    // in Module Management). Empty unless there's more than one.
+    const portals = props.auth?.portals || [];
+    const currentPortal = portals.find((p) => url.startsWith(`/portal/${p.key}/`));
+
+    // Admin-area modules granted to a NON-admin staffer via Module Management —
+    // surface each as a sidebar link so an enabled module actually shows up in
+    // their account. Admins/super already see these in the admin sidebar.
+    const grantedModules = props.auth?.modules || [];
+    const isPrivileged = user?.role === "admin" || user?.role === "super_admin";
+    const moduleExtras = isPrivileged
+        ? []
+        : Object.entries(MODULE_NAV)
+            .filter(([key]) => grantedModules.includes(key))
+            .map(([, item]) => item);
+
+    // Append a "Tools" section for granted admin modules, plus a collapsible
+    // "Portals" group when the user can reach more than one portal.
+    const navWithPortals = [
+        ...nav,
+        ...(moduleExtras.length > 0 ? [{ section: true, name: "Tools" }, ...moduleExtras] : []),
+        ...(portals.length > 1
+            ? [{
+                name: "Portals",
+                icon: <LayoutGrid size={20} />,
+                children: portals.map((p) => ({
+                    name: `${p.label} Portal`,
+                    href: p.href,
+                    icon: portalIcon(p.key),
+                })),
+            }]
+            : []),
+    ];
+
     // Match `/leads` against `/leads/123` (lead detail) but NOT against
     // `/leads/proposals-agreements` — otherwise sibling children share
     // a prefix and both light up. Path must either equal the href or
@@ -58,22 +115,25 @@ export default function DashboardLayout({
     // Single-open accordions: at most one group is expanded at a time, so the
     // sidebar stays short enough to avoid scrolling even on portals with long
     // menus. At rest only the group containing the current page is open.
-    const [openAccordions, setOpenAccordions] = useState(() => {
-        for (const item of nav) {
-            if (item.children && isAccordionActive(item)) return { [item.name]: true };
+    // The active group: a nav group whose child matches the URL, or the Portals
+    // group whenever the user is anywhere inside one of their portals.
+    const activeGroupName = () => {
+        for (const item of navWithPortals) {
+            if (item.children && isAccordionActive(item)) return item.name;
         }
-        return {};
+        if (portals.length > 1 && currentPortal) return "Portals";
+        return null;
+    };
+
+    const [openAccordions, setOpenAccordions] = useState(() => {
+        const g = activeGroupName();
+        return g ? { [g]: true } : {};
     });
 
     useEffect(() => {
         // On navigation, open the active group and collapse every other one.
-        for (const item of nav) {
-            if (item.children && isAccordionActive(item)) {
-                setOpenAccordions({ [item.name]: true });
-                return;
-            }
-        }
-        setOpenAccordions({});
+        const g = activeGroupName();
+        setOpenAccordions(g ? { [g]: true } : {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [url]);
 
@@ -142,7 +202,7 @@ export default function DashboardLayout({
             )}
 
             <div className="flex-1 overflow-y-auto px-3 py-1.5 flex flex-col gap-0.5 scrollbar-hide">
-                {nav.map((item) => {
+                {navWithPortals.map((item) => {
                     if (item.children) {
                         const open = !!openAccordions[item.name];
                         const activeChild = activeChildFor(item);
@@ -322,6 +382,21 @@ export default function DashboardLayout({
                     </div>
 
                     <div className="flex items-center gap-4 lg:gap-5 mt-2">
+                        {portals.length > 1 && (
+                            <div className="relative hidden sm:block" title="Switch portal">
+                                <select
+                                    value={currentPortal?.href || portals[0]?.href || ""}
+                                    onChange={(e) => router.visit(e.target.value)}
+                                    className="appearance-none text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl pl-3 pr-8 py-2 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-900 cursor-pointer"
+                                >
+                                    {portals.map((p) => (
+                                        <option key={p.key} value={p.href}>{p.label} portal</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        )}
+
                         <GlobalSearchBar />
 
                         {user?.role !== "lead" && user?.role !== "agent" && <RequestTicketButton />}

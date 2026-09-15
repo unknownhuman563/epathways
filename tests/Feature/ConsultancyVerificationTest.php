@@ -166,6 +166,32 @@ class ConsultancyVerificationTest extends TestCase
         $this->assertStringContainsStringIgnoringCase('agreement', $res->getContent());
     }
 
+    public function test_approve_fires_the_consultancy_approved_automation_and_ccs_agent(): void
+    {
+        Mail::fake();
+        $agent = User::factory()->create(['role' => 'agent', 'name' => 'Aggie', 'email' => 'aggie@agency.com']);
+        MessageTemplate::create([
+            'key' => 'consultancy_client_notice', 'department' => 'education', 'name' => 'Client notice',
+            'channels' => ['email'], 'email_subject' => 'Approved {{first_name}}', 'email_body' => 'Your agreement is ready.', 'is_active' => true,
+        ]);
+        \App\Models\EmailAutomationMessage::create([
+            'event_key' => 'education.consultancy.approved', 'recipient' => 'client',
+            'template_key' => 'consultancy_client_notice', 'channel' => 'email',
+            'enabled' => true, 'cc_agent' => true, 'sort_order' => 0,
+        ]);
+
+        $lead = $this->submitted('consultancy_std_100');
+        $lead->update(['agent_id' => $agent->id]);
+
+        $this->actingAs($this->reviewer())
+            ->post("/consultancy-verification/{$lead->id}/approve", ['verify_all' => 1, 'send_email' => 1])
+            ->assertRedirect();
+
+        Mail::assertQueued(\App\Mail\TemplatedMessage::class, fn ($m) => $m->hasTo('emma@example.com')
+            && str_contains((string) $m->ccList, 'aggie@agency.com')
+            && str_contains($m->subjectLine, 'Approved'));
+    }
+
     public function test_draft_moves_a_verified_agreement_back_to_pending(): void
     {
         $lead = $this->submitted('consultancy_std_100');

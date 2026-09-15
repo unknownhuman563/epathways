@@ -478,7 +478,9 @@ class LeadController extends Controller
             // table. Same place storeFreeAssessment writes its analysis.
             $lead->update([
                 'source' => 'education-enrolment',
-                'status' => 'New',
+                // Portal intakes land in the pipeline as a proper "New Leads",
+                // not the legacy raw "New" status.
+                'status' => 'New Leads',
                 'ai_analysis' => array_diff_key($validated, array_flip([
                     'first_name', 'last_name', 'email', 'phone', 'residence_country',
                 ])),
@@ -1158,7 +1160,14 @@ class LeadController extends Controller
                 ],
                 'source_of_funds_info' => $data['source_of_funds_info'] ?? null,
                 'declaration_accepted' => $request->boolean('declaration_accepted'),
-                'status' => 'Submitted',
+                // Portal registrations land straight in the pipeline as a
+                // "New Leads" — never "Submitted"/"New". A returning lead who has
+                // already progressed keeps their current stage (no regression).
+                'status' => $isNewRegistration
+                    || $existing->status === null
+                    || in_array($existing->status, ['Submitted', 'submitted', 'New', 'new', 'Draft'], true)
+                        ? 'New Leads'
+                        : $existing->status,
                 'stage' => 'Evaluation',
                 'source' => 'registration',
             ]);

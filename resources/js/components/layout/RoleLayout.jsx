@@ -4,6 +4,7 @@ import SalesLayout from "./SalesLayout";
 import EducationLayout from "./EducationLayout";
 import EnglishLayout from "./EnglishLayout";
 import ImmigrationLayout from "./ImmigrationLayout";
+import ImmigrationAdviserLayout from "./ImmigrationAdviserLayout";
 import AccommodationLayout from "./AccommodationLayout";
 import FinanceLayout from "./FinanceLayout";
 import AgentLayout from "./AgentLayout";
@@ -21,7 +22,7 @@ const BY_ROLE = {
     english: EnglishLayout,
     immigration: ImmigrationLayout,
     immigration_manager: ImmigrationLayout,
-    immigration_adviser: ImmigrationLayout,
+    immigration_adviser: ImmigrationAdviserLayout,
     accommodation: AccommodationLayout,
     finance: FinanceLayout,
     agent: AgentLayout,

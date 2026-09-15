@@ -24,8 +24,10 @@ export default function SchoolProfile({ school = {}, portalBase = "/admin", hasA
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-4 min-w-0">
-                        <span className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0">
-                            <SchoolIcon size={26} />
+                        <span className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            {school.logo_url
+                                ? <img src={school.logo_url} alt={`${school.name} logo`} className="w-full h-full object-contain" />
+                                : <SchoolIcon size={26} />}
                         </span>
                         <div className="min-w-0">
                             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{school.name}</h1>

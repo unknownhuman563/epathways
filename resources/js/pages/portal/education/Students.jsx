@@ -8,7 +8,7 @@ import {
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
     ChevronDown, Check, TrendingUp, Globe,
-    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound,
+    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound, Flag, Briefcase,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import AddEditStudentModal from "./AddEditStudentModal";
@@ -208,15 +208,21 @@ const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-g
 // frontend, mirrored to PHP via Lead::EDUCATION_STAGES. Order matters
 // (it's the dropdown order).
 const EDUCATION_STAGES = [
-    "Endorsed to School",
+    "New Lead",
+    "Pre-Screening Done",
+    "For Proposal",
+    "Proposal Sent",
+    "Engagement Sent",
+    "Goal Setting Done",
+    "School Enrolment",
     "Conditional Offer",
     "Unconditional Offer",
     "Endorsed to Immigration",
     "Visa Lodged",
-    "Approved in Principle",
-    "Request for Information",
     "Approved Visa",
     "Started Course",
+    "For Relodgement",
+    "Declined Visa",
 ];
 
 // Subset of EDUCATION_STAGES that hand the lead off to Immigration.
@@ -225,9 +231,9 @@ const EDUCATION_STAGES = [
 const IMMIGRATION_EDUCATION_STAGES = new Set([
     "Endorsed to Immigration",
     "Visa Lodged",
-    "Approved in Principle",
-    "Request for Information",
     "Approved Visa",
+    "For Relodgement",
+    "Declined Visa",
 ]);
 
 // English-team sub-stage list (mirrors Lead::ENGLISH_STAGES).
@@ -512,25 +518,40 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     };
 
     const tabConfig = TAB_STAGE_CONFIG[view];
+    const searching = search.trim().length > 0;
+
+    // When a search is active the three tabs act as one — resolve each result
+    // to its own primary department (Immigration > English > Education) so its
+    // status chip stays correct even though it surfaced from another tab.
+    const primaryDeptOf = (s) => {
+        const set = departmentsOf(s);
+        if (set.has("immigration")) return "immigration";
+        if (set.has("english")) return "english";
+        return "education";
+    };
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         const rows = students.filter((s) => {
-            // Department tab — membership, not single-owner. A student the
-            // Immigration team also handles stays under Education (and shows
-            // under Immigration too) rather than dropping off this tab.
+            if (q) {
+                // A search spans ALL three department tabs — a name that lives
+                // under English or Immigration still surfaces here.
+                // Intake is matched both raw ("2026-05-11") and formatted
+                // ("11 May 2026") so either spelling finds it; school covers the
+                // FK name too.
+                const hay = `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.school_name || ""} ${s.intake || ""} ${fmtIntake(s.intake)} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase();
+                return hay.includes(q);
+            }
+            // No search — scope to the active department tab. Membership, not
+            // single-owner: a student the Immigration team also handles stays
+            // under Education (and shows under Immigration too).
             if (! departmentsOf(s).has(view)) return false;
             // Stage pill — matches against the tab's own stage column.
             if (stageFilter !== "All") {
                 const stage = s[tabConfig.field];
                 if (stage !== stageFilter) return false;
             }
-            if (!q) return true;
-            // Intake is matched both raw ("2026-05-11") and formatted
-            // ("11 May 2026") so either spelling finds it; school covers the
-            // FK name too.
-            const hay = `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.school_name || ""} ${s.intake || ""} ${fmtIntake(s.intake)} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase();
-            return hay.includes(q);
+            return true;
         });
 
         const dir = sortDir === "asc" ? 1 : -1;
@@ -542,6 +563,26 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
             return 0;
         });
     }, [students, search, stageFilter, view, sortKey, sortDir, tabConfig.field]);
+
+    // Auto-switch tabs on search: if the active tab holds no match but another
+    // department does, jump to the first department that does — so searching a
+    // name that lives under English/Immigration surfaces it (and highlights the
+    // right tab) without switching by hand.
+    useEffect(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return;
+        const matches = (s) => `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.school_name || ""} ${s.intake || ""} ${fmtIntake(s.intake)} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase().includes(q);
+        if (students.some((s) => departmentsOf(s).has(view) && matches(s))) return;
+        for (const d of ["education", "english", "immigration"]) {
+            if (students.some((s) => departmentsOf(s).has(d) && matches(s))) {
+                setView(d);
+                setStageFilter("All");
+                setPage(1);
+                return;
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, students]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const safePage = Math.min(page, totalPages);
@@ -600,13 +641,6 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                         Pipeline · {filtered.length} {filtered.length === 1 ? "student" : "students"}
                     </p>
                 </div>
-                <button
-                    type="button"
-                    onClick={openNewStudent}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm"
-                >
-                    <UserPlus size={15} /> New student
-                </button>
             </div>
 
             {/* Stage distribution — small line graph for Education only. */}
@@ -701,6 +735,19 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                 </div>
             </div>
 
+            {/* New student — placed below the toolbar, above the table. */}
+            {! readOnly && (
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={openNewStudent}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm"
+                    >
+                        <UserPlus size={15} /> New student
+                    </button>
+                </div>
+            )}
+
             {/* Table — always rendered now; the `view` state selects the
                 department tab rather than swapping into a kanban. */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
@@ -719,9 +766,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                 <th className="pr-2 py-3 w-6" />
                                 <SortableTh label="Student"   sortKey="name"         current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Status"    sortKey="status"       current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="Location"  sortKey="location"     current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="Program"   sortKey="program"      current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="School"    sortKey="school"       current={sortKey} dir={sortDir} onSort={toggleSort} />
+                                <SortableTh label="Programme & School" sortKey="program" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Intake"    sortKey="intake"       current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Engaged"   sortKey="date_engaged" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
@@ -732,7 +777,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={12} className="px-6 py-20 text-center">
+                                    <td colSpan={10} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Users size={22} />
                                             <p className="text-sm font-medium">
@@ -798,17 +843,26 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                         </AvatarPhoto>
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">
-                                                            {s.name}
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">
+                                                                {s.name}
+                                                            </div>
+                                                            <StudentCaseBadge student={s} />
                                                         </div>
-                                                        {s.lead_id && (
+                                                        {s.location ? (
+                                                            <div className="flex items-center gap-1 text-[10px] text-gray-500 truncate">
+                                                                <MapPin size={10} className="text-gray-300 flex-shrink-0" /> {s.location}
+                                                            </div>
+                                                        ) : s.lead_id ? (
                                                             <div className="text-[10px] text-gray-400 font-mono truncate">{s.lead_id}</div>
+                                                        ) : null}
+                                                        {(s.agent_name || s.referral) && (
+                                                            <div className="flex items-center gap-1 text-[10px] text-indigo-500 truncate" title="Referring agent">
+                                                                <Users size={10} className="text-indigo-300 flex-shrink-0" /> {s.agent_name || s.referral}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </Link>
-                                                <div className="mt-1 pl-[38px]">
-                                                    <StudentPriority student={s} />
-                                                </div>
                                                 </div>
                                             </td>
 
@@ -820,51 +874,52 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 chip surfaces the staff member who created
                                                 or endorsed this record. */}
                                             <td className="px-3 py-2.5 relative">
-                                                <StagePicker
-                                                    leadId={s.id}
-                                                    field={tabConfig.field}
-                                                    stages={tabConfig.stages}
-                                                    styler={tabConfig.styler}
-                                                    heading={tabConfig.label}
-                                                    value={s[tabConfig.field] || ""}
-                                                    fallbackLabel={view === "education" ? s.status : null}
-                                                    open={openStageMenuId === s.id}
-                                                    onToggle={() => setOpenStageMenuId(openStageMenuId === s.id ? null : s.id)}
-                                                    onClose={() => setOpenStageMenuId(null)}
-                                                />
+                                                {(() => {
+                                                    // While searching, show each result under its own
+                                                    // department's stage set (so a match from another tab
+                                                    // keeps a meaningful status chip).
+                                                    const rc = searching ? TAB_STAGE_CONFIG[primaryDeptOf(s)] : tabConfig;
+                                                    return (
+                                                        <StagePicker
+                                                            leadId={s.id}
+                                                            field={rc.field}
+                                                            stages={rc.stages}
+                                                            styler={rc.styler}
+                                                            heading={rc.label}
+                                                            value={s[rc.field] || ""}
+                                                            fallbackLabel={rc.field === "education_stage" ? s.status : null}
+                                                            open={openStageMenuId === s.id}
+                                                            onToggle={() => setOpenStageMenuId(openStageMenuId === s.id ? null : s.id)}
+                                                            onClose={() => setOpenStageMenuId(null)}
+                                                        />
+                                                    );
+                                                })()}
                                             </td>
 
-                                            {/* Location */}
-                                            <td className="px-3 py-2.5">
-                                                {s.location ? (
-                                                    <span className="inline-flex items-center gap-1 text-gray-600">
-                                                        <MapPin size={11} className="text-gray-300" /> {s.location}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-300">—</span>
-                                                )}
-                                            </td>
-
-                                            {/* Program */}
-                                            <td className="px-3 py-2.5">
-                                                {s.program ? (
-                                                    <span className="text-gray-700 truncate block max-w-[200px]" title={s.program}>
-                                                        {s.program}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-300">—</span>
-                                                )}
-                                            </td>
-
-                                            {/* School */}
-                                            <td className="px-3 py-2.5">
-                                                {s.school ? (
-                                                    <span className="text-gray-700 truncate block max-w-[180px]" title={s.school}>
-                                                        {s.school}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-300">—</span>
-                                                )}
+                                            {/* Programme & School — program name with its school underneath, paired per line */}
+                                            <td className="px-3 py-2.5 align-top">
+                                                {(() => {
+                                                    const programs = s.program ? s.program.split(" · ") : [];
+                                                    const schools = (s.school || s.school_name) ? (s.school || s.school_name).split(" · ") : [];
+                                                    if (!programs.length && !schools.length) {
+                                                        return <span className="text-gray-300">—</span>;
+                                                    }
+                                                    const rows = Math.max(programs.length, schools.length);
+                                                    return (
+                                                        <div className="flex flex-col gap-1.5 max-w-[260px]">
+                                                            {Array.from({ length: rows }).map((_, i) => (
+                                                                <div key={i} className="flex flex-col">
+                                                                    {programs[i] && (
+                                                                        <span className="text-gray-800 text-[12px] font-medium leading-tight truncate" title={programs[i]}>{programs[i]}</span>
+                                                                    )}
+                                                                    {schools[i] && (
+                                                                        <span className="text-gray-500 text-[11px] leading-tight truncate" title={schools[i]}>{schools[i]}</span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
 
                                             {/* Intake */}
@@ -976,7 +1031,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                         {/* Expander — full Students-Dashboard schema */}
                                         {isExpanded && (
                                             <tr className="bg-indigo-50/20 border-t border-indigo-100/60">
-                                                <td colSpan={12} className="px-6 py-4">
+                                                <td colSpan={10} className="px-6 py-4">
                                                     <StudentDashboardPanel student={s} />
                                                 </td>
                                             </tr>
@@ -1061,6 +1116,13 @@ function StudentDashboardPanel({ student: s }) {
             <section>
                 <PanelTitle>Profile</PanelTitle>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                            <Flag size={11} className="text-gray-400" />
+                            Priority
+                        </div>
+                        <StudentPriority student={s} />
+                    </div>
                     <ReadOnlyField icon={Calendar}  label="Date engaged"   value={fmtDate(s.date_engaged)} />
                     <ReadOnlyField icon={MapPin}    label="Location"       value={s.location} />
                     <ReadOnlyField icon={Phone}     label="Contact number" value={s.phone}    href={s.phone ? `tel:${s.phone}` : null} />
@@ -1205,24 +1267,31 @@ function StudentDashboardPanel({ student: s }) {
 // the team that owns that stage so the stepper can colour each segment
 // accordingly — green = Education team, indigo = Immigration team.
 const UNIFIED_JOURNEY = [
-    { stage: "Endorsed to School",       team: "education"   },
+    { stage: "New Lead",                 team: "education"   },
+    { stage: "Pre-Screening Done",       team: "education"   },
+    { stage: "For Proposal",             team: "education"   },
+    { stage: "Proposal Sent",            team: "education"   },
+    { stage: "Engagement Sent",          team: "education"   },
+    { stage: "Goal Setting Done",        team: "education"   },
+    { stage: "School Enrolment",         team: "education"   },
     { stage: "Conditional Offer",        team: "education"   },
     { stage: "Unconditional Offer",      team: "education"   },
     { stage: "Endorsed to Immigration",  team: "immigration" },
     { stage: "Visa Lodged",              team: "immigration" },
-    { stage: "Request for Information",  team: "immigration" },
-    { stage: "Approved in Principle",    team: "immigration" },
     { stage: "Approved Visa",            team: "immigration" },
     { stage: "Started Course",           team: "education"   },
+    { stage: "For Relodgement",          team: "immigration" },
+    { stage: "Declined Visa",            team: "immigration" },
 ];
 
 // Immigration team uses "Endorsed" as a shorter alias for "Endorsed to
-// Immigration"; everything else maps 1:1 to the unified labels above.
+// Immigration"; its interim visa sub-stages fold onto "Visa Lodged" in the
+// unified education journey (which doesn't carry them as separate nodes).
 const IMMIGRATION_TO_UNIFIED = {
     "Endorsed":                "Endorsed to Immigration",
     "Visa Lodged":             "Visa Lodged",
-    "Request for Information": "Request for Information",
-    "Approved in Principle":   "Approved in Principle",
+    "Request for Information": "Visa Lodged",
+    "Approved in Principle":   "Visa Lodged",
     "Approved Visa":           "Approved Visa",
 };
 
@@ -1639,6 +1708,31 @@ function SortableTh({ label, sortKey, current, dir, onSort }) {
                 <Icon size={10} strokeWidth={2.5} className={active ? "opacity-100" : "opacity-30"} />
             </button>
         </th>
+    );
+}
+
+// Small marker next to a student's name that tells staff, at a glance, whether
+// this person is also being handled as an immigration case. A study client on a
+// Student visa legitimately sits under BOTH departments — the amber "Student +
+// Case" pill flags that dual membership; a plain indigo "Case" marks a
+// student-visa case that hasn't been converted to a student record.
+function StudentCaseBadge({ student: s }) {
+    const isCase = !! (s.is_immigration_case || s.immigration_stage);
+    if (! isCase) return null;
+
+    const dual = isCase && !! s.is_student;
+    return (
+        <span
+            className={`inline-flex items-center gap-1 flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border ${
+                dual
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-indigo-50 text-indigo-700 border-indigo-200"
+            }`}
+            title={dual ? "Both a student and an immigration case" : "Immigration case (Student visa)"}
+        >
+            <Briefcase size={9} className="flex-shrink-0" />
+            {dual ? "Student + Case" : "Case"}
+        </span>
     );
 }
 

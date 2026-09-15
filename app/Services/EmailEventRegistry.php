@@ -143,6 +143,8 @@ class EmailEventRegistry
             ['group' => 'Proposals', 'events' => [
                 ['key' => 'education.proposal.submitted', 'label' => 'Proposal submitted for verification', 'when' => 'When staff submit a study proposal for verification', 'vars' => ['first_name', 'program_list', 'program_count', 'tracker_url']],
                 ['key' => 'education.proposal.approved', 'label' => 'Proposal verified & approved', 'when' => 'When staff verify & approve all programmes in Program Verification', 'vars' => ['first_name', 'program_list', 'program_count', 'tracker_url']],
+                ['key' => 'education.consultancy.submitted', 'label' => 'Consultancy agreement submitted for verification', 'when' => 'When staff submit a consultancy agreement for verification', 'vars' => ['first_name', 'agreement_type', 'total_amount']],
+                ['key' => 'education.consultancy.approved', 'label' => 'Consultancy agreement approved', 'when' => 'When staff approve a consultancy agreement in verification', 'vars' => ['first_name', 'agreement_type', 'total_amount', 'tracker_url']],
                 ['key' => 'education.program.chosen', 'label' => 'Client chose a program', 'when' => 'When the client picks one programme from their shortlist on the tracking link', 'vars' => ['first_name', 'program_name', 'program_level', 'program_location', 'tracker_url']],
             ]],
             ['group' => 'Students', 'events' => [

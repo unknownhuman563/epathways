@@ -34,7 +34,7 @@ class ConsultancyVerificationController extends Controller
             })
             ->orderByDesc('updated_at')
             ->limit(300)
-            ->with(['documents' => fn ($q) => $q->where('checklist_key', 'agree.consultancy')
+            ->with(['documents' => fn ($q) => $q->whereIn('checklist_key', ['agree.consultancy', 'agree.engagement_english'])
                 ->where('source', 'generated')->latest()])
             ->get();
 
@@ -322,6 +322,14 @@ class ConsultancyVerificationController extends Controller
         $review['emailed'] = $sendEmail;
         unset($review['changes_requested']);
         $lead->consultancy_review = $review;
+
+        // Advance the lead's pipeline: an approved agreement is now live with
+        // the client (posted to their tracker, and emailed unless opted out),
+        // so the Agreements tab reads "Sent" rather than "Generated". Don't
+        // downgrade a lead that's already marked Signed.
+        if ($lead->status !== 'Consultancy Agreement Signed') {
+            $lead->status = 'Consultancy Agreement Sent';
+        }
         $lead->save();
 
         // Now generate the final PDF (with the reviewer's confirmed fees) and
@@ -340,7 +348,17 @@ class ConsultancyVerificationController extends Controller
 
         if ($sendEmail) {
             try {
-                app(\App\Http\Controllers\LeadDocumentController::class)->sendConsultancyAgreementEmail($lead->fresh());
+                // Fire the Education "Consultancy agreement approved" automation
+                // (client / agent-CC / education-team, each off until configured).
+                // Its return says whether a CLIENT message was sent, so the
+                // built-in client email falls back only when none is configured.
+                $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+                $firedClient = app(\App\Services\EmailAutomationService::class)->fire('education.consultancy.approved', $lead->fresh(), [
+                    'agreement_type' => $review['scenario_label'] ?? 'Consultancy Agreement',
+                    'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+                ]);
+
+                app(\App\Http\Controllers\LeadDocumentController::class)->sendConsultancyAgreementEmail($lead->fresh(), ! $firedClient);
             } catch (\Throwable $e) {
                 Log::warning('Consultancy approval email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
             }

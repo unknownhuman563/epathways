@@ -1635,6 +1635,9 @@ class CaseProfileController extends Controller
             'status' => $lead->status,
             'stage' => $lead->stage,
             'immigration_stage' => $lead->immigration_stage,
+            // RFI response deadline (stored on the RFI stage-history entry) —
+            // shown on the Documents tab's Request Information section.
+            'rfi_deadline' => optional($lead->rfi_deadline)->format('Y-m-d'),
             'inz_visa_type' => $lead->inz_visa_type,
             'inz_reference' => $lead->inz_reference,
             'inz_client_number' => $lead->inz_client_number,
@@ -1686,6 +1689,10 @@ class CaseProfileController extends Controller
             ->map(fn (LeadDocument $d) => [
                 'id' => $d->id,
                 'checklist_key' => $d->checklist_key,
+                // Which document request this file answers (if any) — RFI-request
+                // uploads render in the Request Information rows, so the Documents
+                // tab hides them from the orphan list to avoid a duplicate.
+                'request_id' => $d->request_id,
                 'original_name' => $d->original_name,
                 'mime' => $d->mime,
                 'size' => $d->size,
@@ -1763,7 +1770,10 @@ class CaseProfileController extends Controller
         return $lead->documentRequests()
             // latestDocument is a latestOfMany (self-join), so its constrained
             // columns must be table-qualified or `request_id` is ambiguous.
-            ->with(['requester:id,name', 'latestDocument:lead_documents.id,lead_documents.request_id,lead_documents.status,lead_documents.original_name'])
+            ->with([
+                'requester:id,name',
+                'latestDocument' => fn ($q) => $q->with('reviewer:id,name,role'),
+            ])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (\App\Models\LeadDocumentRequest $r) => [
@@ -1771,10 +1781,30 @@ class CaseProfileController extends Controller
                 'label' => $r->label,
                 'description' => $r->description,
                 'required' => (bool) $r->required,
+                // 'rfi' = extracted from an INZ RFI letter; groups under
+                // "Request Information" on the Documents tab. Null = ad-hoc.
+                'origin' => $r->origin,
                 'requested_by' => optional($r->requester)->name,
                 'requested_at' => optional($r->requested_at ?? $r->created_at)->toIso8601String(),
                 'fulfilled' => (bool) $r->latestDocument,
                 'fulfilled_name' => optional($r->latestDocument)->original_name,
+                'fulfilled_status' => optional($r->latestDocument)->status,
+                // Full latest upload so the RFI rows can reuse the standard
+                // attachment card (View + menu) and the review-status dropdown.
+                'latest_document' => $r->latestDocument ? [
+                    'id' => $r->latestDocument->id,
+                    'original_name' => $r->latestDocument->original_name,
+                    'mime' => $r->latestDocument->mime,
+                    'size' => $r->latestDocument->size,
+                    'status' => $r->latestDocument->status,
+                    'note' => $r->latestDocument->note,
+                    'source' => $r->latestDocument->source,
+                    'source_variant' => $r->latestDocument->source_variant,
+                    'reviewed_at' => optional($r->latestDocument->reviewed_at)->toIso8601String(),
+                    'reviewed_by' => optional($r->latestDocument->reviewer)->name,
+                    'reviewed_by_role' => optional($r->latestDocument->reviewer)->role,
+                    'created_at' => $r->latestDocument->created_at,
+                ] : null,
             ])
             ->all();
     }

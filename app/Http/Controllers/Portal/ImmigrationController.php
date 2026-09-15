@@ -1586,6 +1586,44 @@ class ImmigrationController extends Controller
      * stage automation with the deadline as {{rfi_deadline}} and the PDFs
      * attached to the email. Mirrors recordOutcome() with those additions.
      */
+    /**
+     * Read INZ's RFI letter(s) and return the documents INZ is requesting, so
+     * the RFI modal can show them as an editable list before staff confirms.
+     *
+     * This is a DRAFTING AID (CLAUDE.md AI constraints): it only reads the
+     * uploaded PDF(s) and extracts what the letter literally names — it does not
+     * store anything, change the stage, or notify the client. Nothing reaches
+     * the client until staff confirm the list on the main RFI submit. Degrades
+     * to an empty list (with a flag) for scanned PDFs or when AI is off, so the
+     * staff member can just type the documents manually.
+     */
+    public function analyzeRfi(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $request->validate([
+            'documents' => ['required', 'array', 'max:20'],
+            'documents.*' => ['file', 'mimes:pdf', 'max:10240'],
+        ]);
+
+        // Parse straight from the uploaded temp files — no need to persist here;
+        // the real RFI submit stores them.
+        $paths = [];
+        foreach ((array) $request->file('documents', []) as $file) {
+            if ($file instanceof \Illuminate\Http\UploadedFile && $file->getRealPath()) {
+                $paths[] = $file->getRealPath();
+            }
+        }
+
+        $result = app(\App\Services\Immigration\RfiDocumentExtractor::class)->extract($paths);
+
+        $lead->recordStaffActivity('Analysed RFI letter'.(
+            $result['ai_used'] ? ' ('.count($result['documents']).' document(s) found)' : ''
+        ));
+
+        return response()->json($result);
+    }
+
     public function requestForInformation(\Illuminate\Http\Request $request, $id)
     {
         $lead = Lead::immigrationCase()->findOrFail($id);
@@ -1596,6 +1634,13 @@ class ImmigrationController extends Controller
             'documents' => ['nullable', 'array', 'max:20'],
             'documents.*' => ['file', 'mimes:pdf', 'max:10240'],
             'notify' => ['nullable', 'boolean'],
+            // The documents INZ asked for, confirmed by staff from the AI-extracted
+            // list in the modal. Each becomes a LeadDocumentRequest the client
+            // uploads against — origin 'rfi' groups them under "Request Information".
+            'requested_documents' => ['nullable', 'array', 'max:25'],
+            'requested_documents.*.label' => ['required', 'string', 'max:120'],
+            'requested_documents.*.description' => ['nullable', 'string', 'max:500'],
+            'requested_documents.*.required' => ['nullable', 'boolean'],
         ]);
 
         $stage = 'Request for Information';
@@ -1644,6 +1689,10 @@ class ImmigrationController extends Controller
             $name = $file->getClientOriginalName() ?: 'RFI document.pdf';
             \App\Models\LeadDocument::create([
                 'lead_id' => $lead->id,
+                // The staff RFI file is a NOTIFICATION ("here's what INZ wants") —
+                // kept as a shared doc (checklist_key null), NOT the client's
+                // upload. The client responds via the "Request Information Form"
+                // upload slot, whose files ARE keyed 'rfi'.
                 'checklist_key' => null,
                 'original_name' => $name,
                 'file_path' => $path,
@@ -1656,6 +1705,32 @@ class ImmigrationController extends Controller
                 'note' => $note ?: null,
             ]);
             $attachments[] = ['path' => $path, 'name' => $name];
+        }
+
+        // The documents INZ asked for — staff confirmed these from the AI-read
+        // list in the modal. Each becomes a request the client uploads against
+        // (origin 'rfi' groups them under "Request Information" on the Documents
+        // tab and the client portal). Deduped by label against existing RFI
+        // requests so re-opening the modal doesn't create duplicates.
+        $requestedLabels = [];
+        $existingRfi = $lead->documentRequests()->where('origin', 'rfi')
+            ->pluck('label')->map(fn ($l) => mb_strtolower(trim((string) $l)))->all();
+        foreach ((array) ($data['requested_documents'] ?? []) as $item) {
+            $label = trim((string) ($item['label'] ?? ''));
+            if ($label === '' || in_array(mb_strtolower($label), $existingRfi, true)) {
+                continue;
+            }
+            $existingRfi[] = mb_strtolower($label);
+            \App\Models\LeadDocumentRequest::create([
+                'lead_id' => $lead->id,
+                'label' => $label,
+                'description' => trim((string) ($item['description'] ?? '')) ?: null,
+                'required' => array_key_exists('required', $item) ? (bool) $item['required'] : true,
+                'origin' => 'rfi',
+                'requested_by' => auth()->id(),
+                'requested_at' => now(),
+            ]);
+            $requestedLabels[] = $label;
         }
 
         // Record the note (with the deadline) on the case timeline.
@@ -1675,7 +1750,14 @@ class ImmigrationController extends Controller
             app(\App\Services\EmailAutomationService::class)->fire(
                 'immigration.stage.'.\Illuminate\Support\Str::slug($stage, '_'),
                 $lead,
-                ['stage' => $stage, 'status_detail' => $note, 'rfi_deadline' => $deadline->format('j M Y')],
+                [
+                    'stage' => $stage,
+                    'status_detail' => $note,
+                    'rfi_deadline' => $deadline->format('j M Y'),
+                    // {{document_list}} lets the RFI template spell out exactly
+                    // what the client must upload; blank when none were extracted.
+                    'document_list' => implode(', ', $requestedLabels),
+                ],
                 $attachments,
             );
         }
@@ -3207,7 +3289,7 @@ class ImmigrationController extends Controller
      *
      * @return array<string, array<int, string>>
      */
-    private function intakeSectionSchema(string $type): array
+    public function intakeSectionSchema(string $type): array
     {
         return match ($type) {
             'resident' => [
@@ -3265,7 +3347,7 @@ class ImmigrationController extends Controller
     }
 
     /** Friendly label for an intake column (overrides where headline reads poorly). */
-    private function intakeFieldLabel(string $col): string
+    public function intakeFieldLabel(string $col): string
     {
         static $labels = [
             'dob' => 'Date of Birth',
@@ -3403,7 +3485,7 @@ class ImmigrationController extends Controller
     }
 
     /** Humanise a single intake attribute value for display. */
-    private function formatIntakeValue($value): ?string
+    public function formatIntakeValue($value): ?string
     {
         if (is_bool($value)) {
             return $value ? 'Yes' : 'No';
@@ -3425,6 +3507,93 @@ class ImmigrationController extends Controller
         }
 
         return $value === null ? null : (string) $value;
+    }
+
+    /**
+     * Build the Visa Information Form's sections from the client's ACTUAL
+     * assessment (the same per-visa schema the readiness workspace shows), so
+     * every section they filled — Study Plan, Travel Plan, Family, etc. — is in
+     * the VIF. Output shape matches the pdf.intake Blade (letter/title/rows).
+     * Files aren't questions, so they're skipped.
+     */
+    public function buildVifSections(string $type, array $data): array
+    {
+        $schema = $this->intakeSectionSchema($type);
+        $sections = [];
+        $letterCode = ord('A');
+
+        foreach ($schema as $title => $keys) {
+            $isDeclaration = str_contains(strtolower($title), 'declaration');
+            $rows = [];
+
+            foreach ($keys as $key) {
+                if (in_array($key, ['documents', 'document_files'], true)) {
+                    continue; // uploads, not Q&A rows
+                }
+                if ($key === 'declaration_accepted') {
+                    $rows[] = [
+                        't' => 'check',
+                        'label' => 'I declare that the information provided is true, correct and complete.',
+                        'on' => (bool) ($data[$key] ?? false),
+                    ];
+
+                    continue;
+                }
+                $rows[] = [
+                    'q' => $this->intakeFieldLabel($key),
+                    'a' => $this->formatIntakeValue($data[$key] ?? null) ?? '',
+                ];
+            }
+
+            if (empty($rows)) {
+                continue;
+            }
+            $sections[] = [
+                'letter' => chr($letterCode),
+                'title' => $title,
+                // Declaration sections render as statements, not a Q/A table.
+                'bare' => $isDeclaration,
+                'rows' => $rows,
+            ];
+            $letterCode++;
+        }
+
+        return $sections;
+    }
+
+    /**
+     * Free-assessment VIF sections — the free funnel stores its answers on the
+     * Lead + JSON blocks, so reuse the readiness-workspace section builder and
+     * map it into the same VIF (Blade) shape. Guarantees the free assessment's
+     * full content lands in the VIF too.
+     */
+    public function freeVifSections(Lead $lead): array
+    {
+        [$schemaSections] = $this->freeAssessmentSections($lead);
+        $sections = [];
+        $letterCode = ord('A');
+
+        foreach ($schemaSections as $sec) {
+            $rows = [];
+            foreach (($sec['fields'] ?? []) as $field) {
+                $rows[] = [
+                    'q' => $field['label'] ?? '',
+                    'a' => ($field['provided'] ?? false) ? ($field['value'] ?? '') : '',
+                ];
+            }
+            if (empty($rows)) {
+                continue;
+            }
+            $sections[] = [
+                'letter' => chr($letterCode),
+                'title' => $sec['title'] ?? '',
+                'bare' => false,
+                'rows' => $rows,
+            ];
+            $letterCode++;
+        }
+
+        return $sections;
     }
 
     public function showIntake(string $type, int $id)
@@ -3764,20 +3933,18 @@ class ImmigrationController extends Controller
      */
     private function intakeVifData(string $type, int $id): array
     {
-        // Free assessment — a Lead, not an intake. Its attributes feed the same
-        // VIF builder (identity fields populate; unmatched questions stay blank,
-        // exactly like the paper form), so it exports in the official format too.
+        // Free assessment — a Lead, not an intake. Built from the free
+        // assessment's own sections so its full content lands in the VIF.
         if ($type === 'free') {
             $lead = Lead::findOrFail($id);
-            $vif = \App\Support\VisaInformationForm::build($lead->toArray());
-            $applicant = $vif['applicant'] ?: (trim("{$lead->first_name} {$lead->last_name}") ?: 'Applicant');
+            $applicant = trim("{$lead->first_name} {$lead->last_name}") ?: 'Applicant';
             $data = [
                 'applicant' => $applicant,
-                'sections' => $vif['sections'],
+                'sections' => $this->freeVifSections($lead),
                 'intakeId' => $lead->lead_id,
                 'generatedAt' => now()->format('d/m/Y'),
             ];
-            $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? '')) ?: ($lead->lead_id ?? 'Applicant');
+            $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $applicant)) ?: ($lead->lead_id ?? 'Applicant');
 
             return [$data, $name.' VIF'];
         }
@@ -3794,18 +3961,20 @@ class ImmigrationController extends Controller
         }
 
         $intake = $modelMap[$type]::findOrFail($id)->toArray();
-        $vif = \App\Support\VisaInformationForm::build($intake);
+        // Build the VIF from the client's ACTUAL assessment sections so nothing
+        // they filled is dropped (Study Plan, Travel Plan, Family, …).
+        $applicant = trim(($intake['first_name'] ?? '').' '.($intake['last_name'] ?? $intake['family_name'] ?? '')) ?: 'Applicant';
 
         $data = [
-            'applicant' => $vif['applicant'] ?: 'Applicant',
-            'sections' => $vif['sections'],
+            'applicant' => $applicant,
+            'sections' => $this->buildVifSections($type, $intake),
             'intakeId' => $intake['intake_id'] ?? null,
             'generatedAt' => now()->format('d/m/Y'),
         ];
 
         // Filename = client's name + " VIF" (e.g. "Mary Katherine Paspe VIF").
         // Falls back to the reference id, then a generic label.
-        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? ''));
+        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $applicant));
         if ($name === '') {
             $name = $intake['intake_id'] ?? 'Applicant';
         }
@@ -4128,8 +4297,9 @@ class ImmigrationController extends Controller
             'interim' => $named($inCase()->where('immigration_stage', 'Interim Visa Issued')->whereBetween('stage_updated_at', [$from, $to])),
             'declined' => $named($inCase()->where('immigration_stage', 'Decline Visa')->whereBetween('stage_updated_at', [$from, $to])),
             'with_inz_breakdown' => collect($withInzStages)
-                ->map(fn ($s) => ['stage' => $s, 'count' => $count($s)])
-                ->push(['stage' => 'Unassigned INZ status', 'count' => 0])
+                // Include the named cases per state so the report can reveal WHO
+                // is in each INZ queue (shown on hover).
+                ->map(fn ($s) => ['stage' => $s, 'count' => $count($s), 'cases' => $named($inCase()->where('immigration_stage', $s))])
                 ->filter(fn ($r) => $r['count'] > 0)
                 ->values(),
         ];

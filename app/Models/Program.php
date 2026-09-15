@@ -63,6 +63,44 @@ class Program extends Model
         return $this->belongsTo(School::class);
     }
 
+    /**
+     * The full program payload the ProgramDetailsModal renders (tracker + staff
+     * lead profile share this so the modal shows identical info everywhere).
+     */
+    public function detailPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'institution' => $this->institution ?: optional($this->school)->name,
+            'location' => $this->location,
+            'level' => $this->level,
+            'category' => $this->category,
+            'industry' => $this->industry,
+            'price_text' => $this->price_text,
+            'image_url' => $this->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->image) : null,
+            'description' => $this->description,
+            'intake_months' => $this->intake_months,
+            'duration_months' => $this->duration_months,
+            'credits' => $this->credits,
+            'residency_points' => $this->residency_points,
+            'hours_per_week' => $this->hours_per_week,
+            'entry_requirements' => $this->entry_requirements,
+            'english_requirements' => $this->english_requirements,
+            'specialization' => $this->specialization,
+            'employment_outcomes' => $this->employment_outcomes,
+            'post_study' => $this->post_study,
+            'other_benefits' => $this->other_benefits,
+            'tuition_fee' => $this->tuition_fee,
+            'tuition_fee_notes' => $this->tuition_fee_notes,
+            'tuition_fees' => $this->tuition_fees,
+            'insurance_fee' => $this->insurance_fee,
+            'visa_processing_fee' => $this->visa_processing_fee,
+            'living_expense' => $this->living_expense,
+            'accommodation' => $this->accommodation,
+        ];
+    }
+
     protected static function booted(): void
     {
         static::saving(function (Program $program) {

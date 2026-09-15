@@ -10,7 +10,7 @@ class LeadDocumentRequest extends Model
     use LogsActivity;
 
     protected $fillable = [
-        'lead_id', 'label', 'description', 'required',
+        'lead_id', 'label', 'description', 'required', 'origin',
         'requested_by', 'requested_at',
     ];
 

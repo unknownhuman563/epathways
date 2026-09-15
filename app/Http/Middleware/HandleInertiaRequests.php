@@ -48,6 +48,10 @@ class HandleInertiaRequests extends Middleware
                 'modules' => $request->user()?->grantedModules() ?? [],
                 // Only super admins reach Module Management.
                 'can_manage_modules' => $request->user()?->isSuperAdmin() ?? false,
+                // Department portals this user can switch between (their role +
+                // any granted in Module Management). Only populated when there is
+                // more than one, so the topbar switcher shows only when useful.
+                'portals' => $this->switchablePortals($request->user()),
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),
@@ -98,6 +102,38 @@ class HandleInertiaRequests extends Middleware
             // admin is browsing /portal/lead without a lead of their own.
             'leadPortalPreview' => fn () => $this->leadPortalPreview($request),
         ];
+    }
+
+    /**
+     * Department portals a signed-in staff user can switch between — their own
+     * role's portal plus any granted in Module Management. Returns an empty list
+     * for admins (who use the /admin area) and whenever there is only one, so the
+     * topbar switcher renders only when it actually helps.
+     *
+     * @return list<array{key:string,label:string,href:string}>
+     */
+    private function switchablePortals(?\App\Models\User $user): array
+    {
+        if (! $user || $user->isAdmin() || $user->isLead()) {
+            return [];
+        }
+
+        $labels = [
+            'sales' => 'Sales', 'education' => 'Education', 'english' => 'English',
+            'immigration' => 'Immigration', 'accommodation' => 'Accommodation',
+            'finance' => 'Finance', 'agent' => 'Agent', 'sub_agent' => 'Sub-Agent',
+        ];
+
+        $keys = $user->accessiblePortals();
+        if (count($keys) < 2) {
+            return [];
+        }
+
+        return collect($keys)->map(fn (string $k) => [
+            'key' => $k,
+            'label' => $labels[$k] ?? ucfirst($k),
+            'href' => "/portal/{$k}/dashboard",
+        ])->values()->all();
     }
 
     /** Client-portal preview banner data (admins viewing a sample client). */

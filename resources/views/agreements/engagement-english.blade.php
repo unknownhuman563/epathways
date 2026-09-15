@@ -99,20 +99,20 @@
                     <strong>English Review</strong> (Pearson Test of English) Mock Test (PTE)
                     <ul style="margin-top:4px;">
                         <li>20 hours of personalized PTE coaching</li>
-                        <li>UNLIMITED mock test with assessment and feedback</li>
+                        <li>1 mock test with assessment and feedback</li>
                         <li>Assistance with exam booking</li>
                     </ul>
                 </td>
                 <td class="center">1</td>
-                <td class="right">14,500.00</td>
-                <td class="right">14,500.00</td>
+                <td class="right">{{ number_format($english_fee ?? 14500, 2) }}</td>
+                <td class="right">{{ number_format($english_fee ?? 14500, 2) }}</td>
             </tr>
             <tr>
                 <td></td>
                 <td></td>
                 <td></td>
                 <td class="right">TOTAL</td>
-                <td class="right">Php 14,500.00</td>
+                <td class="right">{{ $currency_symbol ?? 'Php' }} {{ number_format($english_fee ?? 14500, 2) }}</td>
             </tr>
         </tbody>
     </table>
@@ -134,15 +134,15 @@
                 <td class="center">2</td>
                 <td>PTE Examination Fee</td>
                 <td class="center">1</td>
-                <td class="right">USD $240</td>
-                <td class="right">USD $240</td>
+                <td class="right">USD ${{ number_format($pte_fee ?? 240, 2) }}</td>
+                <td class="right">USD ${{ number_format($pte_fee ?? 240, 2) }}</td>
             </tr>
             <tr>
                 <td></td>
                 <td></td>
                 <td></td>
                 <td class="right">TOTAL</td>
-                <td class="right">USD $240</td>
+                <td class="right">USD ${{ number_format($pte_fee ?? 240, 2) }}</td>
             </tr>
         </tbody>
     </table>
@@ -151,11 +151,11 @@
 
     <h3>Section 2. Bank Details</h3>
     <div class="bank-box">
-        <div class="heading">PAYMENT DETAILS</div>
-        <div class="row"><span class="label">Bank Name:</span> <strong>BPI</strong></div>
-        <div class="row"><span class="label">Account Name:</span> <strong>Dinah Jabone</strong></div>
-        <div class="row"><span class="label">Account Number:</span> <strong>9269224808</strong></div>
-        <div class="row"><span class="label">Reference:</span> <strong>#PTE{{ $client_reference }}</strong></div>
+        <div class="heading">{{ $bank_heading ?? 'PAYMENT DETAILS' }}</div>
+        <div class="row"><span class="label">Bank Name:</span> <strong>{{ $bank_name ?? 'BPI' }}</strong></div>
+        <div class="row"><span class="label">Account Name:</span> <strong>{{ $bank_account_name ?? 'Dinah Suarin' }}</strong></div>
+        <div class="row"><span class="label">Account Number:</span> <strong>{{ $bank_account_number ?? '9269224808' }}</strong></div>
+        <div class="row"><span class="label">Reference:</span> <strong>{{ $bank_reference ?? ('#PTE'.$client_reference) }}</strong></div>
     </div>
 
     <div class="article-bar">ARTICLE 2 &nbsp;•&nbsp; SCOPE OF SERVICES</div>

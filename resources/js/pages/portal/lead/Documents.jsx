@@ -1,17 +1,16 @@
 import { useRef, useState } from "react";
 import { Head, router } from "@inertiajs/react";
 import {
-    FileText, Upload, Check, AlertTriangle, Clock, Download, Loader, Wand2, Sparkles, Eye,
-    Inbox, Share2, Lock, CheckCircle2, ChevronDown, ChevronRight, Send, Copy,
+    FileText, Upload, Download, Loader, Eye, Inbox, Calendar, AlertTriangle,
 } from "lucide-react";
-import { CHECKLIST, SECTION_STATUSES, renderFilename, currentSectionIndex } from "@/data/leadDocumentChecklist";
 
-const STATUS_BADGE = {
-    Submitted:   { label: "Awaiting review", chip: "bg-blue-50 text-blue-700 border-blue-200",       icon: Clock },
-    UnderReview: { label: "Under review",    chip: "bg-amber-50 text-amber-700 border-amber-200",    icon: Loader },
-    Approved:    { label: "Approved",        chip: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Check },
-    Rejected:    { label: "Needs new file",  chip: "bg-red-50 text-red-700 border-red-200",          icon: AlertTriangle },
-    StaffShared: { label: "Shared with you", chip: "bg-gray-50 text-gray-600 border-gray-200",       icon: Share2 },
+// Client-facing review status → label + dot colour (read-only; the adviser sets it).
+const STATUS = {
+    Submitted:   { label: "Awaiting review", text: "text-blue-600",    dot: "bg-blue-500" },
+    UnderReview: { label: "Under review",    text: "text-amber-600",   dot: "bg-amber-500" },
+    Approved:    { label: "Approved",        text: "text-emerald-600", dot: "bg-emerald-500" },
+    Rejected:    { label: "Needs new file",  text: "text-rose-600",    dot: "bg-rose-500" },
+    StaffShared: { label: "Shared with you", text: "text-gray-500",    dot: "bg-gray-400" },
 };
 
 const fmtSize = (b) => {
@@ -21,469 +20,171 @@ const fmtSize = (b) => {
     return `${(b / (1024 * 1024)).toFixed(2)} MB`;
 };
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "";
+const latestOf = (files) => (files && files.length ? files[files.length - 1] : null);
+const requestNeedsAction = (r) => !r.latest_document || r.latest_document.status === "Rejected";
+const rowNeedsAction = (row) => {
+    if (row.kind === "shared" || row.kind === "vif") return false;
+    const doc = row.kind === "request" ? row.req.latest_document : latestOf(row.files);
+    return !doc || doc.status === "Rejected";
+};
 
 export default function LeadDocumentsPage({
     lead,
     requests = [],
     shared_by_staff = [],
+    vifItem = null,
+    checklist = {},
     checklistFiles = {},
-    sectionVerifications = {},
 }) {
-    const currentIdx = currentSectionIndex(sectionVerifications);
+    const rfiDeadline = lead?.rfi_deadline || null;
+
+    const rfiRequests = requests.filter((r) => r.origin === "rfi");
+    const otherRequests = requests.filter((r) => r.origin !== "rfi");
+    const rfiLetters = shared_by_staff.filter((d) => d.source_variant === "rfi");
+    const immTeamDocs = shared_by_staff.filter((d) => d.source_variant !== "rfi" && d.source_variant !== "vif");
+
+    // Table sections (Immigration Team → Request Information → checklist categories).
+    // Requested documents are handled separately as a highlighted card above.
+    const sections = [];
+    const immRows = [];
+    // The Visa Information Form leads the Immigration Team section — the real
+    // checklist item (upload + status), not a duplicate.
+    if (vifItem) immRows.push({ kind: "checklist", item: vifItem, files: checklistFiles[vifItem.key] || [] });
+    immTeamDocs.forEach((d) => immRows.push({ kind: "shared", d }));
+    if (immRows.length) sections.push({ key: "imm", title: "Immigration Team", rows: immRows });
+    if (rfiRequests.length || rfiLetters.length) {
+        sections.push({
+            key: "rfi", title: "Request Information", deadline: rfiDeadline,
+            rows: [
+                // The INZ letter reads as "Request Information Form" here, not its raw filename.
+                ...rfiLetters.map((d) => ({ kind: "shared", d, label: "Request Information Form" })),
+                ...rfiRequests.map((r) => ({ kind: "request", req: r })),
+            ],
+        });
+    }
+    Object.entries(checklist).forEach(([category, items]) => {
+        sections.push({ key: `cl-${category}`, title: category, rows: items.map((it) => ({ kind: "checklist", item: it, files: checklistFiles[it.key] || [] })) });
+    });
+
+    const outstanding = otherRequests.filter(requestNeedsAction).length
+        + sections.reduce((n, s) => n + s.rows.filter(rowNeedsAction).length, 0);
+    const isEmpty = otherRequests.length === 0 && sections.length === 0;
 
     return (
-        <div className="space-y-7 max-w-5xl mx-auto pb-12">
+        <div className="space-y-8 max-w-6xl mx-auto pb-16">
             <Head title="My documents" />
 
-            {/* Header */}
+            {/* Header — tells the client exactly what's left to do. */}
             <div>
-                <p className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.32em] mb-1.5">
-                    Documents
-                </p>
+                <p className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.32em] mb-1.5">Documents</p>
                 <h1 className="text-2xl sm:text-3xl font-medium text-[#282728] tracking-tight">My documents</h1>
                 <p className="text-sm text-gray-500 font-light mt-1.5 max-w-2xl">
-                    Upload the documents your adviser has requested below.
+                    {isEmpty
+                        ? "This is where documents you need to upload — and files your team shares with you — will appear."
+                        : outstanding > 0
+                            ? `You have ${outstanding} document${outstanding === 1 ? "" : "s"} to upload. Add ${outstanding === 1 ? "it" : "them"} below and your team is notified automatically.`
+                            : "Everything's up to date. There's nothing left for you to upload right now."}
                 </p>
             </div>
 
-            {/* Documents your adviser requested — shown FIRST. Checklist items
-                they picked, or ad-hoc "other" documents — each is uploadable. */}
-            {requests.length > 0 ? (
-                <AdviserRequestsPanel requests={requests} />
-            ) : (
-                <section className="bg-white rounded-2xl border border-[#282728]/15 p-8 text-center">
-                    <Inbox size={28} className="mx-auto text-gray-300" />
-                    <p className="mt-2 text-sm font-semibold text-[#282728]">No documents requested yet</p>
-                    <p className="text-xs text-gray-500 mt-1">When your adviser asks for a document, it&apos;ll appear here to upload.</p>
+            {/* Requested documents — a highlighted card (not part of the table). */}
+            {otherRequests.length > 0 && <RequestedDocsCard items={otherRequests} />}
+
+            {/* The document table — Immigration Team, Request Information, checklist.
+                All sections stay expanded. */}
+            {sections.length > 0 && (
+                <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[640px] border-collapse text-left">
+                            <thead>
+                                <tr className="bg-gray-50 text-[10.5px] font-bold uppercase tracking-wider text-gray-400">
+                                    <th className="px-4 py-3 w-[42%]">Document</th>
+                                    <th className="px-4 py-3 w-[36%]">Attachment</th>
+                                    <th className="px-4 py-3 w-[22%]">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sections.map((s) => {
+                                    const uploadable = s.rows.filter((r) => r.kind === "request" || r.kind === "checklist");
+                                    const done = uploadable.filter((r) => !rowNeedsAction(r)).length;
+                                    const need = uploadable.length - done;
+                                    const total = uploadable.length || s.rows.length;
+                                    return (
+                                        <SectionBlock
+                                            key={s.key}
+                                            title={s.title}
+                                            done={uploadable.length ? done : s.rows.length}
+                                            total={total}
+                                            need={need}
+                                            deadline={s.deadline}
+                                            rows={s.rows}
+                                        />
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
             )}
 
-            {/* Shared by staff */}
-            {shared_by_staff.length > 0 && (
-                <SharedByStaffPanel shared={shared_by_staff} />
+            {isEmpty && (
+                <section className="bg-white rounded-2xl border border-[#282728]/15 p-10 text-center">
+                    <Inbox size={30} className="mx-auto text-gray-300" />
+                    <p className="mt-3 text-sm font-semibold text-[#282728]">Nothing to do yet</p>
+                    <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                        When your team requests a document or shares a file with you, it&apos;ll show up here.
+                    </p>
+                </section>
             )}
         </div>
     );
 }
 
-// ── Progress strip ─────────────────────────────────────────────────────────
+// ── Requested documents (highlighted yellow card) ──────────────────────────
 
-function SectionProgressStrip({ sections, verifications, currentIdx }) {
+function RequestedDocsCard({ items }) {
+    const sorted = [...items].sort((a, b) =>
+        (requestNeedsAction(b) - requestNeedsAction(a)) || ((b.required === true) - (a.required === true)));
+    const done = items.filter((r) => !requestNeedsAction(r)).length;
     return (
-        <section className="bg-white rounded-2xl border border-[#282728]/15 p-5">
-            <div className="flex items-center gap-2 mb-4">
-                <CheckCircle2 size={14} className="text-[#009688]" />
-                <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-[#009688]">
-                    Your progress
-                </p>
-                <span className="ml-auto text-[11px] font-bold text-[#282728]/60 tabular-nums">
-                    {Math.min(currentIdx, sections.length)} of {sections.length} verified
-                </span>
+        <section className="bg-amber-50/60 rounded-2xl border-2 border-amber-300 overflow-hidden">
+            <div className="px-5 sm:px-6 py-4 border-b border-amber-200/70 flex items-center gap-2.5">
+                <AlertTriangle size={16} className="text-amber-600" />
+                <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-amber-900">Requested documents</h2>
+                <span className="ml-auto text-[11px] font-bold text-amber-700 tabular-nums">{done}/{items.length} uploaded</span>
             </div>
-
-            <ol className="flex flex-wrap gap-2">
-                {sections.map((s, i) => {
-                    const ver = verifications[s.key];
-                    const verStatus = ver?.status;
-                    const isDone = i < currentIdx;
-                    const isCurrent = i === currentIdx;
-                    const isLocked = i > currentIdx;
-
-                    const cls = isDone
-                        ? 'bg-[#009688] text-white border-[#009688]'
-                        : isCurrent
-                            ? 'bg-white text-[#009688] border-[#009688] ring-2 ring-[#009688]/15'
-                            : 'bg-gray-50 text-gray-400 border-gray-200';
-
-                    return (
-                        <li
-                            key={s.key}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border ${cls}`}
-                            title={s.section + (verStatus ? ` — ${SECTION_STATUSES[verStatus].label}` : '')}
-                        >
-                            {isDone ? (
-                                <Check size={11} strokeWidth={3} />
-                            ) : isLocked ? (
-                                <Lock size={10} />
-                            ) : (
-                                <span className="w-4 h-4 rounded-full bg-[#009688] text-white text-[9px] flex items-center justify-center">{i + 1}</span>
-                            )}
-                            <span className="truncate max-w-[160px]">{s.section}</span>
-                        </li>
-                    );
-                })}
-            </ol>
-        </section>
-    );
-}
-
-// ── Section panel ──────────────────────────────────────────────────────────
-
-function SectionPanel({ section, sectionIndex, state, verification, verStatus, files, lead }) {
-    const isCurrent = state === 'current';
-    const isDone    = state === 'done';
-    const isLocked  = state === 'locked';
-    const [expanded, setExpanded] = useState(isCurrent);
-
-    const verMeta = verStatus ? SECTION_STATUSES[verStatus] : null;
-
-    // Differentiate items by who provides them. `system: true` items are
-    // *staff-sent* (the agreement document is generated and uploaded by
-    // Sales/Education, the lead just downloads). All other items are
-    // *lead-uploaded*. This drives the row UI and the section CTA.
-    const staffSentItems  = section.items.filter((it) => it.system);
-    const leadUploadItems = section.items.filter((it) => !it.system);
-    const isStaffSent     = staffSentItems.length > 0 && leadUploadItems.length === 0;
-
-    const totalUploaded = Object.values(files).filter(arr => (arr?.length || 0) > 0).length;
-    const allFilled = totalUploaded === section.items.length;
-
-    const headerSurface = isCurrent
-        ? 'bg-gradient-to-br from-[#009688]/8 to-white border-[#009688]/40'
-        : isDone
-            ? 'bg-emerald-50/40 border-emerald-200'
-            : 'bg-gray-50 border-gray-200 opacity-70';
-
-    return (
-        <section className={`rounded-2xl border ${headerSurface}`}>
-            <button
-                type="button"
-                onClick={() => !isLocked && setExpanded((v) => !v)}
-                disabled={isLocked}
-                className="w-full p-5 sm:p-6 flex items-center gap-4 text-left disabled:cursor-not-allowed"
-            >
-                {/* Step indicator */}
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    isDone
-                        ? 'bg-emerald-500 text-white'
-                        : isCurrent
-                            ? 'bg-[#009688] text-white ring-4 ring-[#009688]/15'
-                            : 'bg-gray-200 text-gray-400'
-                }`}>
-                    {isDone ? <Check size={18} strokeWidth={3} /> : isLocked ? <Lock size={16} /> : <span className="text-sm font-bold">{sectionIndex + 1}</span>}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base sm:text-lg font-medium text-[#282728] tracking-tight">{section.section}</h3>
-                        {verMeta && (
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${verMeta.chip}`}>
-                                {verMeta.label}
-                            </span>
-                        )}
-                    </div>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                        {section.items.length} document{section.items.length === 1 ? '' : 's'}
-                        {isStaffSent && ' · sent by your adviser'}
-                        {!isLocked && !isStaffSent && ` · ${totalUploaded} uploaded`}
-                        {isLocked && ' · unlocks after previous section is verified'}
-                    </p>
-                </div>
-
-                {!isLocked && (
-                    <ChevronDown size={16} className={`text-gray-400 transition-transform flex-shrink-0 ${expanded ? 'rotate-180' : ''}`} />
-                )}
-            </button>
-
-            {/* Revisions note from staff */}
-            {verStatus === 'revisions_needed' && verification?.notes && (
-                <div className="mx-5 sm:mx-6 mb-4 bg-rose-50 border border-rose-200 rounded-xl p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-rose-700 mb-1">
-                        Revisions requested
-                    </p>
-                    <p className="text-xs text-rose-900 italic leading-relaxed">{verification.notes}</p>
-                </div>
-            )}
-
-            {/* Items — only render when expanded and unlocked */}
-            {!isLocked && expanded && (
-                <div className="border-t border-[#282728]/10 p-5 sm:p-6 space-y-3">
-                    {section.items.map((item) => (
-                        <ChecklistItemRow
-                            key={item.id}
-                            item={item}
-                            files={files[item.id] || []}
-                            lead={lead}
-                            sectionKey={section.key}
-                            readOnly={isDone || verStatus === 'in_review'}
-                        />
-                    ))}
-
-                    {/* Lead acknowledgment — only on the Agreements section.
-                        Lead ticks "I have read and agreed to both agreements"
-                        once they've reviewed the generated PDFs above. */}
-                    {section.key === 'agreements' && (
-                        <AgreementsAcknowledgmentBox lead={lead} />
-                    )}
-
-                    {/* CTA — differs for staff-sent vs lead-uploaded sections. */}
-                    {isCurrent && verStatus !== 'in_review' && !isStaffSent && (
-                        <div className="pt-3 border-t border-[#282728]/10 flex items-center justify-between gap-3 flex-wrap">
-                            <p className="text-xs text-gray-500">
-                                {allFilled
-                                    ? "All documents uploaded. Ready to submit for verification?"
-                                    : `Upload remaining ${section.items.length - totalUploaded} document(s) before submitting.`}
-                            </p>
-                            <SubmitForVerificationButton lead={lead} sectionKey={section.key} disabled={!allFilled} />
-                        </div>
-                    )}
-
-                    {/* Staff-sent sections — lead acknowledges receipt instead of uploading. */}
-                    {isCurrent && verStatus !== 'in_review' && isStaffSent && (
-                        <div className="pt-3 border-t border-[#282728]/10 flex items-center justify-between gap-3 flex-wrap">
-                            <p className="text-xs text-gray-500">
-                                {totalUploaded === section.items.length
-                                    ? "Read and acknowledge the documents above to move on."
-                                    : "Your adviser will upload the agreement here. You'll be able to download and review it."}
-                            </p>
-                            <SubmitForVerificationButton
-                                lead={lead}
-                                sectionKey={section.key}
-                                disabled={totalUploaded !== section.items.length}
-                                label="Acknowledge & continue"
-                            />
-                        </div>
-                    )}
-
-                    {verStatus === 'in_review' && (
-                        <div className="pt-3 border-t border-[#282728]/10 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
-                            <Clock size={14} />
-                            Awaiting your adviser&apos;s review. We&apos;ll notify you when this section is verified.
-                        </div>
-                    )}
-                </div>
-            )}
-        </section>
-    );
-}
-
-// ── Submit for verification button ─────────────────────────────────────────
-
-function SubmitForVerificationButton({ lead, sectionKey, disabled, label = 'Submit for verification' }) {
-    const [submitting, setSubmitting] = useState(false);
-
-    const submit = () => {
-        if (!confirm("Submit this section for your adviser to review? You won't be able to add files until they verify or request revisions.")) return;
-        setSubmitting(true);
-        router.post(`/portal/lead/documents/section/${sectionKey}/submit`, {}, {
-            preserveScroll: true,
-            preserveState: true,
-            onFinish: () => setSubmitting(false),
-        });
-    };
-
-    return (
-        <button
-            type="button"
-            onClick={submit}
-            disabled={disabled || submitting}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#009688] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#385029] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-            <Send size={13} />
-            {submitting ? 'Submitting…' : label}
-        </button>
-    );
-}
-
-// ── Checklist item row (lead side) ─────────────────────────────────────────
-
-function ChecklistItemRow({ item, files, lead, sectionKey, readOnly = false }) {
-    const [uploading, setUploading] = useState(false);
-    const fileInputRef = useRef(null);
-    const filename = renderFilename(item.filename, lead);
-    const fileCount = files.length;
-    // `system: true` = staff-sent agreement / generated document. Lead
-    // only downloads it, never uploads. Hides the upload control and the
-    // suggested filename hint (irrelevant — they don't name it).
-    const isStaffSent = !!item.system;
-
-    const triggerUpload = () => fileInputRef.current?.click();
-
-    const handleFiles = (e) => {
-        const picked = Array.from(e.target.files || []);
-        if (picked.length === 0) return;
-        const fd = new FormData();
-        picked.forEach((f) => fd.append('files[]', f));
-        setUploading(true);
-        router.post(`/portal/lead/documents/checklist/${item.id}/upload`, fd, {
-            preserveScroll: true,
-            preserveState: true,
-            forceFormData: true,
-            onFinish: () => {
-                setUploading(false);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-            },
-        });
-    };
-
-    const copyFilename = () => filename && navigator.clipboard?.writeText(filename);
-
-    return (
-        <div className={`bg-white rounded-xl border ${fileCount > 0 ? 'border-emerald-200' : 'border-gray-200'} p-4 space-y-3`}>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-sm font-semibold text-[#282728]">{item.name}</p>
-                        {isStaffSent && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-[#009688]/10 text-[#009688] border border-[#009688]/20">
-                                Sent by adviser
-                            </span>
-                        )}
-                        {fileCount > 0 && !isStaffSent && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700">
-                                <Check size={9} strokeWidth={3} />
-                                {fileCount} {fileCount === 1 ? 'file' : 'files'}
-                            </span>
-                        )}
-                    </div>
-                    {item.description && (
-                        <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{item.description}</p>
-                    )}
-                    {/* Suggested-filename hint only applies when the LEAD is
-                        the one naming a file they're about to upload. Skip
-                        it for staff-sent items. */}
-                    {filename && !isStaffSent && (
-                        <button
-                            type="button"
-                            onClick={copyFilename}
-                            className="mt-2 group inline-flex items-center gap-1.5 text-[10px] font-mono text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md px-2 py-1"
-                            title="Suggested filename — click to copy"
-                        >
-                            <span className="truncate">{filename}</span>
-                            <Copy size={9} className="text-gray-400 group-hover:text-gray-700" />
-                        </button>
-                    )}
-                </div>
-
-                {/* Upload control — only for lead-uploaded items. */}
-                {!readOnly && !isStaffSent && (
-                    <>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            onChange={handleFiles}
-                            className="hidden"
-                        />
-                        <button
-                            type="button"
-                            onClick={triggerUpload}
-                            disabled={uploading}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#282728] text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-black transition-colors disabled:opacity-50"
-                        >
-                            <Upload size={11} />
-                            {uploading ? 'Uploading…' : fileCount > 0 ? 'Add more' : 'Upload'}
-                        </button>
-                    </>
-                )}
-            </div>
-
-            {/* Files — uploaded by lead OR sent by staff. */}
-            {fileCount > 0 ? (
-                <ul className="space-y-1">
-                    {files.map((f) => (
-                        <li key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-gray-50 border border-gray-200">
-                            {f.source === 'generated' ? (
-                                <Wand2 size={12} className="text-violet-500 flex-shrink-0" />
-                            ) : (
-                                <FileText size={12} className={isStaffSent ? 'text-[#009688] flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
-                            )}
-                            <a
-                                href={`/portal/lead/documents/${f.id}/download?inline=1`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-[#009688] truncate"
-                                title={`View ${f.original_name}`}
-                            >
-                                {f.original_name}
-                            </a>
-                            {f.source === 'generated' && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-violet-100 text-violet-700 border border-violet-200">
-                                    <Sparkles size={9} /> Ready to sign
-                                </span>
-                            )}
-                            <span className="text-[10px] text-gray-400 tabular-nums">{fmtSize(f.size)}</span>
-                            <a
-                                href={`/portal/lead/documents/${f.id}/download?inline=1`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10 transition-colors"
-                                title="View"
-                            >
-                                <Eye size={11} />
-                            </a>
-                            <a
-                                href={`/portal/lead/documents/${f.id}/download`}
-                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10 transition-colors"
-                                title="Download"
-                            >
-                                <Download size={11} />
-                            </a>
-                        </li>
-                    ))}
-                </ul>
-            ) : isStaffSent ? (
-                <p className="text-[11px] italic text-gray-400 bg-gray-50 rounded-md px-2 py-2 flex items-center gap-1.5">
-                    <Clock size={11} />
-                    Your adviser will upload this document here soon.
-                </p>
-            ) : null}
-        </div>
-    );
-}
-
-// ── Legacy panels (unchanged) ──────────────────────────────────────────────
-
-function AdviserRequestsPanel({ requests }) {
-    const uploadedCount = requests.filter((r) => r.latest_document && r.latest_document.status !== 'Rejected').length;
-    return (
-        <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
-            <div className="px-6 py-4 border-b border-[#282728]/10 flex items-center gap-2.5">
-                <Inbox size={16} className="text-[#009688]" />
-                <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">Documents your adviser requested</h2>
-                <span className="ml-auto text-[11px] font-bold text-[#282728]/50 tabular-nums">
-                    {uploadedCount} of {requests.length} uploaded
-                </span>
-            </div>
-            <p className="px-6 pt-4 text-xs text-gray-500 font-light">
-                Upload each document your adviser asked for below. They&apos;re notified as soon as you submit.
+            <p className="px-5 sm:px-6 pt-4 text-xs text-amber-800/90 font-light">
+                Your adviser has asked you for these. Please upload each one — they&apos;re notified as soon as you do.
             </p>
             <ul className="p-4 sm:p-5 space-y-2.5">
-                {requests.map((r) => <RequestUploadRow key={r.id} req={r} />)}
+                {sorted.map((r) => <RequestCard key={r.id} req={r} />)}
             </ul>
         </section>
     );
 }
 
-// One adviser-requested document: shows the request, its current status, and an
-// upload control that POSTs the file tied to this request_id (leadUpload).
-function RequestUploadRow({ req }) {
+function RequestCard({ req }) {
     const [uploading, setUploading] = useState(false);
     const fileRef = useRef(null);
     const doc = req.latest_document;
-    const status = doc?.status;
-    const badge = doc ? STATUS_BADGE[status] : null;
-    const approved = status === 'Approved';
-    const needsFile = !doc || status === 'Rejected';
+    const approved = doc?.status === "Approved";
+    const needsFile = !doc || doc.status === "Rejected";
 
-    const pick = () => fileRef.current?.click();
     const onFile = (e) => {
         const file = (e.target.files || [])[0];
         if (!file) return;
         const fd = new FormData();
-        fd.append('file', file);
-        fd.append('request_id', req.id);
+        fd.append("file", file);
+        fd.append("request_id", req.id);
         setUploading(true);
-        router.post('/portal/lead/documents/upload', fd, {
-            preserveScroll: true,
-            preserveState: true,
-            forceFormData: true,
-            onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ''; },
+        router.post("/portal/lead/documents/upload", fd, {
+            preserveScroll: true, preserveState: true, forceFormData: true,
+            onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ""; },
         });
     };
 
     return (
-        <li className={`rounded-xl border p-4 ${doc && !needsFile ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-200 bg-white'}`}>
+        <li className={`rounded-xl border p-4 ${doc && !needsFile ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-white"}`}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -491,145 +192,231 @@ function RequestUploadRow({ req }) {
                         {req.required && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-rose-50 text-rose-600 border border-rose-200">Required</span>
                         )}
-                        {badge && (
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${badge.chip}`}>
-                                <badge.icon size={9} strokeWidth={2.5} /> {badge.label}
-                            </span>
-                        )}
+                        {doc && <StatusPill status={doc.status} />}
                     </div>
                     {req.description && <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{req.description}</p>}
                 </div>
-
-                {/* Upload control — hidden once the file is approved (locked). */}
                 {!approved && (
                     <>
                         <input ref={fileRef} type="file" onChange={onFile} className="hidden" />
-                        <button
-                            type="button"
-                            onClick={pick}
-                            disabled={uploading}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#282728] text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-black transition-colors disabled:opacity-50"
-                        >
+                        <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#282728] text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-black transition-colors disabled:opacity-50">
                             {uploading ? <Loader size={11} className="animate-spin" /> : <Upload size={11} />}
-                            {uploading ? 'Uploading…' : needsFile ? 'Upload' : 'Replace'}
+                            {uploading ? "Uploading…" : needsFile ? "Upload" : "Replace"}
                         </button>
                     </>
                 )}
             </div>
-
-            {/* The uploaded file — view / download. */}
-            {doc && (
-                <div className="mt-3 flex items-center gap-2 px-2 py-1.5 rounded-md bg-white border border-gray-200">
-                    <FileText size={12} className="text-gray-400 flex-shrink-0" />
-                    <a href={`/portal/lead/documents/${doc.id}/download?inline=1`} target="_blank" rel="noreferrer"
-                        className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-[#009688] truncate" title={`View ${doc.original_name}`}>
-                        {doc.original_name}
-                    </a>
-                    <span className="text-[10px] text-gray-400 tabular-nums">{fmtSize(doc.size)}</span>
-                    <a href={`/portal/lead/documents/${doc.id}/download?inline=1`} target="_blank" rel="noreferrer"
-                        className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10" title="View"><Eye size={11} /></a>
-                    <a href={`/portal/lead/documents/${doc.id}/download`}
-                        className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10" title="Download"><Download size={11} /></a>
-                </div>
-            )}
-
-            {/* Adviser asked for a replacement. */}
-            {status === 'Rejected' && doc?.note && (
-                <p className="mt-2 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1.5">
-                    Your adviser asked for a new file: {doc.note}
-                </p>
-            )}
+            {doc && <div className="mt-3"><FileChip f={doc} /></div>}
         </li>
     );
 }
 
-function SharedByStaffPanel({ shared }) {
+function StatusPill({ status }) {
+    const meta = STATUS[status];
+    if (!meta) return null;
     return (
-        <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
-            <div className="px-6 py-4 border-b border-[#282728]/10 flex items-center gap-2.5">
-                <Share2 size={16} className="text-[#009688]" />
-                <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">Shared by your adviser</h2>
-            </div>
-            <ul className="divide-y divide-[#282728]/10">
-                {shared.map((d) => (
-                    <li key={d.id} className="p-5 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div className="w-10 h-10 rounded-xl bg-[#009688]/10 text-[#009688] flex items-center justify-center flex-shrink-0">
-                                <FileText size={16} />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-sm font-medium text-[#282728] truncate">{d.original_name}</p>
-                                <p className="text-[11px] text-gray-400 mt-0.5">{fmtSize(d.size)} · {fmtDate(d.created_at)}</p>
-                                {d.note && <p className="text-xs text-gray-600 mt-1.5">{d.note}</p>}
-                            </div>
-                        </div>
-                        <a
-                            href={`/portal/lead/documents/${d.id}/download`}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#282728] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black active:scale-[0.99] transition-all"
-                        >
-                            <Download size={13} />
-                            Download
-                        </a>
-                    </li>
-                ))}
-            </ul>
-        </section>
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${meta.text} bg-white`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} /> {meta.label}
+        </span>
     );
 }
 
-// Lead's one-tick acknowledgment that they've read both agreements. POSTs
-// to /portal/lead/documents/agreements/acknowledge — server stamps
-// agreements_acknowledged_at on the lead row.
-function AgreementsAcknowledgmentBox({ lead }) {
-    const acknowledgedAt = lead?.agreements_acknowledged_at;
-    const isAcknowledged = !!acknowledgedAt;
-    const [busy, setBusy] = useState(false);
+// ── Table section + rows ───────────────────────────────────────────────────
 
-    const toggle = () => {
-        setBusy(true);
-        router.post(
-            '/portal/lead/documents/agreements/acknowledge',
-            { acknowledged: !isAcknowledged },
-            {
-                preserveScroll: true,
-                preserveState: true,
-                onFinish: () => setBusy(false),
-            }
+function SectionBlock({ title, done, total, need, deadline, rows }) {
+    const deadlineText = deadline
+        ? new Date(deadline).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" })
+        : null;
+    return (
+        <>
+            <tr className="bg-gray-800">
+                <td colSpan={3} className="px-4 py-2.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-100">{title}</span>
+                        <span className="text-[11px] font-semibold text-gray-400 tabular-nums">{done}/{total}</span>
+                        {deadlineText && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300">
+                                <Calendar size={11} /> Due {deadlineText}
+                            </span>
+                        )}
+                        {need > 0 && <span className="ml-auto text-[11px] text-gray-300">{need} to upload</span>}
+                    </div>
+                </td>
+            </tr>
+            {rows.map((row) => {
+                if (row.kind === "shared") return <SharedRow key={`s-${row.d.id}`} d={row.d} label={row.label} />;
+                if (row.kind === "request") return <RequestRow key={`r-${row.req.id}`} req={row.req} />;
+                return <ChecklistRow key={`c-${row.item.key}`} item={row.item} files={row.files} />;
+            })}
+        </>
+    );
+}
+
+function FileChip({ f, downloadUrl }) {
+    const dl = downloadUrl || `/portal/lead/documents/${f.id}/download`;
+    return (
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 max-w-[300px]">
+            <FileText size={15} className="text-gray-300 flex-shrink-0" />
+            <span className="flex flex-col min-w-0 flex-1">
+                <span className="text-[12px] text-gray-800 truncate" title={f.original_name}>{f.original_name}</span>
+                {f.size ? <span className="text-[10px] text-gray-400 tabular-nums">{fmtSize(f.size)}</span> : null}
+            </span>
+            <a href={`/portal/lead/documents/${f.id}/download?inline=1`} target="_blank" rel="noreferrer"
+                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10" title="View"><Eye size={12} /></a>
+            <a href={dl}
+                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10" title="Download"><Download size={12} /></a>
+        </div>
+    );
+}
+
+function StatusCell({ status, label, dot }) {
+    if (label) {
+        return (
+            <span className={`inline-flex items-center gap-2 text-[12px] font-medium ${dot ? "" : "text-gray-500"}`}>
+                <span className={`w-2 h-2 rounded-full ${dot || "bg-gray-400"}`} /> {label}
+            </span>
         );
+    }
+    const meta = status ? STATUS[status] : null;
+    if (!meta) {
+        return (
+            <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-gray-500">
+                <span className="w-2 h-2 rounded-full bg-gray-300" /> Not uploaded
+            </span>
+        );
+    }
+    return (
+        <span className={`inline-flex items-center gap-2 text-[12px] font-semibold ${meta.text}`}>
+            <span className={`w-2 h-2 rounded-full ${meta.dot}`} /> {meta.label}
+        </span>
+    );
+}
+
+function UploadButton({ onPick, uploading, hasFiles }) {
+    return (
+        <button type="button" onClick={onPick} disabled={uploading}
+            className={hasFiles
+                ? "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-600 text-[11px] font-bold hover:border-gray-400 hover:text-gray-900 disabled:opacity-50"
+                : "inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#282728] text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-black disabled:opacity-50"}>
+            {uploading ? <Loader size={11} className="animate-spin" /> : <Upload size={11} />}
+            {uploading ? "Uploading…" : hasFiles ? "Add more" : "Upload"}
+        </button>
+    );
+}
+
+// A document the immigration team shared — download only. `label` overrides the
+// displayed name (e.g. the RFI letter reads "Request Information Form").
+function SharedRow({ d, label }) {
+    return (
+        <tr className="border-b border-gray-50 last:border-b-0 align-top">
+            <td className="px-4 py-3">
+                <div className="flex items-start gap-2">
+                    <FileText size={14} className="text-gray-300 flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium text-[#282728] leading-tight truncate">{label || d.original_name}</p>
+                        <p className="text-[10.5px] text-gray-400 mt-0.5">Shared {fmtDate(d.created_at)}</p>
+                    </div>
+                </div>
+            </td>
+            <td className="px-4 py-3"><FileChip f={d} /></td>
+            <td className="px-4 py-3"><StatusCell label="Shared with you" /></td>
+        </tr>
+    );
+}
+
+// A document requested from the client (RFI) — upload against request_id.
+function RequestRow({ req }) {
+    const [uploading, setUploading] = useState(false);
+    const fileRef = useRef(null);
+    const doc = req.latest_document;
+    const approved = doc?.status === "Approved";
+
+    const onFile = (e) => {
+        const file = (e.target.files || [])[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("request_id", req.id);
+        setUploading(true);
+        router.post("/portal/lead/documents/upload", fd, {
+            preserveScroll: true, preserveState: true, forceFormData: true,
+            onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ""; },
+        });
     };
 
-    const formattedDate = acknowledgedAt
-        ? new Date(acknowledgedAt).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
-        : null;
+    return (
+        <tr className="border-b border-gray-50 last:border-b-0 align-top">
+            <td className="px-4 py-3">
+                <div className="flex items-start gap-2">
+                    <FileText size={14} className="text-gray-300 flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium text-[#282728] leading-tight">
+                            {req.label}{req.required && <span className="ml-1 text-rose-500">*</span>}
+                        </p>
+                        {req.description && <p className="text-[10.5px] text-gray-500 mt-0.5 max-w-[320px]">{req.description}</p>}
+                    </div>
+                </div>
+            </td>
+            <td className="px-4 py-3">
+                <input ref={fileRef} type="file" onChange={onFile} className="hidden" />
+                {doc ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <FileChip f={doc} />
+                        {!approved && <UploadButton onPick={() => fileRef.current?.click()} uploading={uploading} hasFiles />}
+                    </div>
+                ) : (
+                    <UploadButton onPick={() => fileRef.current?.click()} uploading={uploading} hasFiles={false} />
+                )}
+            </td>
+            <td className="px-4 py-3"><StatusCell status={doc?.status} /></td>
+        </tr>
+    );
+}
+
+// A checklist item — upload against the checklist key (may hold several files).
+function ChecklistRow({ item, files }) {
+    const [uploading, setUploading] = useState(false);
+    const fileRef = useRef(null);
+    const latest = latestOf(files);
+
+    const onFile = (e) => {
+        const picked = Array.from(e.target.files || []);
+        if (!picked.length) return;
+        const fd = new FormData();
+        picked.forEach((f) => fd.append("files[]", f));
+        setUploading(true);
+        router.post(`/portal/lead/documents/checklist/${encodeURIComponent(item.key)}/upload`, fd, {
+            preserveScroll: true, preserveState: true, forceFormData: true,
+            onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ""; },
+        });
+    };
 
     return (
-        <div className={`mt-2 rounded-xl border-2 p-4 transition-colors ${
-            isAcknowledged ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-[#009688]/30'
-        }`}>
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-                <input
-                    type="checkbox"
-                    checked={isAcknowledged}
-                    onChange={toggle}
-                    disabled={busy}
-                    className="mt-0.5 w-5 h-5 rounded border-2 border-[#009688] text-[#009688] focus:ring-2 focus:ring-[#009688]/30 cursor-pointer disabled:opacity-50"
-                />
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[#282728] leading-snug">
-                        I have read and agreed to the Consultancy Agreement and English Engagement Agreement terms.
-                    </p>
-                    {isAcknowledged ? (
-                        <p className="text-[11px] text-emerald-700 font-semibold mt-1.5 flex items-center gap-1.5">
-                            <Check size={12} strokeWidth={2.5} />
-                            Acknowledged on {formattedDate}
+        <tr className="border-b border-gray-50 last:border-b-0 align-top">
+            <td className="px-4 py-3">
+                <div className="flex items-start gap-2">
+                    <FileText size={14} className="text-gray-300 flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium text-[#282728] leading-tight">
+                            {item.label}{item.required && <span className="ml-1 text-rose-500">*</span>}
                         </p>
-                    ) : (
-                        <p className="text-[11px] text-gray-600 mt-1.5">
-                            Please download and review both agreement PDFs above, then tick this box to confirm you accept the terms.
-                        </p>
-                    )}
+                        {item.hint && <p className="text-[10.5px] text-gray-500 mt-0.5 max-w-[320px]">{item.hint}</p>}
+                    </div>
                 </div>
-            </label>
-        </div>
+            </td>
+            <td className="px-4 py-3">
+                <input ref={fileRef} type="file" multiple onChange={onFile} className="hidden" />
+                {files.length ? (
+                    <div className="flex flex-col gap-1.5">
+                        {files.map((f) => <FileChip key={f.id} f={f} />)}
+                        <UploadButton onPick={() => fileRef.current?.click()} uploading={uploading} hasFiles />
+                    </div>
+                ) : (
+                    <UploadButton onPick={() => fileRef.current?.click()} uploading={uploading} hasFiles={false} />
+                )}
+            </td>
+            <td className="px-4 py-3"><StatusCell status={latest?.status} /></td>
+        </tr>
     );
 }

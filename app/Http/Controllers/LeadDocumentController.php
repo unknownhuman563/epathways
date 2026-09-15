@@ -570,6 +570,49 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Staff upload a file AGAINST a document request — for when the client hands
+     * a requested document to staff directly (email, in person) instead of
+     * uploading it themselves. The file is tied to the request (request_id) so it
+     * fulfils that row, exactly as a client upload would.
+     */
+    public function staffRequestUpload(Request $request, $leadId, $requestId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $docRequest = LeadDocumentRequest::where('lead_id', $lead->id)->findOrFail($requestId);
+
+        $request->validate([
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => UploadValidation::document(),
+        ]);
+
+        try {
+            foreach ($request->file('files') as $file) {
+                $path = $file->store("lead-documents/{$lead->id}", self::DISK);
+
+                LeadDocument::create([
+                    'lead_id' => $lead->id,
+                    'request_id' => $docRequest->id,
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'mime' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'status' => LeadDocument::STATUS_SUBMITTED,
+                    'uploaded_by' => Auth::id(),
+                ]);
+            }
+
+            $n = count($request->file('files'));
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+            return back()->with('success', "{$n} ".($n === 1 ? 'file' : 'files').' uploaded on behalf of the client.');
+        } catch (\Throwable $e) {
+            Log::error('Staff request upload failed', ['lead_id' => $leadId, 'request_id' => $requestId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not upload that file.']);
+        }
+    }
+
+    /**
      * Generate a templated agreement (Blade -> PDF) and attach it to the
      * lead's documents under the matching checklist key. Routes by key:
      *   agree.consultancy        — Consultancy Agreement (Single | Partner)
@@ -642,23 +685,33 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            if ($consultancyScenario !== null || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)) {
-                // Consultancy agreements go through verification BEFORE any PDF
-                // exists: submitting only snapshots the scenario + fees + bank
-                // details onto the lead. The reviewer previews it live; the PDF
-                // is generated and attached only on approval, then posted to the
-                // client's tracking link.
+            $isEnglishAgreement = in_array($type, ['english_engagement', 'english_offshore'], true);
+
+            if ($consultancyScenario !== null
+                || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)
+                || $isEnglishAgreement) {
+                // Consultancy AND English agreements go through verification
+                // BEFORE any PDF exists: submitting only snapshots the scenario +
+                // fees + bank details onto the lead. The reviewer previews it
+                // live; the PDF is generated and attached only on approval, then
+                // posted to the client's tracking link.
                 \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
 
-                return back()->with('success', "Consultancy Agreement submitted for verification — {$lead->first_name} {$lead->last_name}.");
-            } elseif ($type === 'english_engagement') {
-                $generator->englishEngagement($lead, $overrides['currency'] ?? 'php');
-                $friendly = 'English Engagement';
-            } else {
-                return back()->withErrors(['error' => "Unknown document type: {$type}"]);
+                // Notify via the Education "Consultancy agreement submitted for
+                // verification" automation (a no-op unless an admin enabled it).
+                $review = is_array($lead->fresh()->consultancy_review) ? $lead->fresh()->consultancy_review : [];
+                $items = is_array($review['items'] ?? null) ? $review['items'] : [];
+                app(\App\Services\EmailAutomationService::class)->fire('education.consultancy.submitted', $lead->fresh(), [
+                    'agreement_type' => \App\Services\ConsultancyReviewService::scenarioLabel($type),
+                    'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+                ]);
+
+                $label = $isEnglishAgreement ? 'English agreement' : 'Consultancy Agreement';
+
+                return back()->with('success', "{$label} submitted for verification — {$lead->first_name} {$lead->last_name}.");
             }
 
-            return back()->with('success', "{$friendly} generated for {$lead->first_name} {$lead->last_name}.");
+            return back()->withErrors(['error' => "Unknown document type: {$type}"]);
         } catch (\Throwable $e) {
             Log::error('Unified document generation failed', [
                 'lead_id' => $leadId,
@@ -668,6 +721,49 @@ class LeadDocumentController extends Controller
 
             return back()->withErrors(['error' => 'Could not generate the document: '.$e->getMessage()]);
         }
+    }
+
+    /**
+     * Move an already-generated English agreement into the Consultancy
+     * Agreement Verification queue — the ⋮ "Send for verification" row action.
+     *
+     * Older English agreements were generated straight to a PDF (before English
+     * joined the verification flow). This snapshots a fresh PENDING review for
+     * the lead so it appears in the queue; the reviewer confirms/edits the fees
+     * (they can't be recovered from the baked PDF, so they seed to the defaults)
+     * and it's the approval that regenerates the client-facing PDF.
+     */
+    public function sendEnglishToVerification(Request $request, $leadId, $documentId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $doc = LeadDocument::where('lead_id', $lead->id)->findOrFail($documentId);
+
+        abort_unless(
+            $doc->checklist_key === 'agree.engagement_english' && $doc->source === LeadDocument::SOURCE_GENERATED,
+            422,
+            'Only a generated English agreement can be sent for verification.'
+        );
+
+        // Already under review — don't clobber an in-flight review.
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        if (in_array($review['status'] ?? null, ['pending', 'verified'], true)) {
+            return back()->with('success', 'This agreement is already in the verification queue.');
+        }
+
+        // Infer the variant + currency from the stored document.
+        $type = $doc->source_variant === 'engagement-english-offshore' ? 'english_offshore' : 'english_engagement';
+        $overrides = ['currency' => $type === 'english_offshore' ? 'nzd' : 'php'];
+
+        \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
+
+        $fresh = is_array($lead->fresh()->consultancy_review) ? $lead->fresh()->consultancy_review : [];
+        $items = is_array($fresh['items'] ?? null) ? $fresh['items'] : [];
+        app(\App\Services\EmailAutomationService::class)->fire('education.consultancy.submitted', $lead->fresh(), [
+            'agreement_type' => \App\Services\ConsultancyReviewService::scenarioLabel($type),
+            'total_amount' => array_sum(array_map(fn ($m) => (int) ($m['amount'] ?? 0), $items)),
+        ]);
+
+        return back()->with('success', "English agreement sent for verification — {$lead->first_name} {$lead->last_name}.");
     }
 
     /**
@@ -1324,7 +1420,7 @@ class LeadDocumentController extends Controller
     private function feeOverridesFromRequest(Request $request): array
     {
         $out = [];
-        foreach (['school_enrolment_fee', 'english_proficiency_fee'] as $key) {
+        foreach (['school_enrolment_fee', 'english_proficiency_fee', 'english_fee', 'pte_fee'] as $key) {
             $val = $request->input($key);
             if ($val !== null && $val !== '' && is_numeric($val) && (int) $val > 0) {
                 $out[$key] = (int) $val;
@@ -1457,7 +1553,12 @@ class LeadDocumentController extends Controller
             $view = 'agreements.consultancy';
         } elseif ($type === 'english_engagement') {
             $view = 'agreements.engagement-english';
-            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php');
+            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php', (int) ($overrides['english_fee'] ?? 14500), (int) ($overrides['pte_fee'] ?? 240))
+                + $generator->englishBankVars($overrides);
+        } elseif ($type === 'english_offshore') {
+            $view = 'agreements.engagement-english-offshore';
+            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'nzd', (int) ($overrides['english_fee'] ?? 550))
+                + $generator->englishBankVars($overrides);
         } else {
             return response('<html><body style="font-family:sans-serif;padding:2rem;color:#666">Unknown document type.</body></html>', 400)
                 ->header('Content-Type', 'text/html; charset=utf-8');
@@ -1467,7 +1568,7 @@ class LeadDocumentController extends Controller
             ->header('Content-Type', 'text/html; charset=utf-8');
     }
 
-    private function englishEngagementPayload(Lead $lead, string $currency = 'php'): array
+    private function englishEngagementPayload(Lead $lead, string $currency = 'php', int $englishFee = 14500, int $pteFee = 240): array
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
 
@@ -1486,6 +1587,8 @@ class LeadDocumentController extends Controller
             'generated_at_formatted' => now()->format('jS').' day of '.now()->format('F Y'),
             'currency' => $currency === 'nzd' ? 'nzd' : 'php',
             'currency_symbol' => $this->currencySymbolFor($currency),
+            'english_fee' => $englishFee,
+            'pte_fee' => $pteFee,
         ];
     }
 
@@ -1680,6 +1783,12 @@ class LeadDocumentController extends Controller
                 Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, $kind));
             }
 
+            // Start the post-proposal feedback drip (day 1/2/5) on an actual
+            // proposal send, regardless of whether the stage transitioned.
+            if ($kind === 'proposal') {
+                \App\Jobs\SendLeadFollowupEmail::scheduleProposalDrip($lead);
+            }
+
             return back()->with('success', "Notification sent to {$lead->first_name} {$lead->last_name}.");
         } catch (\Throwable $e) {
             Log::error('Document-ready notification failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
@@ -1716,6 +1825,11 @@ class LeadDocumentController extends Controller
             $lead->status = 'Proposal Sent';
             $lead->save();
         }
+
+        // Kick off the day 1/2/5 feedback drip now that the proposal is being
+        // sent — even when the lead was already in "Proposal Sent" (so the
+        // status-change hook wouldn't have fired).
+        \App\Jobs\SendLeadFollowupEmail::scheduleProposalDrip($lead);
 
         // A configured client automation may already own the "proposal ready"
         // email — in that case advance the pipeline but skip the built-in send
@@ -1853,10 +1967,36 @@ class LeadDocumentController extends Controller
 
     // ── LEAD (own portal) ───────────────────────────────────────────────────
 
-    public function leadIndex()
+    /**
+     * The client whose portal is being viewed. Normally the signed-in lead;
+     * for an admin/super-admin previewing the client portal, the preview lead
+     * (same session key the tracker/requirements preview uses).
+     */
+    private function portalLead(): ?Lead
     {
         $user = Auth::user();
-        $lead = $user?->lead;
+        if ($user?->lead) {
+            return $user->lead;
+        }
+        if ($user && $user->isAtLeast('admin')) {
+            $id = request('preview_lead') ?: session('lead_portal_preview_id');
+            if ($id && ($lead = Lead::find($id))) {
+                session(['lead_portal_preview_id' => $lead->id]);
+
+                return $lead;
+            }
+
+            return Lead::whereHas('portalUser')->latest()->first()
+                ?? Lead::where('is_immigration_case', true)->latest()->first()
+                ?? Lead::latest()->first();
+        }
+
+        return null;
+    }
+
+    public function leadIndex()
+    {
+        $lead = $this->portalLead();
         abort_unless($lead, 403);
 
         $requests = $lead->documentRequests()
@@ -1868,6 +2008,9 @@ class LeadDocumentController extends Controller
                 'label' => $r->label,
                 'description' => $r->description,
                 'required' => $r->required,
+                // 'rfi' groups these under a "Request Information" section the
+                // client uploads their INZ-requested documents into.
+                'origin' => $r->origin,
                 'requested_at' => $r->requested_at,
                 'latest_document' => $r->latestDocument ? $this->docSerialize($r->latestDocument) : null,
             ]);
@@ -1896,6 +2039,32 @@ class LeadDocumentController extends Controller
                 'created_at' => $f->created_at,
             ])->values());
 
+        // The case's own visa-type checklist, grouped by category — the SAME
+        // list staff review on the case profile, so what the client uploads
+        // lines up with what the adviser expects. Hidden items and the special
+        // rows shown elsewhere are pulled out: 'rfi' → Request Information
+        // section; 'svf' (the Visa Information Form) → its own first row under
+        // Immigration Team.
+        $checklist = [];
+        $vifItem = null;
+        if ($lead->is_immigration_case) {
+            $grouped = app(\App\Services\Immigration\CaseChecklistService::class)->groupedByCategory($lead);
+            foreach ($grouped as $category => $items) {
+                foreach ($items as $it) {
+                    if (($it['key'] ?? null) === 'svf' && empty($it['hidden'])) {
+                        $vifItem = $it;
+                    }
+                }
+                $visible = array_values(array_filter(
+                    $items,
+                    fn ($i) => empty($i['hidden']) && ! in_array($i['key'] ?? null, ['rfi', 'svf'], true),
+                ));
+                if ($visible) {
+                    $checklist[$category] = $visible;
+                }
+            }
+        }
+
         return inertia('portal/lead/Documents', [
             'lead' => [
                 'id' => $lead->id,
@@ -1903,9 +2072,16 @@ class LeadDocumentController extends Controller
                 'first_name' => $lead->first_name,
                 'last_name' => $lead->last_name,
                 'agreements_acknowledged_at' => $lead->agreements_acknowledged_at,
+                // RFI response deadline (if the case is in Request for Information)
+                // — shown on the client's Documents page so they know the due date.
+                'rfi_deadline' => optional($lead->rfi_deadline)->toDateString(),
             ],
             'requests' => $requests,
             'shared_by_staff' => $sharedByStaff,
+            // The Visa Information Form checklist item — rendered first under
+            // Immigration Team (same function as the "Student Visa Information Form").
+            'vifItem' => $vifItem,
+            'checklist' => $checklist,
             'checklistFiles' => $checklistFiles,
             'sectionVerifications' => $lead->section_verifications ?? [],
         ]);

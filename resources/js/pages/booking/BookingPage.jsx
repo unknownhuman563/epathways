@@ -109,7 +109,7 @@ const faqs = [
     }
 ];
 
-const consultants = {
+export const consultants = {
     education: [
         {
             id: 2,
@@ -1334,7 +1334,7 @@ const slotsBetween = (start, end, step = 60) => {
 // shown for display (who you'll meet) — no selection — then the visitor picks a
 // date (native react-day-picker, past/off-days disabled), a time slot, and
 // enters their contact details, all saved to a Booking on confirm.
-function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Pacific/Auckland', slotMinutes = 60, hideDetails = false, busyUrl = null, info, onChange, onConfirm, isSubmitting, error }) {
+export function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Pacific/Auckland', slotMinutes = 60, hideDetails = false, busyUrl = null, info, onChange, onConfirm, isSubmitting, error }) {
     // Advisers' saved availability drives the bookable days + time slots;
     // fall back to Mon–Fri 9–5 if none has been set. Availability windows are in
     // the business timezone (NZ); the client sees each slot in their own.

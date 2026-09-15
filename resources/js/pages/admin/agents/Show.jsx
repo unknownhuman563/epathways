@@ -17,6 +17,7 @@ export default function AgentShow({
     agreementDefaults = {},
     previewBase = "",
     commission = null,
+    statusCounts = [],
 }) {
     const [modalOpen, setModalOpen] = useState(false);
     const [signOpen, setSignOpen] = useState(false);
@@ -90,6 +91,24 @@ export default function AgentShow({
                     </div>
                 </div>
             </div>
+
+            {/* Leads by stage — a count per pipeline stage across this agent's leads */}
+            {statusCounts.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <TrendingUp size={15} className="text-gray-400" />
+                        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800">Leads by stage</h2>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {statusCounts.map((s) => (
+                            <div key={s.status} className={`rounded-xl border p-3.5 ${stageChip(s.status)}`}>
+                                <div className="text-2xl font-black tabular-nums leading-none">{s.count}</div>
+                                <div className="text-[11px] font-bold uppercase tracking-wide mt-1.5 leading-tight">{s.status}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Agreement section */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">

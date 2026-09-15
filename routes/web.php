@@ -357,6 +357,10 @@ Route::middleware(['throttle:tracker', 'tracker.enabled'])->group(function () {
     Route::get('/track/{code}/programs/{program}', [LeadTrackingController::class, 'programDetails'])->name('track.program.details');
     Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
 
+    // Full program detail (JSON) for the staff-side ProgramDetailsModal on the
+    // lead profile — any authenticated staff/agent can read catalogue info.
+    Route::middleware('auth')->get('/admin/programs/{id}/details', [ProgramController::class, 'detailsJson'])->name('admin.programs.details');
+
     // Build 11.D Phase 3 — Agreement signing. tracker_signing_token in the
     // URL is the bearer credential for the agreement; the controller
     // validates that it belongs to the lead resolved from {code}, so a
@@ -517,6 +521,9 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.module-management');
         Route::post('/admin/module-management/{user}', [\App\Http\Controllers\Admin\ModuleManagementController::class, 'update'])
             ->name('admin.module-management.update');
+        // Grant a user access to extra department portals (beyond their role).
+        Route::post('/admin/module-management/{user}/portals', [\App\Http\Controllers\Admin\ModuleManagementController::class, 'updatePortals'])
+            ->name('admin.module-management.portals');
     });
 
     // Agents module — restricted (default super-admin-only, grantable per user
@@ -764,23 +771,26 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'analytics'])->name('analytics');
         });
 
-        // Lead Portal invitations — admin approval / rejection / revocation.
-        // Gated by the Portal Invitations module (admins + super always pass via
-        // admin_default; grantable to others). Sales requests are separate below.
-        Route::middleware('module:portal_invitation')->group(function () {
-            Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
-                ->name('admin.portal-invitations');
-            Route::post('/admin/leads/{id}/portal-invitation/approve', [LeadPortalInvitationController::class, 'approve'])
-                ->name('admin.portal-invitation.approve');
-            Route::post('/admin/leads/{id}/portal-invitation/reject', [LeadPortalInvitationController::class, 'reject'])
-                ->name('admin.portal-invitation.reject');
-            Route::post('/admin/leads/{id}/portal-invitation/revoke', [LeadPortalInvitationController::class, 'revoke'])
-                ->name('admin.portal-invitation.revoke');
-            Route::post('/admin/leads/{id}/portal-invitation/generate-credentials', [LeadPortalInvitationController::class, 'generateCredentials'])
-                ->name('admin.portal-invitation.generate-credentials');
-            Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
-                ->name('admin.portal-invitation.reset-password');
-        });
+    });
+
+    // Lead Portal invitations — admin approval / rejection / revocation.
+    // Module-gated (NOT portal:admin) so the "Portal Invitations" module can be
+    // granted to non-admin staff via Module Management and they can actually
+    // reach the page; admins/super pass via the module's admin_default. Sales
+    // requests are separate below.
+    Route::middleware('module:portal_invitation')->group(function () {
+        Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
+            ->name('admin.portal-invitations');
+        Route::post('/admin/leads/{id}/portal-invitation/approve', [LeadPortalInvitationController::class, 'approve'])
+            ->name('admin.portal-invitation.approve');
+        Route::post('/admin/leads/{id}/portal-invitation/reject', [LeadPortalInvitationController::class, 'reject'])
+            ->name('admin.portal-invitation.reject');
+        Route::post('/admin/leads/{id}/portal-invitation/revoke', [LeadPortalInvitationController::class, 'revoke'])
+            ->name('admin.portal-invitation.revoke');
+        Route::post('/admin/leads/{id}/portal-invitation/generate-credentials', [LeadPortalInvitationController::class, 'generateCredentials'])
+            ->name('admin.portal-invitation.generate-credentials');
+        Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
+            ->name('admin.portal-invitation.reset-password');
     });
 
     // Consultation bookings — admin + education (education triages/converts
@@ -848,6 +858,8 @@ Route::middleware(['auth'])->group(function () {
         // "bulk-*" segments aren't captured as an {id}.
         Route::post('/admin/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('admin.leads.bulk-agent');
         Route::post('/admin/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('admin.leads.bulk-delete');
+        // Server-side lead search for the "+ New" proposal/agreement picker.
+        Route::get('/admin/leads/doc-picker-search', [SalesController::class, 'docPickerSearch'])->name('admin.leads.doc-picker-search');
         // Assign / clear the recruiting agent on a single lead from the Edit
         // Lead modal (declared before /admin/leads/{id} so "{id}/agent" resolves).
         Route::post('/admin/leads/{id}/agent', [SalesController::class, 'updateLeadAgent'])->name('admin.leads.agent');
@@ -966,6 +978,9 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.documents.request.destroy');
         Route::post('/admin/leads/{leadId}/documents/requests/{requestId}/resend', [LeadDocumentController::class, 'resendRequest'])
             ->name('admin.leads.documents.request.resend');
+        // Staff upload a file against a request (client handed it over directly).
+        Route::post('/admin/leads/{leadId}/documents/requests/{requestId}/upload', [LeadDocumentController::class, 'staffRequestUpload'])
+            ->name('admin.leads.documents.request.upload');
         Route::post('/admin/leads/{leadId}/documents/{docId}/status', [LeadDocumentController::class, 'updateStatus'])
             ->name('admin.leads.documents.status');
         Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
@@ -989,6 +1004,10 @@ Route::middleware(['auth'])->group(function () {
     // write too — the adviser is no longer read-only; advice-bearing artifacts
     // are gated by AdviceBearingPolicy (licence), not by withholding routes.
     Route::middleware('portal:admin,sales,education,english,immigration,immigration_manager,immigration_adviser,accommodation,finance')->group(function () {
+        // Staff "Book" action on a lead profile — creates a consultation booking
+        // for the existing lead (no intake form) from the scheduler modal.
+        Route::post('/admin/leads/{id}/booking', [BookingController::class, 'storeForLead'])
+            ->name('admin.leads.booking');
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
         // Per-lead ad-hoc document rows on the Documents tab — scoped to this
@@ -1007,6 +1026,10 @@ Route::middleware(['auth'])->group(function () {
         //   proposal | consultancy_single | consultancy_partner | english_engagement
         Route::post('/admin/leads/{id}/generate/{type}', [LeadDocumentController::class, 'generateDocument'])
             ->name('admin.leads.generate');
+        // Move an already-generated English agreement into the Consultancy
+        // Agreement Verification queue (the ⋮ "Send for verification" action).
+        Route::post('/admin/leads/{id}/documents/{document}/to-verification', [LeadDocumentController::class, 'sendEnglishToVerification'])
+            ->name('admin.leads.document.to-verification');
         // Bulk generate immigration engagement documents (written agreement
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
@@ -1497,6 +1520,10 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
             // Add / edit / soft-delete student rows from the Students page.
             Route::post('/students', [EducationController::class, 'storeStudent'])->name('students.store');
+            // "Add from existing person" — search leads not yet students, then
+            // flag the chosen one as a student (links, does not duplicate).
+            Route::get('/students/search-existing', [EducationController::class, 'searchExistingLeads'])->name('students.search-existing');
+            Route::post('/students/link-existing', [EducationController::class, 'linkExistingStudent'])->name('students.link-existing');
             Route::post('/students/{id}/update', [EducationController::class, 'updateStudent'])->name('students.update');
             Route::post('/students/{id}/destroy', [EducationController::class, 'destroyStudent'])->name('students.destroy');
             // Schools catalog — same SchoolController as /admin/schools,
@@ -1527,6 +1554,7 @@ Route::middleware(['auth'])->group(function () {
             // REPORTS — single page; period (weekly|monthly|quarterly|custom)
             // is a query param, sections stay the same.
             Route::get('/reports', [EducationController::class, 'reports'])->name('reports');
+            Route::post('/reports/note', [EducationController::class, 'saveReportNote'])->name('reports.note');
 
             // ACCOUNT
             Route::get('/profile', [EducationController::class, 'profile'])->name('profile');
@@ -1726,6 +1754,7 @@ Route::middleware(['auth'])->group(function () {
             // Request for Information — moves to "Request for Information" with a
             // response deadline, attached RFI PDF(s) shared to the case, and the
             // configured RFI stage automation (PDFs attached to the email).
+            Route::post('/cases/{id}/rfi/analyze', [ImmigrationController::class, 'analyzeRfi'])->name('cases.rfi.analyze');
             Route::post('/cases/{id}/rfi', [ImmigrationController::class, 'requestForInformation'])->name('cases.rfi');
             // Inline visa-type update from the Cases table.
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');

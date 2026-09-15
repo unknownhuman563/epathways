@@ -8,6 +8,7 @@ import {
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
     Archive, Pencil, Mail, Phone, Paperclip, KeyRound,
     ArrowLeftRight, UserPlus, Loader2, Check, Eye, Link2,
+    Sparkles, Trash2,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
@@ -1954,19 +1955,82 @@ function RequestInfoModal({ caseId, onClose }) {
     const [notify, setNotify] = useState(true);
     const [saving, setSaving] = useState(false);
 
+    // AI reads the uploaded RFI letter and lists the documents INZ is asking
+    // for. Staff review / edit this list; on submit each becomes a request the
+    // client uploads against. Nothing is created until staff confirm here.
+    const [analyzing, setAnalyzing] = useState(false);
+    const [analyzed, setAnalyzed] = useState(false); // a run has completed
+    const [aiUsed, setAiUsed] = useState(false);
+    const [textFound, setTextFound] = useState(true);
+    const [reqDocs, setReqDocs] = useState([]); // [{ label, description, required, include }]
+
+    // PDF preview shown in the left pane so staff can read the letter beside the
+    // extracted documents. Object URLs are created/revoked as the selection changes.
+    const [previewIdx, setPreviewIdx] = useState(0);
+    const [previewUrl, setPreviewUrl] = useState(null);
+
     useEffect(() => {
         const onKey = (e) => { if (e.key === "Escape") onClose(); };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [onClose]);
 
+    useEffect(() => {
+        const f = files[previewIdx];
+        if (!f) { setPreviewUrl(null); return; }
+        const url = URL.createObjectURL(f);
+        setPreviewUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [files, previewIdx]);
+
+    const onFilesChosen = (chosen) => {
+        setFiles(chosen);
+        setPreviewIdx(0);
+        setAnalyzed(false);
+        setReqDocs([]);
+        if (chosen.length) analyze(chosen);
+    };
+
+    // Ask the server to read the PDF(s) and extract the requested documents.
+    const analyze = (chosen) => {
+        const fd = new FormData();
+        chosen.forEach((f) => fd.append("documents[]", f));
+        setAnalyzing(true);
+        window.axios
+            .post(`/portal/immigration/cases/${caseId}/rfi/analyze`, fd)
+            .then(({ data }) => {
+                setAiUsed(!!data.ai_used);
+                setTextFound(data.text_found !== false);
+                // Auto-fill the deadline the letter sets (staff can still change it).
+                if (data.deadline) setDeadline(data.deadline);
+                setReqDocs((data.documents || []).map((d) => ({
+                    label: d.label || "", description: d.description || "",
+                    required: true, include: true,
+                })));
+                setAnalyzed(true);
+                if (data.ai_used && (data.documents || []).length) {
+                    toast.success(`Found ${data.documents.length} requested document${data.documents.length > 1 ? "s" : ""}${data.deadline ? " + deadline" : ""}`);
+                }
+            })
+            .catch(() => toast.error("Couldn't read the RFI letter — add the documents manually."))
+            .finally(() => setAnalyzing(false));
+    };
+
+    const updateDoc = (i, patch) => setReqDocs((list) => list.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+    const removeDoc = (i) => setReqDocs((list) => list.filter((_, j) => j !== i));
+    const addDoc = () => setReqDocs((list) => [...list, { label: "", description: "", required: true, include: true }]);
+
     const submit = () => {
         if (saving) return;
         if (!deadline) { toast.error("Set a response deadline."); return; }
+        // Only included rows with a real label are sent to the client.
+        const requested_documents = reqDocs
+            .filter((d) => d.include && d.label.trim())
+            .map((d) => ({ label: d.label.trim(), description: d.description.trim(), required: d.required ? 1 : 0 }));
         setSaving(true);
         router.post(
             `/portal/immigration/cases/${caseId}/rfi`,
-            { deadline, note, notify: notify ? 1 : 0, documents: files },
+            { deadline, note, notify: notify ? 1 : 0, documents: files, requested_documents },
             {
                 forceFormData: true,
                 preserveScroll: true,
@@ -1977,9 +2041,11 @@ function RequestInfoModal({ caseId, onClose }) {
         );
     };
 
+    const includedCount = reqDocs.filter((d) => d.include && d.label.trim()).length;
+
     return createPortal(
         <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col transition-all duration-200 ${files.length ? "max-w-7xl h-[92vh]" : "max-w-lg max-h-[90vh]"}`} onClick={(e) => e.stopPropagation()}>
                 <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
                     <div>
                         <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
@@ -1990,8 +2056,62 @@ function RequestInfoModal({ caseId, onClose }) {
                     <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
                 </header>
 
-                <div className="px-5 py-4 space-y-4">
-                    {/* Deadline */}
+                <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-hidden">
+                    {/* Left pane — the RFI letter, so staff read it beside the
+                        documents extracted from it. Only when a file is chosen. */}
+                    {files.length > 0 && (
+                        <div className="md:w-1/2 md:border-r border-b md:border-b-0 border-gray-100 bg-gray-100 flex flex-col min-h-0 h-64 md:h-auto">
+                            {files.length > 1 && (
+                                <div className="flex items-center gap-1 px-2 py-1.5 bg-white border-b border-gray-100 overflow-x-auto">
+                                    {files.map((f, i) => (
+                                        <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => setPreviewIdx(i)}
+                                            className={`px-2 py-1 rounded text-[10px] font-semibold whitespace-nowrap max-w-[140px] truncate ${i === previewIdx ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+                                            title={f.name}
+                                        >
+                                            {f.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {previewUrl
+                                ? <iframe src={previewUrl} title="RFI letter" className="flex-1 w-full border-0 bg-white" />
+                                : <div className="flex-1 grid place-items-center text-[11px] text-gray-400">Preview unavailable</div>}
+                        </div>
+                    )}
+
+                    {/* Right pane — the form + extracted documents. */}
+                    <div className={`px-5 py-4 space-y-4 overflow-y-auto min-h-0 flex-1 ${files.length ? "md:w-1/2" : ""}`}>
+                    {/* Sequence: 1) upload the letter, 2) deadline (auto-filled
+                        from it), 3) the documents it requests. */}
+
+                    {/* 1 — RFI PDFs (multiple) */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">RFI document(s) — PDF</label>
+                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-400 text-[12px] text-gray-600">
+                            <Paperclip size={14} className="text-gray-400" />
+                            <span className="truncate">{files.length ? `${files.length} file${files.length > 1 ? "s" : ""} selected` : "Choose PDF file(s)"}</span>
+                            <input
+                                type="file"
+                                accept="application/pdf"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => onFilesChosen(Array.from(e.target.files || []))}
+                            />
+                        </label>
+                        {files.length > 0 && (
+                            <ul className="mt-1.5 space-y-0.5">
+                                {files.map((f, i) => (
+                                    <li key={i} className="text-[11px] text-emerald-600 font-medium truncate">• {f.name}</li>
+                                ))}
+                            </ul>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-1">Shared to the client&apos;s portal, shown on the Documents tab, and attached to the email.</p>
+                    </div>
+
+                    {/* 2 — Deadline (auto-filled from the letter when found) */}
                     <div>
                         <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                             Response deadline <span className="text-rose-500">*</span>
@@ -2006,31 +2126,91 @@ function RequestInfoModal({ caseId, onClose }) {
                                 className="w-full text-sm pl-9 pr-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900"
                             />
                         </div>
+                        {analyzed && aiUsed && deadline && (
+                            <p className="text-[10px] text-indigo-500 mt-1 inline-flex items-center gap-1">
+                                <Sparkles size={10} /> Read from the letter — adjust if needed.
+                            </p>
+                        )}
                     </div>
 
-                    {/* RFI PDFs (multiple) */}
-                    <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">RFI document(s) — PDF</label>
-                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-400 text-[12px] text-gray-600">
-                            <Paperclip size={14} className="text-gray-400" />
-                            <span className="truncate">{files.length ? `${files.length} file${files.length > 1 ? "s" : ""} selected` : "Choose PDF file(s)"}</span>
-                            <input
-                                type="file"
-                                accept="application/pdf"
-                                multiple
-                                className="hidden"
-                                onChange={(e) => setFiles(Array.from(e.target.files || []))}
-                            />
-                        </label>
-                        {files.length > 0 && (
-                            <ul className="mt-1.5 space-y-0.5">
-                                {files.map((f, i) => (
-                                    <li key={i} className="text-[11px] text-emerald-600 font-medium truncate">• {f.name}</li>
-                                ))}
-                            </ul>
-                        )}
-                        <p className="text-[10px] text-gray-400 mt-1">Shared to the client&apos;s portal, shown on the Documents tab, and attached to the email.</p>
-                    </div>
+                    {/* 3 — AI-read requested documents. Appears once a letter is
+                        chosen; staff review / edit before confirming. */}
+                    {(analyzing || analyzed || reqDocs.length > 0) && (
+                        <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-[11px] font-semibold text-indigo-900 inline-flex items-center gap-1.5">
+                                    <Sparkles size={13} className="text-indigo-500" /> Documents requested by INZ
+                                </p>
+                                {analyzing && <Loader2 size={13} className="animate-spin text-indigo-400" />}
+                            </div>
+
+                            {analyzing && (
+                                <p className="text-[11px] text-indigo-700/80 mt-1.5">Reading the RFI letter…</p>
+                            )}
+
+                            {! analyzing && analyzed && aiUsed && reqDocs.length === 0 && (
+                                <p className="text-[11px] text-gray-500 mt-1.5">No documents were detected in the letter. Add them manually below.</p>
+                            )}
+                            {! analyzing && analyzed && ! textFound && (
+                                <p className="text-[11px] text-amber-700 mt-1.5">This PDF looks scanned (no readable text). Add the requested documents manually below.</p>
+                            )}
+                            {! analyzing && analyzed && textFound && ! aiUsed && (
+                                <p className="text-[11px] text-gray-500 mt-1.5">Automatic reading is unavailable. Add the requested documents manually below.</p>
+                            )}
+
+                            {reqDocs.length > 0 && (
+                                <ul className="mt-2 space-y-2">
+                                    {reqDocs.map((d, i) => (
+                                        <li key={i} className={`rounded-md border px-2.5 py-2 ${d.include ? "border-indigo-200 bg-white" : "border-gray-200 bg-gray-50 opacity-60"}`}>
+                                            <div className="flex items-start gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={d.include}
+                                                    onChange={(e) => updateDoc(i, { include: e.target.checked })}
+                                                    className="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    title="Include this document"
+                                                />
+                                                <div className="min-w-0 flex-1 space-y-1">
+                                                    <input
+                                                        type="text"
+                                                        value={d.label}
+                                                        onChange={(e) => updateDoc(i, { label: e.target.value })}
+                                                        maxLength={120}
+                                                        placeholder="Document name"
+                                                        className="w-full text-[12px] font-medium text-gray-900 bg-transparent border-0 border-b border-transparent focus:border-indigo-300 focus:outline-none px-0 py-0.5"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={d.description}
+                                                        onChange={(e) => updateDoc(i, { description: e.target.value })}
+                                                        maxLength={500}
+                                                        placeholder="Note (optional)"
+                                                        className="w-full text-[11px] text-gray-500 bg-transparent border-0 focus:outline-none px-0"
+                                                    />
+                                                </div>
+                                                <button type="button" onClick={() => removeDoc(i)} className="mt-0.5 text-gray-300 hover:text-rose-500" title="Remove">
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={addDoc}
+                                className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
+                            >
+                                <Plus size={12} /> Add a document
+                            </button>
+                            {includedCount > 0 && (
+                                <p className="text-[10px] text-gray-500 mt-2">
+                                    {includedCount} document{includedCount > 1 ? "s" : ""} will be requested from the client in their portal.
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Note */}
                     <div>
@@ -2050,6 +2230,7 @@ function RequestInfoModal({ caseId, onClose }) {
                         <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="rounded border-gray-300" />
                         <Mail size={13} className="text-gray-400" /> Email the client (uses the RFI stage automation)
                     </label>
+                    </div>
                 </div>
 
                 <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">

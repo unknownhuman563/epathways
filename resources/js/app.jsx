@@ -56,7 +56,15 @@ createInertiaApp({
       );
     }
 
-    if (name.startsWith('admin/')) {
+    // Admin-area pages that are grantable to non-admin staff via Module
+    // Management must keep the user's OWN sidebar, not switch to the admin
+    // chrome — so they adopt the signed-in user's role layout (admins still
+    // resolve to AdminLayout through RoleLayout).
+    const ROLE_CHROME_PAGES = ['admin/PortalInvitations'];
+
+    if (ROLE_CHROME_PAGES.includes(name)) {
+      page.default.layout = page.default.layout || ((page) => <RoleLayout>{page}</RoleLayout>);
+    } else if (name.startsWith('admin/')) {
       page.default.layout = page.default.layout || ((page) => <AdminLayout>{page}</AdminLayout>);
     } else if (name.startsWith('ai/')) {
       // Role-agnostic authenticated pages (AI Assistant) reachable from every

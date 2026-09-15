@@ -47,6 +47,26 @@ class SendLeadFollowupEmail implements ShouldQueue
     }
 
     /**
+     * Schedule the post-proposal feedback drip (day 1 / 2 / 5) for a lead the
+     * moment their Study Proposal is actually emailed. Tied to the real send —
+     * not the "Proposal Sent" status transition — because the proposal is often
+     * emailed while the lead is already in that stage (verification-approval
+     * flow, or a lead created directly in "Proposal Sent"), in which case no
+     * transition fires. Each job no-ops at fire time if the lead has moved off
+     * "Proposal Sent" (e.g. chose a program), so a responsive lead stops.
+     */
+    public static function scheduleProposalDrip(Lead $lead): void
+    {
+        if (empty($lead->email)) {
+            return;
+        }
+
+        self::dispatch($lead->id, 'proposal_send_1', 'Proposal Sent')->delay(now()->addDay());
+        self::dispatch($lead->id, 'proposal_send_2', 'Proposal Sent')->delay(now()->addDays(2));
+        self::dispatch($lead->id, 'proposal_send_3', 'Proposal Sent')->delay(now()->addDays(5));
+    }
+
+    /**
      * Resolve a template by key across departments (shared first, else any
      * department that owns it) and send it. Non-fatal on failure.
      */

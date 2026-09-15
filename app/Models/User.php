@@ -69,6 +69,7 @@ class User extends Authenticatable
         'password',
         'role',
         'module_permissions',
+        'portal_access',
         'referral_code',
         'parent_agent_id',
         'lead_id',
@@ -115,6 +116,7 @@ class User extends Authenticatable
             'iaa_licence_verified_at' => 'date',
             'signature_updated_at' => 'datetime',
             'module_permissions' => 'array',
+            'portal_access' => 'array',
             'password' => 'hashed',
         ];
     }
@@ -451,8 +453,44 @@ class User extends Authenticatable
         if ($portal === 'immigration-adviser') {
             return $this->role === self::ROLE_IMMIGRATION_ADVISER;
         }
+        // Extra portals granted in Module Management (beyond the user's role).
+        if (in_array($portal, (array) ($this->portal_access ?? []), true)) {
+            return true;
+        }
 
         return $this->role === $portal;
+    }
+
+    /**
+     * Every department portal this staff user can reach — their own role's
+     * portal plus any granted in Module Management. Admins/super-admins reach
+     * them all. Returns portal keys (a subset of PORTAL_ROLES). Drives the
+     * topbar portal switcher.
+     *
+     * @return list<string>
+     */
+    public function accessiblePortals(): array
+    {
+        if ($this->isAdmin()) {
+            return self::PORTAL_ROLES;
+        }
+
+        $portals = [];
+        // The user's own role, when it is itself a department portal.
+        if (in_array($this->role, self::PORTAL_ROLES, true)) {
+            $portals[] = $this->role;
+        }
+        // Immigration sub-roles land on the immigration portal.
+        if (in_array($this->role, self::IMMIGRATION_ROLES, true)) {
+            $portals[] = 'immigration';
+        }
+        foreach ((array) ($this->portal_access ?? []) as $p) {
+            if (in_array($p, self::PORTAL_ROLES, true)) {
+                $portals[] = $p;
+            }
+        }
+
+        return array_values(array_unique($portals));
     }
 
     /**

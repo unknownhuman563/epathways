@@ -5,11 +5,13 @@ import { Boxes, Search, Save, Check, ShieldCheck, User as UserIcon } from "lucid
 // Super-admin-only: grant per-user access to restricted modules. Every other
 // module is grandfathered (visible by role) and never appears here — only the
 // modules that ship hidden-by-default are toggled per user.
-export default function ModuleManagement({ modules = [], users = [] }) {
+export default function ModuleManagement({ modules = [], users = [], portals = [] }) {
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState(null);
     const [granted, setGranted] = useState(() => new Set());
+    const [grantedPortals, setGrantedPortals] = useState(() => new Set());
     const [saving, setSaving] = useState(false);
+    const [savingPortals, setSavingPortals] = useState(false);
 
     const selected = useMemo(() => users.find((u) => u.id === selectedId) || null, [users, selectedId]);
 
@@ -26,7 +28,14 @@ export default function ModuleManagement({ modules = [], users = [] }) {
     const selectUser = (u) => {
         setSelectedId(u.id);
         setGranted(new Set(u.modules || []));
+        setGrantedPortals(new Set(u.portals || []));
     };
+
+    const togglePortal = (key) => setGrantedPortals((prev) => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+    });
 
     const featureKeys = (m) => (m.features || []).map((f) => f.key);
 
@@ -86,6 +95,24 @@ export default function ModuleManagement({ modules = [], users = [] }) {
         });
     };
 
+    const portalsDirty = useMemo(() => {
+        if (! selected) return false;
+        const saved = new Set(selected.portals || []);
+        if (saved.size !== grantedPortals.size) return true;
+        for (const k of grantedPortals) if (! saved.has(k)) return true;
+        return false;
+    }, [selected, grantedPortals]);
+
+    const savePortals = () => {
+        if (! selected || selected.is_admin) return;
+        setSavingPortals(true);
+        router.post(`/admin/module-management/${selected.id}/portals`, { portals: [...grantedPortals] }, {
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: () => setSavingPortals(false),
+        });
+    };
+
     const roleBadge = (role) => (
         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
             {(role || "").replace(/_/g, " ")}
@@ -107,7 +134,7 @@ export default function ModuleManagement({ modules = [], users = [] }) {
                 </p>
             </div>
 
-            {modules.length === 0 ? (
+            {modules.length === 0 && portals.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400">
                     <Boxes size={26} className="mx-auto mb-2 text-gray-300" />
                     <p className="text-sm font-medium">No restricted modules yet</p>
@@ -256,6 +283,59 @@ export default function ModuleManagement({ modules = [], users = [] }) {
                                             </button>
                                         </div>
                                     </>
+                                )}
+
+                                {/* Portal access — grant extra department portals beyond the user's role */}
+                                {portals.length > 0 && (
+                                    <div className="mt-6 pt-5 border-t border-gray-100">
+                                        <h3 className="text-sm font-bold text-gray-900">Portal access</h3>
+                                        <p className="text-xs text-gray-500 mt-0.5 mb-3">
+                                            Give this user access to extra department portals. Their own role portal is always available.
+                                        </p>
+                                        {selected.is_admin ? (
+                                            <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+                                                <ShieldCheck size={16} className="mt-0.5 shrink-0" />
+                                                <span>{selected.role === "super_admin" ? "Super admins" : "Admins"} already reach every portal.</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                    {portals.map((p) => {
+                                                        const isOwn = p.key === selected.role;
+                                                        const on = isOwn || grantedPortals.has(p.key);
+                                                        return (
+                                                            <button
+                                                                key={p.key}
+                                                                type="button"
+                                                                disabled={isOwn}
+                                                                onClick={() => togglePortal(p.key)}
+                                                                className={`text-left flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-colors ${on ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200 hover:bg-gray-50"} ${isOwn ? "opacity-70 cursor-default" : ""}`}
+                                                            >
+                                                                <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-gray-300"}`}>
+                                                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
+                                                                </span>
+                                                                <span className="min-w-0">
+                                                                    <span className="block text-[13px] font-semibold text-gray-900 truncate">{p.label}</span>
+                                                                    {isOwn && <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">Own role</span>}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="flex items-center justify-end gap-3 mt-4">
+                                                    {portalsDirty && <span className="text-[11px] text-amber-600 font-semibold">Unsaved changes</span>}
+                                                    <button
+                                                        type="button"
+                                                        onClick={savePortals}
+                                                        disabled={! portalsDirty || savingPortals}
+                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black disabled:opacity-50 transition-colors"
+                                                    >
+                                                        {savingPortals ? <Check size={15} /> : <Save size={15} />} Save portals
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 )}
                             </>
                         )}
