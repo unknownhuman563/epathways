@@ -208,9 +208,17 @@ class HandleInertiaRequests extends Middleware
 
         if (str_starts_with($path, 'portal/education')) {
             $todayStart = now()->startOfDay();
+            $weekStart = now()->startOfWeek();
             $out['education'] = [
                 'new_leads_today' => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
                 'docs_pending_review' => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                // Assessments awaiting attention — every free-assessment /
+                // education-enrolment entry (submitted or still a draft).
+                'assessments' => \App\Models\Lead::whereIn('source', ['free-assessment', 'education-enrolment'])->count(),
+                // Newly-booked consultations this week.
+                'bookings_new' => \App\Models\Booking::where('created_at', '>=', $weekStart)->count(),
+                // User reviews still awaiting moderation (status "New").
+                'user_reviews_new' => \App\Models\UserReview::where('status', 'New')->count(),
                 'notifications_unread' => $user->unreadNotifications()->count(),
             ];
         }

@@ -630,7 +630,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
 
     return (
         <ReadOnlyContext.Provider value={readOnly}>
-        <div className="space-y-4 max-w-[1600px] mx-auto">
+        <div className="space-y-4">
             <Head title="Students — Education" />
 
             {/* Header */}

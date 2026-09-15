@@ -91,7 +91,8 @@
                 <td>
                     <ul style="margin:0 0 0 18px;">
                         <li>20 hours of personalized PTE coaching</li>
-                        <li>1 mock test with assessment and feedback</li>
+                        <li>{{ $mock_line ?? '1 mock test with assessment and feedback' }}</li>
+                        @if (($show_pte_bullet ?? false))<li>PTE Examination Fee</li>@endif
                     </ul>
                 </td>
                 <td class="center">1</td>

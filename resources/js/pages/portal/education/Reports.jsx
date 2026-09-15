@@ -80,7 +80,7 @@ export default function EducationReports({ range = {}, pipeline = [], summary = 
     }, []);
 
     return (
-        <div className="space-y-6 max-w-[1400px] mx-auto pb-16">
+        <div className="space-y-6 pb-16">
             <Head title="Education Report" />
 
             <div>

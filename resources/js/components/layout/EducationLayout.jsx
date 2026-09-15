@@ -1,11 +1,11 @@
 import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
 import {
-    LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
-    ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
+    LayoutDashboard, UserSquare2, Users, GraduationCap,
+    LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
     Building2, Ticket, Mail,
     PenLine, Megaphone, Smartphone, MessageSquare, FileText, Award,
-    Clock, BookOpen, BadgeCheck,
+    Clock, BookOpen, BadgeCheck, CalendarDays,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -17,21 +17,12 @@ export default function EducationLayout({ children }) {
         { name: "Dashboard", href: "/portal/education/dashboard", icon: <LayoutDashboard size={20} /> },
 
         { name: "Work", section: true },
-        {
-            name: "Leads",
-            icon: <UserSquare2 size={20} />,
-            badge: badges.new_leads_today,
-            badgeTone: "default",
-            children: [
-                { name: "List of Leads",         href: "/portal/education/leads",                      icon: <UserSquare2 size={16} /> },
-                { name: "Proposal & Agreements", href: "/portal/education/leads/proposals-agreements", icon: <FileText size={16} /> },
-            ],
-        },
-        { name: "Task Board", href: "/portal/education/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
-        { name: "Assessments", href: "/portal/education/assessments", icon: <ClipboardCheck size={20} /> },
-        { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
+        { name: "Assessments", href: "/portal/education/assessments", icon: <ClipboardCheck size={20} />, badge: badges.assessments, badgeTone: "warning" },
+        { name: "Bookings", href: "/portal/education/booking", icon: <BookOpen size={20} />, badge: badges.bookings_new, badgeTone: "warning" },
+        { name: "List of Leads", href: "/portal/education/leads", icon: <UserSquare2 size={20} />, badge: badges.new_leads_today, badgeTone: "warning" },
+        { name: "Proposal & Agreements", href: "/portal/education/leads/proposals-agreements", icon: <FileText size={20} /> },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },
-        { name: "Documents", href: "/portal/education/documents", icon: <FolderOpen size={20} />, badge: badges.docs_pending_review, badgeTone: "warning" },
+        { name: "Intake Monitoring", href: "/portal/education/students/intake-monitoring", icon: <CalendarDays size={20} /> },
         // Restricted module — only shows when granted (e.g. to Dinah). Two
         // parts, each its own grantable feature.
         ...((modules.includes("program_verification.proposal") || modules.includes("program_verification.consultancy"))
@@ -46,16 +37,11 @@ export default function EducationLayout({ children }) {
                 ],
             }]
             : []),
-        { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
+        { name: "Task Board", href: "/portal/education/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
 
         { name: "Setup", section: true },
-        { name: "Programs",            href: "/portal/education/programs",            icon: <GraduationCap size={20} /> },
-        { name: "Schools",             href: "/portal/education/schools",             icon: <Building2 size={20} /> },
-        { name: "Promotions",          href: "/admin/promos",                         icon: <Tag size={20} /> },
-        { name: "Checklist Templates", href: "/portal/education/checklist-templates", icon: <ListChecks size={20} /> },
-
         {
-            name: "Email",
+            name: "Emails",
             icon: <Mail size={20} />,
             children: [
                 { name: "Templates", href: "/portal/education/email-templates", icon: <PenLine size={16} /> },
@@ -65,19 +51,31 @@ export default function EducationLayout({ children }) {
                 { name: "Replies",   href: "/portal/education/email/replies",   icon: <MessageSquare size={16} /> },
             ],
         },
-
         { name: "Reports",       href: "/portal/education/reports", icon: <LineChart size={20} /> },
-        { name: "Visa Approved", href: "/admin/visa-approvals",     icon: <Award size={20} /> },
+        { name: "Programs",      href: "/portal/education/programs", icon: <GraduationCap size={20} /> },
+        { name: "Schools",       href: "/portal/education/schools",  icon: <Building2 size={20} /> },
+        // Public-facing showcase content — testimonials, success stories, campaigns.
+        {
+            name: "Marketing",
+            icon: <Megaphone size={20} />,
+            badge: badges.user_reviews_new,
+            badgeTone: "warning",
+            children: [
+                { name: "User Reviews",  href: "/admin/user-reviews",  icon: <Star size={16} />, badge: badges.user_reviews_new, badgeTone: "warning" },
+                { name: "Visa Approved", href: "/admin/visa-approvals", icon: <Award size={16} /> },
+                { name: "Promotions",    href: "/admin/promos",         icon: <Tag size={16} /> },
+            ],
+        },
 
         { name: "Account", section: true },
-        { name: "My Profile",    href: "/portal/education/profile",       icon: <User size={20} /> },
-        { name: "Notifications", href: "/portal/education/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
         { name: "Daily Time Record", href: "/portal/education/dtr", icon: <Clock size={20} /> },
         { name: "My Tickets",    href: "/portal/tickets",                icon: <Ticket size={20} /> },
+        { name: "Notifications", href: "/portal/education/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
+        { name: "My Profile",    href: "/portal/education/profile",       icon: <User size={20} /> },
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Education Portal" accent="bg-indigo-600" nav={EDUCATION_NAV}>
+        <DashboardLayout brand="ePathways." subtitle="Education Portal" accent="bg-[#14532d]" nav={EDUCATION_NAV}>
             {children}
         </DashboardLayout>
     );

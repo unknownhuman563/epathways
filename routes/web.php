@@ -1030,6 +1030,10 @@ Route::middleware(['auth'])->group(function () {
         // Agreement Verification queue (the ⋮ "Send for verification" action).
         Route::post('/admin/leads/{id}/documents/{document}/to-verification', [LeadDocumentController::class, 'sendEnglishToVerification'])
             ->name('admin.leads.document.to-verification');
+        // Re-render an approved agreement PDF in place from the current amount
+        // (no re-verification) — fixes file-vs-column drift.
+        Route::post('/admin/leads/{id}/documents/{document}/regenerate', [LeadDocumentController::class, 'regenerateAgreement'])
+            ->name('admin.leads.document.regenerate');
         // Bulk generate immigration engagement documents (written agreement
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
@@ -1515,7 +1519,11 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // WORK
+            // Bookings — same page as /admin/booking but rendered under the
+            // education prefix so it keeps the Education sidebar.
+            Route::get('/booking', [\App\Http\Controllers\BookingController::class, 'index'])->name('booking');
             Route::get('/students', [EducationController::class, 'students'])->name('students');
+            Route::get('/students/intake-monitoring', [EducationController::class, 'intakeMonitoring'])->name('students.intake-monitoring');
             Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
             // Add / edit / soft-delete student rows from the Students page.
             Route::post('/students', [EducationController::class, 'storeStudent'])->name('students.store');

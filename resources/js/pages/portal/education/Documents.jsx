@@ -66,7 +66,7 @@ export default function EducationDocuments({
     const portalBase = url.startsWith("/portal/immigration") ? "/portal/immigration" : "/portal/education";
 
     return (
-        <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
+        <div className="space-y-5 pb-12">
             <Head title="Documents — Education" />
 
             {/* Header */}

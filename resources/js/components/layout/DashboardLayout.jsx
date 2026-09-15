@@ -96,6 +96,19 @@ export default function DashboardLayout({
     // continue with a `/`.
     const isPathMatch = (href) => url === href || url.startsWith(href + "/");
 
+    // The single best top-level match — the item whose href is the LONGEST
+    // prefix of the current URL — so sibling prefixes don't both light up
+    // (e.g. /leads vs /leads/proposals-agreements).
+    const bestTopHref = (() => {
+        let best = null;
+        for (const it of navWithPortals) {
+            if (! it.href || it.children) continue;
+            if (! isPathMatch(it.href)) continue;
+            if (! best || it.href.length > best.length) best = it.href;
+        }
+        return best;
+    })();
+
     // Among a group's children, only ONE is active — the child whose
     // href is the longest prefix of the current URL. That way
     // /leads/proposals-agreements beats /leads even though both are
@@ -286,7 +299,7 @@ export default function DashboardLayout({
                         );
                     }
 
-                    const isActive = isPathMatch(item.href);
+                    const isActive = item.href === bestTopHref;
                     return (
                         <Link
                             key={item.name}

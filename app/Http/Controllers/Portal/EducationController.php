@@ -75,7 +75,6 @@ class EducationController extends Controller
                 'studentStats' => $studentStats,
                 'recentStudents' => $recentStudents,
                 'recentPrograms' => $recentPrograms,
-                'intakeMonitoring' => $this->intakeMonitoring(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Education dashboard failed', ['error' => $e->getMessage()]);
@@ -85,74 +84,7 @@ class EducationController extends Controller
                 'studentStats' => array_fill_keys(['total_with_plan', 'this_month', 'qualified', 'enrolled'], 0),
                 'recentStudents' => collect(),
                 'recentPrograms' => collect(),
-                'intakeMonitoring' => [],
             ]);
-        }
-    }
-
-    /**
-     * Intake monitoring — every student in the Students register (Education +
-     * English + student-visa Immigration), grouped by their intake MONTH so the
-     * dashboard can show each month's cohort. The intake is the free-text
-     * `preferred_intake` on the study plan (e.g. "31 August 2026"); we best-effort
-     * parse it to a month, and anything unparseable falls into "Unscheduled".
-     *
-     * @return array<int, array{key:string,label:string,count:int,rows:array}>
-     */
-    private function intakeMonitoring(): array
-    {
-        $students = Lead::inStudentsRegister()
-            ->with(['studyPlans:id,lead_id,preferred_course,preferred_intake', 'school:id,name'])
-            ->get(['id', 'first_name', 'last_name', 'residence_country', 'education_stage', 'immigration_stage', 'english_stage', 'status', 'is_immigration_case', 'student_school', 'school_id']);
-
-        $groups = [];
-        foreach ($students as $l) {
-            $plan = $l->studyPlans->first();
-            $intakeRaw = $plan?->preferred_intake;
-            [$key, $label, $sort] = $this->parseIntakeMonth($intakeRaw);
-
-            $groups[$key] ??= ['key' => $key, 'label' => $label, 'sort' => $sort, 'rows' => []];
-            $groups[$key]['rows'][] = [
-                'id' => $l->id,
-                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
-                // Effective department status — education first, then the visa
-                // or English sub-stage, then the raw sales status.
-                'status' => $l->education_stage ?: ($l->immigration_stage ?: ($l->english_stage ?: $l->status)),
-                'location' => $l->residence_country,
-                'intake' => $intakeRaw,
-                'school' => $l->student_school ?: optional($l->school)->name,
-                'program' => $plan?->preferred_course,
-            ];
-        }
-
-        // Chronological by intake month; "Unscheduled" sinks to the bottom.
-        usort($groups, fn ($a, $b) => $a['sort'] <=> $b['sort']);
-        foreach ($groups as &$g) {
-            usort($g['rows'], fn ($a, $b) => strcasecmp($a['name'], $b['name']));
-            $g['count'] = count($g['rows']);
-            unset($g['sort']);
-        }
-
-        return array_values($groups);
-    }
-
-    /**
-     * Best-effort parse of a free-text intake string into a month bucket.
-     *
-     * @return array{0:string,1:string,2:int} [key, label, sortValue]
-     */
-    private function parseIntakeMonth(?string $raw): array
-    {
-        $raw = trim((string) $raw);
-        if ($raw === '') {
-            return ['unscheduled', 'Unscheduled', PHP_INT_MAX];
-        }
-        try {
-            $d = \Illuminate\Support\Carbon::parse($raw);
-
-            return [$d->format('Y-m'), $d->format('F Y'), (int) $d->format('Ym')];
-        } catch (\Throwable $e) {
-            return ['unscheduled', 'Unscheduled', PHP_INT_MAX];
         }
     }
 
@@ -542,6 +474,117 @@ class EducationController extends Controller
             request()->is('portal/agent/*') => ['portal/agent/Students', 'agent'],
             default => ['portal/education/Students', 'education'],
         };
+    }
+
+    /**
+     * Intake monitoring — every student grouped by their study-plan intake
+     * month, so staff can see how many people start each intake and who is
+     * still unscheduled. Same student universe as the Students page.
+     */
+    public function intakeMonitoring()
+    {
+        try {
+            $students = Lead::with(['studyPlans', 'school', 'faceImage'])
+                ->inStudentsRegister()
+                ->limit(1000)
+                ->get()
+                ->map(function (Lead $l) {
+                    $plan = $l->studyPlans->first();
+                    $intakeRaw = optional($plan)->preferred_intake;
+                    [$monthKey, $monthLabel, $intakeDisplay] = $this->intakeBucket($intakeRaw);
+
+                    // Department track (mirrors the Students tabs) and the
+                    // effective stage used for the card chip + grouping.
+                    $track = $l->is_immigration_case
+                        ? 'immigration'
+                        : (($l->is_english_student || $l->english_stage) ? 'english' : 'education');
+                    $effStage = $l->education_stage ?: ($l->immigration_stage ?: ($l->english_stage ?: $l->status));
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
+                        'status' => $effStage ?: null,
+                        'location' => $l->residence_country,
+                        'intake' => $intakeDisplay,
+                        'school' => optional($l->school)->name ?: $l->student_school,
+                        'program' => optional($plan)->preferred_course,
+                        'month_key' => $monthKey,
+                        'month_label' => $monthLabel,
+                        'track' => $track,
+                        // Card-grouping bucket for the "Group by Stage" view.
+                        'category' => $this->intakeCategory($track, $effStage),
+                    ];
+                })
+                // Chronological, with unscheduled (key '9999-99') always last.
+                ->sortBy([['month_key', 'asc'], ['name', 'asc']])
+                ->values();
+
+            return inertia('portal/education/IntakeMonitoring', [
+                'portal' => 'education',
+                'students' => $students,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Intake monitoring failed', ['error' => $e->getMessage()]);
+
+            return inertia('portal/education/IntakeMonitoring', [
+                'portal' => 'education',
+                'students' => collect(),
+            ]);
+        }
+    }
+
+    /**
+     * Stage → card-grouping bucket for the Intake Monitoring board's
+     * "Group by Stage" view: needs_attention | immigration | offers |
+     * english | started | lead_stages.
+     */
+    private function intakeCategory(string $track, ?string $stage): string
+    {
+        $s = (string) $stage;
+        if ($s === 'Started Course') {
+            return 'started';
+        }
+        if (in_array($s, ['For Relodgement', 'Declined Visa', 'Decline Visa', 'Request for Information', 'Request to Lodge', 'Missed the Meeting', 'Not Qualified'], true)) {
+            return 'needs_attention';
+        }
+        if ($track === 'immigration' || in_array($s, ['Endorsed to Immigration', 'Visa Lodged', 'Approved in Principle', 'Approved Visa', 'Endorsed', 'For Assessment', 'Interim Visa Issued', 'RFI Responded'], true)) {
+            return 'immigration';
+        }
+        if (in_array($s, ['Conditional Offer', 'Unconditional Offer', 'School Enrolment', 'School Enrollment', 'Endorsed to School'], true)) {
+            return 'offers';
+        }
+        if ($track === 'english' || in_array($s, ['English Pro', 'PTE Review', 'DIY Review', 'For PTE Mocktest', 'For PTE Exam'], true)) {
+            return 'english';
+        }
+
+        return 'lead_stages';
+    }
+
+    /**
+     * Resolve a free-text / dated intake value to a sortable month bucket.
+     * Returns [month_key, month_label, display]. Anything unparseable falls
+     * into the "Unscheduled" bucket (key sorts last).
+     *
+     * @return array{0:string,1:string,2:?string}
+     */
+    private function intakeBucket(?string $raw): array
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return ['9999-99', 'Unscheduled', null];
+        }
+
+        try {
+            $d = \Illuminate\Support\Carbon::parse($raw);
+
+            return [$d->format('Y-m'), $d->format('F Y'), $raw];
+        } catch (\Throwable) {
+            // Not a full date (e.g. just "November") — keep it visible but
+            // group it as unscheduled since we can't place it on a timeline.
+            return ['9999-99', 'Unscheduled', $raw];
+        }
     }
 
     /**
@@ -1190,9 +1233,31 @@ class EducationController extends Controller
                     'level' => $sp['qualification_level'] ?? null,
                     'intake' => $sp['preferred_intake'] ?? null,
                     'analysis_done' => $l->ai_analysis_status === 'completed',
+                    // Short AI verdict shown under the progress bar
+                    // ("AI analysed · eligible" / "· needs review").
+                    'ai_verdict' => $this->assessmentVerdict($l, $analysis),
                     'detail_url' => "/portal/education/leads/{$l->id}",
                 ];
             });
+    }
+
+    /** A short AI-eligibility verdict for the Assessments progress column. */
+    private function assessmentVerdict(Lead $l, array $analysis): ?string
+    {
+        if ($l->ai_analysis_status !== 'completed') {
+            return null;
+        }
+        foreach (['verdict', 'eligibility', 'recommendation'] as $k) {
+            if (! empty($analysis[$k]) && is_string($analysis[$k])) {
+                return (string) \Illuminate\Support\Str::of($analysis[$k])->limit(28);
+            }
+        }
+        $score = $analysis['overall_score'] ?? $analysis['eligibility_score'] ?? $analysis['score'] ?? null;
+        if ($score !== null) {
+            return (int) $score >= 60 ? 'eligible' : 'needs review';
+        }
+
+        return 'analysed';
     }
 
     /** Programs the Education team advises on — same catalogue admin manages. */

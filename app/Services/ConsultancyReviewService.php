@@ -40,6 +40,7 @@ class ConsultancyReviewService
             'consultancy_onshore' => 'Onshore engagement (free)',
             'english_engagement' => 'English — Offshore (Philippines)',
             'english_offshore' => 'English — Offshore',
+            'english_offshore_1000' => 'English — Offshore ($1,000)',
             default => 'Consultancy Agreement',
         };
     }
@@ -84,6 +85,8 @@ class ConsultancyReviewService
             ],
             // English — Offshore: single NZD package fee.
             'english_offshore' => [$item('english_package', $englishFee ?? 550)],
+            // English — Offshore ($1,000): fuller package (unlimited mock + PTE fee).
+            'english_offshore_1000' => [$item('english_package', $englishFee ?? 1000)],
             default => [],
         };
     }
@@ -180,6 +183,9 @@ class ConsultancyReviewService
         } elseif ($type === 'english_offshore') {
             $payload = $g->buildEnglishOffshorePayload($lead, $overrides['currency'] ?? 'nzd', $overrides);
             $view = 'agreements.engagement-english-offshore';
+        } elseif ($type === 'english_offshore_1000') {
+            $payload = $g->buildEnglishOffshorePayload($lead, $overrides['currency'] ?? 'nzd', array_merge($overrides, ['offshore_variant' => 'package_1000']));
+            $view = 'agreements.engagement-english-offshore';
         } elseif ($type === 'consultancy_offshore' || $type === 'consultancy_offshore_zero') {
             $payload = $g->buildOffshorePayload($lead, $type === 'consultancy_offshore_zero' ? array_merge($overrides, ['zero_fees' => true]) : $overrides);
             $view = 'agreements.consultancy-offshore';
@@ -201,6 +207,8 @@ class ConsultancyReviewService
             $g->englishEngagement($lead, $overrides['currency'] ?? 'php', $overrides);
         } elseif ($type === 'english_offshore') {
             $g->englishOffshore($lead, $overrides['currency'] ?? 'nzd', $overrides);
+        } elseif ($type === 'english_offshore_1000') {
+            $g->englishOffshore($lead, $overrides['currency'] ?? 'nzd', array_merge($overrides, ['offshore_variant' => 'package_1000']));
         } elseif ($type === 'consultancy_offshore_zero') {
             $g->consultancyOffshore($lead, array_merge($overrides, ['zero_fees' => true]));
         } elseif ($type === 'consultancy_offshore') {
