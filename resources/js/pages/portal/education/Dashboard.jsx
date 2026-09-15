@@ -26,7 +26,7 @@ export default function EducationDashboard({ programStats = {}, studentStats = {
     ];
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto">
+        <div className="space-y-6">
             <Head title="Education Dashboard" />
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

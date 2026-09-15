@@ -53,7 +53,7 @@ export default function IntakeMonitoring({ students = [] }) {
     }, [visible, months]);
 
     return (
-        <div className="max-w-[1400px] mx-auto p-4 sm:p-6">
+        <div className="pb-8">
             <Head title="Intake Monitoring — Education" />
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">

@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Head, Link, router } from '@inertiajs/react';
 import {
     FileText, Plus, Search, Download, Eye, Loader, X, Check,
     ChevronRight, ChevronDown, Users, Lightbulb, FileSignature, Wand2,
     Mail, Send, AlertCircle, MoreVertical, Pencil, Trash2, StickyNote, ShieldCheck, Flag,
+    MessageSquare,
 } from 'lucide-react';
 
 // Portal → URL prefix. Same shape as the other portal-scoped pages.
@@ -37,16 +39,33 @@ export default function ProposalsAgreements({
     // Prefill state — used when clicking "Generate" on a suggestion row so
     // the New modal opens with that lead + doc type pre-selected.
     const [prefill, setPrefill] = useState(null);
-    const [tab, setTab] = useState('suggestions');
+    // Suggestions moved off the tab strip into a header popover.
+    const [tab, setTab] = useState('proposals');
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    // Dismissed suggestions hide for 30 days — per-viewer, localStorage only
+    // (no backend). Expired entries are pruned on load.
+    const [dismissedSug, setDismissedSug] = useState(() => {
+        try {
+            const raw = JSON.parse(localStorage.getItem('pa.dismissedSuggestions') || '{}');
+            const now = Date.now();
+            const keep = {};
+            Object.entries(raw).forEach(([k, ts]) => { if (now - ts < 30 * 86400000) keep[k] = ts; });
+            return keep;
+        } catch { return {}; }
+    });
+    const dismissSuggestion = (id) => setDismissedSug((d) => {
+        const next = { ...d, [id]: Date.now() };
+        try { localStorage.setItem('pa.dismissedSuggestions', JSON.stringify(next)); } catch { /* storage unavailable */ }
+        return next;
+    });
+    const visibleSuggestions = suggestions.filter((s) => ! dismissedSug[s.id]);
     // Notify-lead flow — opens a small confirm dialog with an email
     // preview, then fires the queued mailable pointing at /track/{code}.
     const [notifyTarget, setNotifyTarget] = useState(null); // { lead, kind }
     const openNotify = (row, kind) => setNotifyTarget({ lead: row, kind });
     const closeNotify = () => setNotifyTarget(null);
 
-    const activeRows = tab === 'proposals' ? proposals
-        : tab === 'agreements' ? agreements
-        : suggestions;
+    const activeRows = tab === 'agreements' ? agreements : proposals;
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -88,7 +107,7 @@ export default function ProposalsAgreements({
         : '—';
 
     return (
-        <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
+        <div className="space-y-6 pb-12">
             <Head title="Proposal & Agreements" />
 
             {/* Header */}
@@ -113,12 +132,36 @@ export default function ProposalsAgreements({
                             className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all"
                         />
                     </div>
+                    {/* Suggestions — a header popover (no longer a tab). */}
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setShowSuggestions((v) => ! v)}
+                            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                                showSuggestions ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Lightbulb size={14} className="text-amber-500" /> Suggestions
+                            {visibleSuggestions.length > 0 && (
+                                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">{visibleSuggestions.length}</span>
+                            )}
+                        </button>
+                        {showSuggestions && (
+                            <SuggestionsPopover
+                                suggestions={visibleSuggestions}
+                                portalBase={portalBase}
+                                onGenerate={openNewWithPrefill}
+                                onDismiss={dismissSuggestion}
+                                onClose={() => setShowSuggestions(false)}
+                            />
+                        )}
+                    </div>
                     <button
                         type="button"
                         onClick={() => setShowNew(true)}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-colors shadow-sm"
                     >
-                        <Plus size={14} /> New
+                        <Plus size={14} /> New document
                     </button>
                 </div>
             </div>
@@ -126,14 +169,6 @@ export default function ProposalsAgreements({
             {/* Tab strip */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100">
-                    <TabButton
-                        active={tab === 'suggestions'}
-                        onClick={() => { setTab('suggestions'); setSearch(''); }}
-                        icon={<Lightbulb size={13} />}
-                        label="Suggestions"
-                        count={suggestions.length}
-                        countTone="amber"
-                    />
                     <TabButton
                         active={tab === 'proposals'}
                         onClick={() => { setTab('proposals'); setSearch(''); }}
@@ -154,20 +189,14 @@ export default function ProposalsAgreements({
                     <div className="p-16 text-center text-gray-400">
                         <FileText size={26} className="mx-auto mb-2 text-gray-300" />
                         <p className="text-sm font-medium">
-                            {tab === 'suggestions' ? 'No suggested leads right now'
-                                : tab === 'proposals' ? 'No program shortlists yet'
-                                : 'No agreements generated yet'}
+                            {tab === 'proposals' ? 'No program shortlists yet' : 'No agreements generated yet'}
                         </p>
                         <p className="text-xs mt-1">
-                            {tab === 'suggestions'
-                                ? 'Leads at Consultation Done, Proposal Sent, or Consultancy Agreement without a matching document will appear here.'
-                                : tab === 'proposals'
-                                    ? <>Click <span className="font-semibold text-gray-600">+ New</span> and pick up to 5 programs to shortlist for a lead.</>
-                                    : <>Click <span className="font-semibold text-gray-600">+ New</span> to generate one for a lead.</>}
+                            {tab === 'proposals'
+                                ? <>Click <span className="font-semibold text-gray-600">+ New document</span> and pick up to 5 programs to shortlist for a lead.</>
+                                : <>Click <span className="font-semibold text-gray-600">+ New document</span> to generate one for a lead.</>}
                         </p>
                     </div>
-                ) : tab === 'suggestions' ? (
-                    <SuggestionsTable rows={filtered} portalBase={portalBase} onGenerate={openNewWithPrefill} />
                 ) : tab === 'proposals' ? (
                     <ProposalsTable rows={filtered} portalBase={portalBase} fmtDate={fmtDate} onNotify={(row) => openNotify(row, 'proposal')} />
                 ) : (
@@ -287,6 +316,81 @@ function SuggestionsTable({ rows, portalBase, onGenerate }) {
                     ))}
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+// ── Suggested next documents — header popover (replaces the old Suggestions
+//    tab). Each lead the system flags gets a card: current stage, the next
+//    document in the pathway, and Generate / Open lead / Dismiss. ──────────
+function SuggestionsPopover({ suggestions = [], portalBase, onGenerate, onDismiss, onClose }) {
+    const ref = useRef(null);
+    useEffect(() => {
+        const onClick = (e) => { if (ref.current && ! ref.current.contains(e.target)) onClose(); };
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('mousedown', onClick);
+        document.addEventListener('keydown', onKey);
+        return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+    }, [onClose]);
+
+    const stageChip = (stage) => {
+        if (stage === 'Consultation Done')     return 'bg-purple-100 text-purple-700 border-purple-200';
+        if (stage === 'Proposal Sent')         return 'bg-teal-100 text-teal-700 border-teal-200';
+        if (stage === 'Consultancy Agreement') return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+        return 'bg-gray-100 text-gray-600 border-gray-200';
+    };
+    const initials = (name = '') => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '—';
+
+    return (
+        <div ref={ref} className="absolute right-0 top-full mt-2 w-[360px] max-h-[70vh] overflow-y-auto bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 z-40">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                    <span className="text-[12px] font-bold text-gray-900">Suggested next documents</span>
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">{suggestions.length}</span>
+                </div>
+                <button type="button" onClick={onClose} className="p-1 rounded-md text-gray-400 hover:bg-gray-100"><X size={14} /></button>
+            </div>
+
+            {suggestions.length === 0 ? (
+                <div className="px-4 py-8 text-center text-[12px] text-gray-400">No suggestions right now.</div>
+            ) : (
+                <div className="divide-y divide-gray-50">
+                    {suggestions.map((r) => {
+                        const suggested = r.suggestion === 'proposal' ? 'a study proposal' : 'a consultancy agreement';
+                        return (
+                            <div key={r.id} className="px-4 py-3">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-white text-[10px] font-bold bg-[#14532d] flex-shrink-0">{initials(r.name)}</span>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-[13px] font-semibold text-gray-900 truncate">{r.name}</div>
+                                        <div className="text-[10px] text-gray-400 font-mono">{r.lead_id}</div>
+                                    </div>
+                                    {r.status && (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold border ${stageChip(r.status)}`}>{r.status}</span>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-1.5 leading-snug">
+                                    {r.status ? `${r.status} — ` : ''}the next document in the pathway is {suggested}.
+                                </p>
+                                <div className="flex items-center gap-2 mt-2">
+                                    <button type="button" onClick={() => { onGenerate(r.id, r.suggestion); onClose(); }}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14532d] text-white text-[11px] font-bold hover:bg-[#0f3d21]">
+                                        <Wand2 size={12} /> {r.suggestion === 'proposal' ? 'Generate proposal' : 'Generate agreement'}
+                                    </button>
+                                    <Link href={`${portalBase}/leads/${r.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                                        Open lead
+                                    </Link>
+                                    <button type="button" onClick={() => onDismiss(r.id)} className="ml-auto text-[11px] font-semibold text-gray-400 hover:text-gray-700">Dismiss</button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            <div className="px-4 py-2.5 border-t border-gray-100 text-[10px] text-gray-400">
+                Suggestions come from each lead's current stage. Dismissing one hides it for 30 days.
+            </div>
         </div>
     );
 }
@@ -411,7 +515,7 @@ function ProposalReviewRow({ r, portalBase, fmtDate, onNotify }) {
                                 </div>
                                 {/* Note thread */}
                                 <div className={dimmed ? 'opacity-40' : ''}>
-                                    <ProgramNoteThread leadId={r.id} program={p} />
+                                    <ProgramNoteThread leadId={r.id} program={p} title={p.title} subtitle={`${r.name}${r.lead_id ? ` · ${r.lead_id}` : ''}`} />
                                 </div>
                             </Fragment>
                         );
@@ -482,30 +586,171 @@ function fmtNoteTime(iso) {
     return `${d.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short' })}, ${t}`;
 }
 
-// Threaded notes for one programme — display + Add note / Reply / Mark actioned.
-function ProgramNoteThread({ leadId, program }) {
-    const notes = program.notes || [];
-    // The single free-text staff note captured on the Program Verification
-    // screen (leads.proposed_program_meta[<program>].note). Shown here so the
-    // reviewer's verification note surfaces in the Proposals inbox.
-    const vnote = (program.note || '').trim();
-    // Row shows only the latest note; the rest expand on demand (like the
-    // document notes on the Case Profile).
+// Author role → little badge shown beside a note author, matching the redesign
+// (ADMIN in dark, everyone else reads as REVIEWER).
+function roleBadge(role) {
+    const r = String(role || '').toLowerCase();
+    if (r === 'admin' || r === 'super_admin') return { label: 'ADMIN', cls: 'bg-gray-900 text-white' };
+    return { label: 'REVIEWER', cls: 'bg-amber-100 text-amber-700' };
+}
+
+// Flatten a thread into chronological messages (each note followed by its replies).
+function threadMessages(notes) {
+    const out = [];
+    [...notes].forEach((n) => {
+        out.push({ id: n.id, author: n.author, role: n.role, body: n.body, created_at: n.created_at, tag: n.tag });
+        (n.replies || []).forEach((rp) => out.push({ id: rp.id, author: rp.author, role: rp.role, body: rp.body, created_at: rp.created_at, reply: true }));
+    });
+    return out;
+}
+
+// Right-side slide-out thread panel — the full conversation for one row plus a
+// reply composer. Replies + "Reply & resolve" reuse the existing note endpoints.
+function NoteThreadDrawer({ notes = [], base, title, subtitle, onClose }) {
+    const [reply, setReply] = useState('');
+    const [busy, setBusy] = useState(false);
+    const target = [...notes].reverse()[0]; // reply onto the latest note
+    const msgs = threadMessages(notes);
+
+    const doReply = (resolve) => {
+        if (! reply.trim() || ! target) return;
+        setBusy(true);
+        router.post(`${base}/${target.id}/reply`, { body: reply }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setReply('');
+                if (resolve) router.post(`${base}/${target.id}/actioned`, {}, { preserveScroll: true, onFinish: () => setBusy(false) });
+                else setBusy(false);
+            },
+            onError: () => setBusy(false),
+        });
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[60] flex justify-end" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/20" />
+            <div className="relative w-full max-w-[380px] h-full bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Note thread</p>
+                        <h3 className="text-sm font-bold text-gray-900 truncate">{title || 'Notes'}</h3>
+                        {subtitle && <p className="text-[11px] text-gray-500 truncate">{subtitle}</p>}
+                    </div>
+                    <button type="button" onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                    {msgs.length === 0 && <p className="text-[12px] text-gray-400 italic">No messages yet.</p>}
+                    {msgs.map((m) => {
+                        return (
+                            <div key={m.id} className={m.reply ? 'pl-4 border-l-2 border-gray-100' : ''}>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[12px] font-bold text-gray-900">{m.author}</span>
+                                    <span className="text-[10px] text-gray-400">{fmtNoteTime(m.created_at)}</span>
+                                </div>
+                                <div className={`mt-1 rounded-lg px-3 py-2 text-[12px] leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${m.tag === 'change_requested' ? 'bg-rose-50 text-rose-900 border border-rose-100' : 'bg-amber-50 text-gray-800 border border-amber-100'}`}>
+                                    {m.body}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Composer */}
+                <div className="px-5 py-3 border-t border-gray-100">
+                    <textarea
+                        value={reply}
+                        onChange={(e) => setReply(e.target.value)}
+                        rows={2}
+                        placeholder="Reply to the reviewer…"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-[#14532d]/20 focus:border-[#14532d] resize-y"
+                    />
+                    <div className="flex items-center justify-between gap-2 mt-2">
+                        <div className="flex items-center gap-2">
+                            <button type="button" disabled={busy || ! reply.trim()} onClick={() => doReply(false)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14532d] text-white text-[12px] font-bold hover:bg-[#0f3d21] disabled:opacity-40">
+                                <Send size={12} /> Send reply
+                            </button>
+                            <button type="button" disabled={busy || ! reply.trim()} onClick={() => doReply(true)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[12px] font-bold hover:bg-gray-50 disabled:opacity-40">
+                                Reply &amp; resolve
+                            </button>
+                        </div>
+                        <span className="text-[10px] text-gray-400">Visible to staff &amp; reviewers</span>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+// Compact note cell for a table row — shows the latest note as a preview with a
+// "View thread" link that opens the slide-out drawer. Reuses the note endpoints
+// at `base` (POST base = add, base/{id}/reply, base/{id}/actioned).
+function NoteThreadCell({ notes = [], base, title, subtitle, extraCard = null, emptyLabel = 'No note yet', addLabel = 'Add note', placeholder = 'Add a note…' }) {
     const ordered = [...notes].reverse(); // newest first
-    const [expanded, setExpanded] = useState(false);
-    const visible = expanded ? ordered : ordered.slice(0, 1);
+    const [drawer, setDrawer] = useState(false);
     const [adding, setAdding] = useState(false);
     const [body, setBody] = useState('');
-    const [replyTo, setReplyTo] = useState(null);
-    const [replyBody, setReplyBody] = useState('');
+    const addNote = () => {
+        if (! body.trim()) return;
+        router.post(base, { body, tag: 'note' }, { preserveScroll: true, onSuccess: () => { setBody(''); setAdding(false); } });
+    };
+
+    if (notes.length === 0) {
+        return (
+            <div className="space-y-2 min-w-[240px]">
+                {extraCard}
+                {adding ? (
+                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder={placeholder} />
+                ) : (
+                    <div className="flex items-center gap-2">
+                        {! extraCard && <span className="text-[11px] text-gray-400 italic">{emptyLabel}</span>}
+                        <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">+ {addLabel}</button>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    const n = ordered[0];
+    const cr = n.tag === 'change_requested';
+    const replyCount = notes.reduce((s, x) => s + ((x.replies || []).length), 0);
+    const needsReply = cr && ! n.actioned_at;
+
+    return (
+        <div className="space-y-2 min-w-[240px]">
+            {extraCard}
+            <div className={`rounded-lg border px-3 py-2 ${cr ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-semibold text-gray-800">{n.author}</span>
+                    <span className="text-[10px] text-gray-400">{fmtNoteTime(n.created_at)}</span>
+                </div>
+                <p className={`mt-1 text-[12px] leading-snug text-gray-800 [overflow-wrap:anywhere] whitespace-pre-wrap ${n.actioned_at ? 'line-through text-gray-400' : ''}`}>{n.body}</p>
+                <div className="mt-1.5 flex items-center gap-2 text-[11px] font-semibold">
+                    {replyCount > 0 && <span className="text-gray-400">{replyCount} repl{replyCount === 1 ? 'y' : 'ies'} ·</span>}
+                    <button type="button" onClick={() => setDrawer(true)} className="text-[#14532d] hover:underline">View thread</button>
+                    {needsReply && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">Reply needed</span>}
+                </div>
+            </div>
+            <button type="button" onClick={() => setDrawer(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Reply / add note</button>
+            {drawer && <NoteThreadDrawer notes={notes} base={base} title={title} subtitle={subtitle} onClose={() => setDrawer(false)} />}
+        </div>
+    );
+}
+
+// Threaded notes for one programme — display + Add note / Reply / Mark actioned.
+function ProgramNoteThread({ leadId, program, title, subtitle }) {
+    const notes = program.notes || [];
+    // The single free-text staff note captured on the Program Verification
+    // screen (leads.proposed_program_meta[<program>].note), surfaced as a
+    // pinned card above the thread.
+    const vnote = (program.note || '').trim();
     const base = `/admin/leads/${leadId}/program-notes/${program.id}`;
-    const send = (url, data, done) => router.post(url, data, { preserveScroll: true, onSuccess: done });
 
-    const addNote = () => { if (! body.trim()) return; send(base, { body, tag: 'note' }, () => { setBody(''); setAdding(false); }); };
-    const reply = (id) => { if (! replyBody.trim()) return; send(`${base}/${id}/reply`, { body: replyBody }, () => { setReplyBody(''); setReplyTo(null); }); };
-    const toggle = (id) => send(`${base}/${id}/actioned`, {});
-
-    // Verification note card — always visible when the reviewer left one.
     const verificationCard = vnote ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
             <div className="flex items-start gap-1.5">
@@ -516,105 +761,17 @@ function ProgramNoteThread({ leadId, program }) {
         </div>
     ) : null;
 
-    if (notes.length === 0) {
-        return (
-            <div className="space-y-2">
-                {verificationCard}
-                {! verificationCard && ! adding && (
-                    <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] text-gray-400 italic">No note on this program</span>
-                            <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
-                        </div>
-                    </div>
-                )}
-                {verificationCard && ! adding && (
-                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
-                )}
-                {adding && (
-                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
-                )}
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-2">
-            {verificationCard}
-            {! expanded ? (
-                /* Collapsed row — latest note as a compact coloured card. */
-                (() => {
-                    const n = ordered[0];
-                    const done = !! n.actioned_at;
-                    const cr = n.tag === 'change_requested';
-                    return (
-                        <div className={`rounded-lg border px-3 py-2 ${cr ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
-                            <div className="flex items-start gap-1.5">
-                                <Flag size={12} className={`mt-0.5 shrink-0 ${cr ? 'text-rose-500' : 'text-amber-500'}`} />
-                                <span className={`text-[12px] font-medium leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : 'text-gray-800'}`}>{n.body}</span>
-                            </div>
-                            <div className={`text-[10px] mt-1 ml-[18px] ${cr ? 'text-rose-700/80' : 'text-amber-700/80'}`}>
-                                {n.author} · {fmtNoteTime(n.created_at)}
-                                {n.replies.length ? <span className="text-gray-400"> · {n.replies.length} repl{n.replies.length === 1 ? 'y' : 'ies'}</span> : null}
-                            </div>
-                        </div>
-                    );
-                })()
-            ) : (
-                /* Expanded — plain thread, no card colour. */
-                ordered.map((n) => {
-                    const done = !! n.actioned_at;
-                    const cr = n.tag === 'change_requested';
-                    return (
-                        <div key={n.id} className="text-[11px]">
-                            <div className="flex items-center gap-1.5">
-                                <NoteTag tag={n.tag} />
-                                <span className="font-bold text-gray-800 truncate">{n.author}</span>
-                                <span className="text-gray-400 whitespace-nowrap">{fmtNoteTime(n.created_at)}</span>
-                            </div>
-                            <p className={`mt-1 text-gray-700 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : ''}`}>{n.body}</p>
-                            {n.replies.map((rp) => (
-                                <div key={rp.id} className="mt-1.5 ml-3 border-l-2 border-gray-100 pl-2.5">
-                                    <span className="font-semibold text-gray-700">{rp.author}</span>
-                                    <span className="text-gray-400"> · {fmtNoteTime(rp.created_at)}</span>
-                                    <p className="text-gray-600 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap">{rp.body}</p>
-                                </div>
-                            ))}
-                            <div className="mt-1.5 flex items-center gap-3 font-semibold">
-                                <button type="button" onClick={() => toggle(n.id)} className={done ? 'text-gray-400 hover:text-gray-600' : 'text-emerald-700 hover:text-emerald-900'}>
-                                    {done ? 'Actioned ✓' : (cr ? 'Mark as actioned' : 'Acknowledge')}
-                                </button>
-                                <button type="button" onClick={() => { setReplyTo(replyTo === n.id ? null : n.id); setReplyBody(''); }} className="text-gray-500 hover:text-gray-800">Reply</button>
-                            </div>
-                            {replyTo === n.id && (
-                                <div className="mt-1.5">
-                                    <NoteComposer value={replyBody} onChange={setReplyBody} onSubmit={() => reply(n.id)} onCancel={() => { setReplyBody(''); setReplyTo(null); }} placeholder="Write a reply…" small />
-                                </div>
-                            )}
-                        </div>
-                    );
-                })
-            )}
-
-            {/* "N notes ›" collapse toggle + Add note */}
-            <div className="flex items-center gap-3">
-                <button
-                    type="button"
-                    onClick={() => setExpanded((v) => ! v)}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-800"
-                >
-                    {expanded ? 'Show less' : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
-                    <ChevronRight size={12} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
-                </button>
-                {! adding && (
-                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
-                )}
-            </div>
-
-            {adding && (
-                <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this programme…" />
-            )}
-        </div>
+        <NoteThreadCell
+            notes={notes}
+            base={base}
+            title={title || program.title}
+            subtitle={subtitle}
+            extraCard={verificationCard}
+            emptyLabel="No note on this program"
+            addLabel="Add note"
+            placeholder="Add a note on this programme…"
+        />
     );
 }
 
@@ -696,110 +853,17 @@ const rowInitials = (name = '') =>
 // card for the latest note, expandable full thread with author/time, tags,
 // Acknowledge, Reply + composer, "N notes ›" collapse, and Add note. Lets the
 // generation staff and the verification staff talk on the same thread.
-function DocumentNoteThread({ docId, notes = [] }) {
-    const ordered = [...notes].reverse(); // newest first
-    const [expanded, setExpanded] = useState(false);
-    const [adding, setAdding] = useState(false);
-    const [body, setBody] = useState('');
-    const [replyTo, setReplyTo] = useState(null);
-    const [replyBody, setReplyBody] = useState('');
-    const base = `/admin/documents/${docId}/notes`;
-    const send = (url, data, done) => router.post(url, data, { preserveScroll: true, onSuccess: done });
-
-    const addNote = () => { if (! body.trim()) return; send(base, { body, tag: 'note' }, () => { setBody(''); setAdding(false); }); };
-    const reply = (id) => { if (! replyBody.trim()) return; send(`${base}/${id}/reply`, { body: replyBody }, () => { setReplyBody(''); setReplyTo(null); }); };
-    const toggle = (id) => send(`${base}/${id}/actioned`, {});
-
-    if (notes.length === 0) {
-        return (
-            <div className="space-y-2 min-w-[220px]">
-                {! adding ? (
-                    <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] text-gray-400 italic">No note on this agreement</span>
-                            <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
-                        </div>
-                    </div>
-                ) : (
-                    <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this agreement…" />
-                )}
-            </div>
-        );
-    }
-
+function DocumentNoteThread({ docId, notes = [], title, subtitle }) {
     return (
-        <div className="space-y-2 min-w-[240px]">
-            {! expanded ? (
-                (() => {
-                    const n = ordered[0];
-                    const done = !! n.actioned_at;
-                    const cr = n.tag === 'change_requested';
-                    return (
-                        <div className={`rounded-lg border px-3 py-2 ${cr ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
-                            <div className="flex items-start gap-1.5">
-                                <Flag size={12} className={`mt-0.5 shrink-0 ${cr ? 'text-rose-500' : 'text-amber-500'}`} />
-                                <span className={`text-[12px] font-medium leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : 'text-gray-800'}`}>{n.body}</span>
-                            </div>
-                            <div className={`text-[10px] mt-1 ml-[18px] ${cr ? 'text-rose-700/80' : 'text-amber-700/80'}`}>
-                                {n.author} · {fmtNoteTime(n.created_at)}
-                                {n.replies.length ? <span className="text-gray-400"> · {n.replies.length} repl{n.replies.length === 1 ? 'y' : 'ies'}</span> : null}
-                            </div>
-                        </div>
-                    );
-                })()
-            ) : (
-                ordered.map((n) => {
-                    const done = !! n.actioned_at;
-                    const cr = n.tag === 'change_requested';
-                    return (
-                        <div key={n.id} className="text-[11px]">
-                            <div className="flex items-center gap-1.5">
-                                <NoteTag tag={n.tag} />
-                                <span className="font-bold text-gray-800 truncate">{n.author}</span>
-                                <span className="text-gray-400 whitespace-nowrap">{fmtNoteTime(n.created_at)}</span>
-                            </div>
-                            <p className={`mt-1 text-gray-700 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap ${done ? 'line-through text-gray-400' : ''}`}>{n.body}</p>
-                            {n.replies.map((rp) => (
-                                <div key={rp.id} className="mt-1.5 ml-3 border-l-2 border-gray-100 pl-2.5">
-                                    <span className="font-semibold text-gray-700">{rp.author}</span>
-                                    <span className="text-gray-400"> · {fmtNoteTime(rp.created_at)}</span>
-                                    <p className="text-gray-600 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap">{rp.body}</p>
-                                </div>
-                            ))}
-                            <div className="mt-1.5 flex items-center gap-3 font-semibold">
-                                <button type="button" onClick={() => toggle(n.id)} className={done ? 'text-gray-400 hover:text-gray-600' : 'text-emerald-700 hover:text-emerald-900'}>
-                                    {done ? 'Actioned ✓' : (cr ? 'Mark as actioned' : 'Acknowledge')}
-                                </button>
-                                <button type="button" onClick={() => { setReplyTo(replyTo === n.id ? null : n.id); setReplyBody(''); }} className="text-gray-500 hover:text-gray-800">Reply</button>
-                            </div>
-                            {replyTo === n.id && (
-                                <div className="mt-1.5">
-                                    <NoteComposer value={replyBody} onChange={setReplyBody} onSubmit={() => reply(n.id)} onCancel={() => { setReplyBody(''); setReplyTo(null); }} placeholder="Write a reply…" small />
-                                </div>
-                            )}
-                        </div>
-                    );
-                })
-            )}
-
-            <div className="flex items-center gap-3">
-                <button
-                    type="button"
-                    onClick={() => setExpanded((v) => ! v)}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-800"
-                >
-                    {expanded ? 'Show less' : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
-                    <ChevronRight size={12} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
-                </button>
-                {! adding && (
-                    <button type="button" onClick={() => setAdding(true)} className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">Add note</button>
-                )}
-            </div>
-
-            {adding && (
-                <NoteComposer value={body} onChange={setBody} onSubmit={addNote} onCancel={() => { setBody(''); setAdding(false); }} placeholder="Add a note on this agreement…" />
-            )}
-        </div>
+        <NoteThreadCell
+            notes={notes}
+            base={`/admin/documents/${docId}/notes`}
+            title={title || 'Agreement'}
+            subtitle={subtitle}
+            emptyLabel="No note on this agreement"
+            addLabel="Add note"
+            placeholder="Add a note on this agreement…"
+        />
     );
 }
 
@@ -954,7 +1018,7 @@ function DocumentRow({ lead, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                                     <div>
                                         {pending
                                             ? <span className="text-[11px] text-gray-400 italic">Notes in verification</span>
-                                            : <DocumentNoteThread docId={doc.id} notes={doc.notes || []} />}
+                                            : <DocumentNoteThread docId={doc.id} notes={doc.notes || []} title={`${doc.type}${doc.applicant_mode ? ` (${doc.applicant_mode})` : ''}`} subtitle={`${lead.name}${lead.lead_id ? ` · ${lead.lead_id}` : ''}`} />}
                                     </div>
                                 </div>
                             </div>
@@ -983,14 +1047,7 @@ function DocumentRow({ lead, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
 
                             {/* Actions */}
                             <div className="md:w-[32px] shrink-0 md:text-right">
-                                {pending ? (
-                                    <Link href="/consultancy-verification"
-                                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
-                                        <ShieldCheck size={12} /> Review
-                                    </Link>
-                                ) : (
-                                    <DocumentRowActions doc={doc} lead={lead} onNotify={onNotify} onEdit={onEdit} />
-                                )}
+                                <DocumentRowActions doc={doc} lead={lead} onNotify={onNotify} onEdit={onEdit} pending={pending} />
                             </div>
                         </div>
                     );
@@ -1003,7 +1060,7 @@ function DocumentRow({ lead, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
 // 3-dot menu for the Agreements table — closes on outside click and Esc.
 // Menu items call into the same endpoints as the old row buttons; Delete
 // hits the DELETE route with a confirm.
-function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
+function DocumentRowActions({ doc, lead, onNotify, onEdit, pending = false }) {
     const [open, setOpen] = useState(false);
     const wrapRef = useRef(null);
 
@@ -1070,7 +1127,20 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
                 <MoreVertical size={15} />
             </button>
 
-            {open && (
+            {open && pending && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl ring-1 ring-black/5 py-1.5 z-30 text-[12px]">
+                    {/* Pending verification has no file yet — only the review action. */}
+                    <Link
+                        href="/consultancy-verification"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 hover:text-indigo-700 transition-colors"
+                    >
+                        <ShieldCheck size={13} className="text-gray-400" /> Review in verification
+                    </Link>
+                </div>
+            )}
+
+            {open && ! pending && (
                 <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl ring-1 ring-black/5 py-1.5 z-30 text-[12px]">
                     <a
                         href={`/admin/documents/${doc.id}/download?inline=1`}

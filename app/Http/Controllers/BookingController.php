@@ -13,7 +13,16 @@ class BookingController extends Controller
 {
     public function index()
     {
+        // The Education portal deep-links here but should not see immigration
+        // consultation bookings — drop them for that portal.
+        $isEducation = request()->is('portal/education/*');
+
         $bookings = Booking::with('lead')->latest()->get();
+        if ($isEducation) {
+            $bookings = $bookings
+                ->reject(fn (Booking $b) => str_contains(strtolower((string) $b->service_type), 'immigration'))
+                ->values();
+        }
 
         // Lightweight lead list for the "Log Manual Booking" client picker.
         $leadPicker = Lead::orderBy('first_name')
@@ -26,12 +35,19 @@ class BookingController extends Controller
                 'email' => $l->email,
             ]);
 
-        return Inertia::render('admin/Bookings', [
+        // Resolve the page by URL prefix so app.jsx wraps it in the matching
+        // portal chrome — the Education portal deep-links here but must keep
+        // its own sidebar (the education page is a re-export of admin/Bookings).
+        $component = request()->is('portal/education/*') ? 'portal/education/Bookings' : 'admin/Bookings';
+
+        return Inertia::render($component, [
             'bookings' => $bookings,
             // Canonical pipeline stages — the STAGE column dropdown reuses
             // these so it matches the Leads list exactly.
             'stages' => \App\Models\Lead::STAGES,
             'leadPicker' => $leadPicker,
+            // Education portal hides the Immigration tab + service option.
+            'hideImmigration' => $isEducation,
         ]);
     }
 

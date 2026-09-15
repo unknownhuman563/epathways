@@ -11,7 +11,7 @@ import {
 import { stageClass } from '@/pages/portal/sales/Leads';
 import ManualBookingModal from '@/components/bookings/ManualBookingModal';
 
-export default function Bookings({ bookings: backendBookings, stages = [], leadPicker = [] }) {
+export default function Bookings({ bookings: backendBookings, stages = [], leadPicker = [], hideImmigration = false }) {
     const [manualOpen, setManualOpen] = useState(false);
     const [bookings, setBookings] = useState(() => {
         if (backendBookings && backendBookings.length > 0) {
@@ -48,7 +48,9 @@ export default function Bookings({ bookings: backendBookings, stages = [], leadP
     const [editingData, setEditingData] = useState({ id: null, date: '', time: '', status: '' });
     const [viewingBooking, setViewingBooking] = useState(null);
 
-    // Tabs to split consultation bookings by service line.
+    // Tabs to split consultation bookings by service line. The Education
+    // portal is education-only (immigration is filtered server-side) so it
+    // hides the tab bar entirely and just lists everything it was sent.
     const [tab, setTab] = useState("all");
     const matchesTab = (b, t) => (t === "all" ? true : (b.service || "").toLowerCase().includes(t));
     const filteredBookings = bookings.filter((b) => matchesTab(b, tab));
@@ -201,8 +203,8 @@ export default function Bookings({ bookings: backendBookings, stages = [], leadP
                     <select className="bg-white border border-gray-200 text-gray-700 text-sm rounded-xl focus:ring-[#436235] focus:border-[#436235] block p-2.5 outline-none hover:bg-gray-50 transition-colors shadow-sm cursor-pointer">
                         <option value="">All Services</option>
                         <option value="education">Education</option>
-                        <option value="immigration">Immigration</option>
-                        <option value="accommodation">Accommodation</option>
+                        {! hideImmigration && <option value="immigration">Immigration</option>}
+                        {! hideImmigration && <option value="accommodation">Accommodation</option>}
                     </select>
 
                     <select className="bg-white border border-gray-200 text-gray-700 text-sm rounded-xl focus:ring-[#436235] focus:border-[#436235] block p-2.5 outline-none hover:bg-gray-50 transition-colors shadow-sm cursor-pointer border-[#436235]/20">
@@ -224,23 +226,26 @@ export default function Bookings({ bookings: backendBookings, stages = [], leadP
                 </div>
             </div>
 
-            {/* Service tabs — All / Education / Immigration */}
-            <div className="flex items-center gap-1 border-b border-gray-100">
-                {[
-                    { key: "all", label: "All Bookings" },
-                    { key: "education", label: "Education" },
-                    { key: "immigration", label: "Immigration" },
-                ].map((t) => (
-                    <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => setTab(t.key)}
-                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${tab === t.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-700"}`}
-                    >
-                        {t.label} <span className="ml-1 text-xs text-gray-400">{tabCount(t.key)}</span>
-                    </button>
-                ))}
-            </div>
+            {/* Service tabs — All / Education / Immigration. Hidden in the
+                Education portal, which is education-only (no tab needed). */}
+            {! hideImmigration && (
+                <div className="flex items-center gap-1 border-b border-gray-100">
+                    {[
+                        { key: "all", label: "All Bookings" },
+                        { key: "education", label: "Education" },
+                        { key: "immigration", label: "Immigration" },
+                    ].map((t) => (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setTab(t.key)}
+                            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${tab === t.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-700"}`}
+                        >
+                            {t.label} <span className="ml-1 text-xs text-gray-400">{tabCount(t.key)}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

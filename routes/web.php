@@ -1515,6 +1515,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // WORK
+            // Bookings — same page as /admin/booking but rendered under the
+            // education prefix so it keeps the Education sidebar.
+            Route::get('/booking', [\App\Http\Controllers\BookingController::class, 'index'])->name('booking');
             Route::get('/students', [EducationController::class, 'students'])->name('students');
             Route::get('/students/intake-monitoring', [EducationController::class, 'intakeMonitoring'])->name('students.intake-monitoring');
             Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');

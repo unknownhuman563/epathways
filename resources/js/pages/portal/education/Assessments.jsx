@@ -122,7 +122,7 @@ export default function EducationAssessments({ eligibility = [], enrolment = [] 
     const activeTab = TABS.find((t) => t.key === tab);
 
     return (
-        <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
+        <div className="space-y-5 pb-12">
             <Head title="Assessments — Education" />
 
             {/* Header */}
