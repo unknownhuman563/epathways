@@ -117,6 +117,9 @@ class AgreementGenerator
         $today = now();
         $signer = Auth::user();
         $currency = $currency === 'php' ? 'php' : 'nzd';
+        // "package_1000" variant — a fuller package (unlimited mock + PTE exam
+        // fee) at a $1,000 default, sharing this same offshore layout.
+        $is1000 = ($overrides['offshore_variant'] ?? null) === 'package_1000';
 
         return [
             'client_name' => $clientName,
@@ -128,7 +131,10 @@ class AgreementGenerator
             'generated_at_formatted' => $today->format('jS').' day of '.$today->format('F Y'),
             'currency' => $currency,
             'currency_symbol' => $currency === 'nzd' ? 'NZ$' : 'Php',
-            'english_fee' => (int) ($overrides['english_fee'] ?? 550),
+            'english_fee' => (int) ($overrides['english_fee'] ?? ($is1000 ? 1000 : 550)),
+            // Bullet variations for the fee package.
+            'mock_line' => $is1000 ? 'UNLIMITED mock test with assessment and feedback' : '1 mock test with assessment and feedback',
+            'show_pte_bullet' => $is1000,
         ] + $this->englishBankVars($overrides);
     }
 
@@ -136,12 +142,13 @@ class AgreementGenerator
     {
         $payload = $this->buildEnglishOffshorePayload($lead, $currency, $overrides);
         $clientName = $payload['client_name'];
+        $is1000 = ($overrides['offshore_variant'] ?? null) === 'package_1000';
 
         $pdf = Pdf::loadView('agreements.engagement-english-offshore', $payload)->setPaper('a4');
         $binary = $pdf->output();
 
         $safeName = $this->safeBaseName($clientName ?: 'Client');
-        $filename = "EngOffshore-{$safeName}.pdf";
+        $filename = ($is1000 ? "EngOffshore1000-{$safeName}.pdf" : "EngOffshore-{$safeName}.pdf");
         $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
         Storage::disk(self::DISK)->put($path, $binary);
 
@@ -155,7 +162,7 @@ class AgreementGenerator
             'size' => strlen($binary),
             'status' => LeadDocument::STATUS_SUBMITTED,
             'source' => LeadDocument::SOURCE_GENERATED,
-            'source_variant' => 'engagement-english-offshore',
+            'source_variant' => $is1000 ? 'engagement-english-offshore-1000' : 'engagement-english-offshore',
             'uploaded_by' => Auth::id(),
         ]);
     }

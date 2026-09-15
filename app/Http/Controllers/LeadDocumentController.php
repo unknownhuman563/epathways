@@ -685,7 +685,7 @@ class LeadDocumentController extends Controller
             $consultancyScenario = $this->consultancyScenarioForType($type);
             $overrides = $this->feeOverridesFromRequest($request);
 
-            $isEnglishAgreement = in_array($type, ['english_engagement', 'english_offshore'], true);
+            $isEnglishAgreement = in_array($type, ['english_engagement', 'english_offshore', 'english_offshore_1000'], true);
 
             if ($consultancyScenario !== null
                 || in_array($type, ['consultancy_onshore', 'consultancy_offshore', 'consultancy_offshore_zero'], true)
@@ -751,8 +751,12 @@ class LeadDocumentController extends Controller
         }
 
         // Infer the variant + currency from the stored document.
-        $type = $doc->source_variant === 'engagement-english-offshore' ? 'english_offshore' : 'english_engagement';
-        $overrides = ['currency' => $type === 'english_offshore' ? 'nzd' : 'php'];
+        $type = match ($doc->source_variant) {
+            'engagement-english-offshore' => 'english_offshore',
+            'engagement-english-offshore-1000' => 'english_offshore_1000',
+            default => 'english_engagement',
+        };
+        $overrides = ['currency' => $type === 'english_engagement' ? 'php' : 'nzd'];
 
         \App\Services\ConsultancyReviewService::submit($lead, $type, $overrides, optional($request->user())->id);
 
@@ -764,6 +768,49 @@ class LeadDocumentController extends Controller
         ]);
 
         return back()->with('success', "English agreement sent for verification — {$lead->first_name} {$lead->last_name}.");
+    }
+
+    /**
+     * Re-render an already-approved consultancy / English agreement PDF in place
+     * from the amount currently stored on the lead's review — no re-verification.
+     * Fixes file-vs-column drift when a fee was edited after the PDF was made.
+     */
+    public function regenerateAgreement(Request $request, $leadId, $documentId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $doc = LeadDocument::where('lead_id', $lead->id)->findOrFail($documentId);
+
+        abort_unless(
+            in_array($doc->checklist_key, ['agree.consultancy', 'agree.engagement_english'], true)
+                && $doc->source === LeadDocument::SOURCE_GENERATED,
+            422,
+            'Only a generated agreement can be regenerated.'
+        );
+
+        $review = is_array($lead->consultancy_review) ? $lead->consultancy_review : [];
+        abort_if(empty($review) || empty($review['scenario']), 422, 'No stored agreement data to regenerate from.');
+
+        try {
+            // Render a fresh PDF from the current (approved) amounts...
+            \App\Services\ConsultancyReviewService::generatePdf(
+                app(\App\Services\AgreementGenerator::class),
+                $lead,
+                $review['scenario'],
+                \App\Services\ConsultancyReviewService::overridesForGeneration($review),
+            );
+
+            // ...then drop the stale file so the row shows only the fresh one.
+            if ($doc->file_path) {
+                Storage::disk(self::DISK)->delete($doc->file_path);
+            }
+            $doc->delete();
+
+            return back()->with('success', 'Agreement PDF regenerated with the current amount.');
+        } catch (\Throwable $e) {
+            Log::error('Agreement regenerate failed', ['lead' => $leadId, 'doc' => $documentId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not regenerate the PDF.']);
+        }
     }
 
     /**
@@ -1555,10 +1602,14 @@ class LeadDocumentController extends Controller
             $view = 'agreements.engagement-english';
             $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'php', (int) ($overrides['english_fee'] ?? 14500), (int) ($overrides['pte_fee'] ?? 240))
                 + $generator->englishBankVars($overrides);
-        } elseif ($type === 'english_offshore') {
+        } elseif ($type === 'english_offshore' || $type === 'english_offshore_1000') {
             $view = 'agreements.engagement-english-offshore';
-            $payload = $this->englishEngagementPayload($lead, $overrides['currency'] ?? 'nzd', (int) ($overrides['english_fee'] ?? 550))
-                + $generator->englishBankVars($overrides);
+            $ov = $overrides;
+            if ($type === 'english_offshore_1000') {
+                $ov['offshore_variant'] = 'package_1000';
+            }
+            $payload = $generator->buildEnglishOffshorePayload($lead, $overrides['currency'] ?? 'nzd', $ov);
+            $payload['preview'] = true;
         } else {
             return response('<html><body style="font-family:sans-serif;padding:2rem;color:#666">Unknown document type.</body></html>', 400)
                 ->header('Content-Type', 'text/html; charset=utf-8');

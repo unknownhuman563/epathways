@@ -1030,6 +1030,10 @@ Route::middleware(['auth'])->group(function () {
         // Agreement Verification queue (the ⋮ "Send for verification" action).
         Route::post('/admin/leads/{id}/documents/{document}/to-verification', [LeadDocumentController::class, 'sendEnglishToVerification'])
             ->name('admin.leads.document.to-verification');
+        // Re-render an approved agreement PDF in place from the current amount
+        // (no re-verification) — fixes file-vs-column drift.
+        Route::post('/admin/leads/{id}/documents/{document}/regenerate', [LeadDocumentController::class, 'regenerateAgreement'])
+            ->name('admin.leads.document.regenerate');
         // Bulk generate immigration engagement documents (written agreement
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])

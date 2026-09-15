@@ -570,6 +570,10 @@ class SalesController extends Controller
             return 'Study Proposal';
         }
         if ($checklistKey === 'agree.engagement_english') {
+            if (in_array($variant, ['engagement-english-offshore-1000', 'english_offshore_1000'], true)) {
+                return 'Offshore - English ($1,000)';
+            }
+
             return in_array($variant, ['engagement-english-offshore', 'english_offshore'], true)
                 ? 'Offshore - English'
                 : 'Offshore - Philippines';
@@ -598,6 +602,10 @@ class SalesController extends Controller
     private function variantToFeeType(string $checklistKey, ?string $variant): ?string
     {
         if ($checklistKey === 'agree.engagement_english') {
+            if (in_array($variant, ['engagement-english-offshore-1000', 'english_offshore_1000'], true)) {
+                return 'english_offshore_1000';
+            }
+
             return in_array($variant, ['engagement-english-offshore', 'english_offshore'], true)
                 ? 'english_offshore'
                 : 'english_engagement';
@@ -619,7 +627,7 @@ class SalesController extends Controller
     {
         $type = $this->variantToFeeType($checklistKey, $variant);
 
-        return in_array($type, ['consultancy_offshore', 'consultancy_offshore_zero', 'english_offshore'], true)
+        return in_array($type, ['consultancy_offshore', 'consultancy_offshore_zero', 'english_offshore', 'english_offshore_1000'], true)
             ? 'NZ$'
             : 'Php';
     }
@@ -783,7 +791,7 @@ class SalesController extends Controller
                     $scenario = $review['scenario'] ?? null;
                     // English agreements now go through this queue too — reflect
                     // their real document bucket + type, not "Consultancy".
-                    $isEnglish = in_array($scenario, ['english_engagement', 'english_offshore'], true);
+                    $isEnglish = in_array($scenario, ['english_engagement', 'english_offshore', 'english_offshore_1000'], true);
                     $key = $isEnglish ? 'agree.engagement_english' : 'agree.consultancy';
 
                     return [

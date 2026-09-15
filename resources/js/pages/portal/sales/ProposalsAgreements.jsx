@@ -5,7 +5,7 @@ import {
     FileText, Plus, Search, Download, Eye, Loader, X, Check,
     ChevronRight, ChevronDown, Users, Lightbulb, FileSignature, Wand2,
     Mail, Send, AlertCircle, MoreVertical, Pencil, Trash2, StickyNote, ShieldCheck, Flag,
-    MessageSquare,
+    MessageSquare, RefreshCw,
 } from 'lucide-react';
 
 // Portal → URL prefix. Same shape as the other portal-scoped pages.
@@ -810,6 +810,7 @@ function NoteComposer({ value, onChange, onSubmit, onCancel, placeholder, small 
 // variant the doc was generated with.
 function variantToTypeKey(doc) {
     if (doc.checklist_key === 'agree.engagement_english') {
+        if (doc.variant === 'engagement-english-offshore-1000') return 'english_offshore_1000';
         return doc.variant === 'engagement-english-offshore' ? 'english_offshore' : 'english_engagement';
     }
     if (doc.checklist_key === 'agree.consultancy') {
@@ -1002,7 +1003,19 @@ function DocumentRow({ lead, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                                     <div>
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <FileText size={13} className="text-gray-400 shrink-0" />
-                                            <span className="text-[13px] font-semibold text-gray-900">{doc.type}</span>
+                                            {pending ? (
+                                                <span className="text-[13px] font-semibold text-gray-900">{doc.type}</span>
+                                            ) : (
+                                                <a
+                                                    href={`/admin/documents/${doc.id}/download?inline=1`}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    title="View PDF"
+                                                    className="text-[13px] font-semibold text-gray-900 hover:text-emerald-700 hover:underline cursor-pointer"
+                                                >
+                                                    {doc.type}
+                                                </a>
+                                            )}
                                             {mode && (
                                                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                                                     mode === 'couple'
@@ -1113,6 +1126,12 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit, pending = false }) {
         router.post(`/admin/leads/${lead.id}/documents/${doc.id}/to-verification`, {}, { preserveScroll: true });
     };
 
+    // Re-render the PDF in place from the current stored amount — no re-verify.
+    const handleRegenerate = () => {
+        setOpen(false);
+        router.post(`/admin/leads/${lead.id}/documents/${doc.id}/regenerate`, {}, { preserveScroll: true });
+    };
+
     return (
         <div ref={wrapRef} className="relative inline-block">
             <button
@@ -1165,6 +1184,16 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit, pending = false }) {
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
                         >
                             <Pencil size={13} className="text-gray-400" /> Edit / regenerate
+                        </button>
+                    )}
+                    {canEdit && (
+                        <button
+                            type="button"
+                            onClick={handleRegenerate}
+                            title="Re-render the PDF from the current amount — no re-verification"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                        >
+                            <RefreshCw size={13} className="text-gray-400" /> Regenerate PDF
                         </button>
                     )}
                     <button
@@ -1439,7 +1468,7 @@ function documentCategory(type) {
             border: 'border-violet-200',
         };
     }
-    if (type === 'english_engagement' || type === 'english_offshore') {
+    if (type === 'english_engagement' || type === 'english_offshore' || type === 'english_offshore_1000') {
         return {
             label: 'English',
             chip: 'bg-sky-100 text-sky-700 ring-1 ring-sky-200',
@@ -1737,6 +1766,7 @@ const DOC_TYPES = [
     { value: 'consultancy_english_single_100',    label: 'With English · Single · 100,000',                category: 'philippines', hint: 'Sole applicant with English review add-on.',                                                  backendType: 'consultancy_english_100', applicantMode: 'single', defaultSchoolFee: 100000 },
     { value: 'english_engagement',                label: 'Offshore - Philippines',                         category: 'english',     hint: 'English Engagement Agreement (PTE prep + exam) — Php. Editable English Review + PTE Exam fees.', backendType: 'english_engagement', englishFee: true, hasPte: true, defaultEnglishFee: 14500, defaultPteFee: 240, currency: 'php' },
     { value: 'english_offshore',                  label: 'Offshore - English',                             category: 'english',     hint: 'English Proficiency Test (IELTS/PTE) Review Agreement — NZD. Editable package fee.', backendType: 'english_offshore', englishFee: true, defaultEnglishFee: 550, currency: 'nzd' },
+    { value: 'english_offshore_1000',             label: 'Offshore - English ($1000)',                     category: 'english',     hint: 'IELTS/PTE Review — NZD $1,000 package (20h coaching + unlimited mock + PTE exam fee). Editable.', backendType: 'english_offshore_1000', englishFee: true, defaultEnglishFee: 1000, currency: 'nzd' },
 
     { value: 'consultancy_onshore',               label: 'Onshore Engagement (free)',                      category: 'onshore',     hint: 'Applicant already in NZ. Education engagement — FREE OF CHARGE (no consultancy fees). Refers to a Licensed Immigration Adviser.', backendType: 'consultancy_onshore', free: true },
 
@@ -2038,7 +2068,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
 
     // Consultancy = has a fee/bank panel (excludes the free onshore engagement).
     const isConsultancyType = CONSULTANCY_TYPES.has(type);
-    const isEnglishType = type === 'english_engagement' || type === 'english_offshore';
+    const isEnglishType = type === 'english_engagement' || type === 'english_offshore' || type === 'english_offshore_1000';
     // Any agreement whose generate endpoint self-emails the client (all
     // consultancy scenarios + onshore + offshore) — so the modal skips the
     // second notify POST for these.
