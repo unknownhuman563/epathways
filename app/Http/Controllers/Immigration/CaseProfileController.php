@@ -1681,6 +1681,10 @@ class CaseProfileController extends Controller
 
     private function loadDocuments(Lead $lead): array
     {
+        // Fallback name for unauthenticated client uploads (via /track/{code}),
+        // which carry no uploader user — attribute them to the client themselves.
+        $clientName = trim("{$lead->first_name} {$lead->last_name}") ?: ($lead->lead_id ?: 'Client');
+
         return LeadDocument::where('lead_id', $lead->id)
             ->whereNull('dependent_id') // dependants' docs live under the Family tab
             ->with(['reviewer:id,name,role', 'uploader:id,name,role'])
@@ -1705,9 +1709,10 @@ class CaseProfileController extends Controller
                 // Documents tab can attribute the verdict to the adviser/staffer.
                 'reviewed_by' => optional($d->reviewer)->name,
                 'reviewed_by_role' => optional($d->reviewer)->role,
-                // Who uploaded the file. Null for unauthenticated client uploads
-                // (via /track/{code}) — the frontend falls back to "Client".
-                'uploaded_by' => optional($d->uploader)->name,
+                // Who uploaded the file. Unauthenticated client uploads (via
+                // /track/{code}) carry no uploader user, so attribute them to
+                // the client by name.
+                'uploaded_by' => optional($d->uploader)->name ?: $clientName,
                 'uploaded_by_role' => optional($d->uploader)->role,
                 'created_at' => $d->created_at,
             ])
