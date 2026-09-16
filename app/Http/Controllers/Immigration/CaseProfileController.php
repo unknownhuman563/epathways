@@ -1683,7 +1683,7 @@ class CaseProfileController extends Controller
     {
         return LeadDocument::where('lead_id', $lead->id)
             ->whereNull('dependent_id') // dependants' docs live under the Family tab
-            ->with('reviewer:id,name,role')
+            ->with(['reviewer:id,name,role', 'uploader:id,name,role'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (LeadDocument $d) => [
@@ -1705,6 +1705,10 @@ class CaseProfileController extends Controller
                 // Documents tab can attribute the verdict to the adviser/staffer.
                 'reviewed_by' => optional($d->reviewer)->name,
                 'reviewed_by_role' => optional($d->reviewer)->role,
+                // Who uploaded the file. Null for unauthenticated client uploads
+                // (via /track/{code}) — the frontend falls back to "Client".
+                'uploaded_by' => optional($d->uploader)->name,
+                'uploaded_by_role' => optional($d->uploader)->role,
                 'created_at' => $d->created_at,
             ])
             ->all();

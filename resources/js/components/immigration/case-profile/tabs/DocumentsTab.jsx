@@ -828,11 +828,6 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), keyThread
                             {row.label}
                             {row.required && <span className="ml-1 text-red-500">*</span>}
                         </p>
-                        {doc && (
-                            <p className="text-[10.5px] text-gray-400 mt-0.5">
-                                uploaded {formatDate(doc.created_at)}
-                            </p>
-                        )}
                     </div>
                 </div>
             </td>
@@ -857,9 +852,10 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), keyThread
                                     <span className="text-[12px] text-gray-800 truncate" title={d.original_name}>
                                         {d.original_name}
                                     </span>
-                                    {d.size ? (
-                                        <span className="text-[10px] text-gray-400 tabular-nums">{formatBytes(d.size)}</span>
-                                    ) : null}
+                                    <span className="text-[10px] text-gray-400">
+                                        {d.created_at ? `${formatDate(d.created_at)} · ` : ""}
+                                        {d.uploaded_by || "Client"}
+                                    </span>
                                 </span>
                                 <button
                                     type="button"
