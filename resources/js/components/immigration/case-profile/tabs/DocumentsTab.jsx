@@ -853,8 +853,8 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), keyThread
                                         {d.original_name}
                                     </span>
                                     <span className="text-[10px] text-gray-400">
-                                        {d.created_at ? `${formatDate(d.created_at)} · ` : ""}
-                                        {d.uploaded_by || "Client"}
+                                        {d.created_at ? `${formatDate(d.created_at)}` : ""}
+                                        {d.uploaded_by ? `${d.created_at ? " · " : ""}${d.uploaded_by}` : ""}
                                     </span>
                                 </span>
                                 <button
