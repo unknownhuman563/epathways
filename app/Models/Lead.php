@@ -39,6 +39,11 @@ class Lead extends Model
         'Visa Lodged',
         'Approved Visa',
         'Started Course',
+        // Education-only end-stages — let the Education team keep tracking a
+        // student after the visa outcome, without touching the Immigration
+        // status. NOT part of EDUCATION_STAGES_IMMIGRATION (no handoff).
+        'Course Ongoing',
+        'Completed',
         'For Relodgement',
         'Declined Visa',
     ];

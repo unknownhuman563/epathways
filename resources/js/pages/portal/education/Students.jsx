@@ -221,6 +221,11 @@ const EDUCATION_STAGES = [
     "Visa Lodged",
     "Approved Visa",
     "Started Course",
+    // Education-only end-stages — the Education team keeps progressing a
+    // student after the visa outcome without touching Immigration status.
+    // Deliberately NOT in IMMIGRATION_EDUCATION_STAGES (no handoff).
+    "Course Ongoing",
+    "Completed",
     "For Relodgement",
     "Declined Visa",
 ];
@@ -317,6 +322,8 @@ const EDUCATION_STAGE_STYLES = {
     "Request for Information":  "bg-orange-100 text-orange-800 border-orange-200",
     "Approved Visa":            "bg-green-100 text-green-800 border-green-200",
     "Started Course":           "bg-teal-100 text-teal-800 border-teal-200",
+    "Course Ongoing":           "bg-blue-100 text-blue-800 border-blue-200",
+    "Completed":                "bg-lime-100 text-lime-800 border-lime-200",
 };
 const educationStageClass = (s) => EDUCATION_STAGE_STYLES[s] || stageClass(s);
 
@@ -1280,6 +1287,8 @@ const UNIFIED_JOURNEY = [
     { stage: "Visa Lodged",              team: "immigration" },
     { stage: "Approved Visa",            team: "immigration" },
     { stage: "Started Course",           team: "education"   },
+    { stage: "Course Ongoing",           team: "education"   },
+    { stage: "Completed",                team: "education"   },
     { stage: "For Relodgement",          team: "immigration" },
     { stage: "Declined Visa",            team: "immigration" },
 ];
