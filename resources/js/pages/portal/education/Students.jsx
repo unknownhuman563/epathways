@@ -886,6 +886,19 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                     // department's stage set (so a match from another tab
                                                     // keeps a meaningful status chip).
                                                     const rc = searching ? TAB_STAGE_CONFIG[primaryDeptOf(s)] : tabConfig;
+                                                    const val = s[rc.field] || "";
+                                                    // Immigration owns its own stages — the Education team
+                                                    // can't change them here, so show a read-only chip. The
+                                                    // Immigration team updates them from their portal.
+                                                    if (rc.field === "immigration_stage") {
+                                                        return val ? (
+                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${rc.styler(val)}`}>
+                                                                {val}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-300 text-xs">—</span>
+                                                        );
+                                                    }
                                                     return (
                                                         <StagePicker
                                                             leadId={s.id}
@@ -893,7 +906,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                             stages={rc.stages}
                                                             styler={rc.styler}
                                                             heading={rc.label}
-                                                            value={s[rc.field] || ""}
+                                                            value={val}
                                                             fallbackLabel={rc.field === "education_stage" ? s.status : null}
                                                             open={openStageMenuId === s.id}
                                                             onToggle={() => setOpenStageMenuId(openStageMenuId === s.id ? null : s.id)}
