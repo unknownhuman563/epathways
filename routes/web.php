@@ -2099,3 +2099,10 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 });
+
+// Local-only email/template previews. The file is git-ignored and exists only
+// on dev machines, so nothing here is committed or reachable on production —
+// see routes/dev-previews.php.
+if (app()->environment('local') && file_exists(__DIR__.'/dev-previews.php')) {
+    require __DIR__.'/dev-previews.php';
+}

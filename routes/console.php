@@ -77,3 +77,12 @@ Schedule::command('google:sync-reviews')
     ->timezone('Pacific/Auckland')
     ->name('google-sync-reviews')
     ->withoutOverlapping();
+
+// Daily "you have overdue tasks" digest — emails each staff member the tasks
+// assigned to them that are past due and still open (ClickUp-style). Early NZ
+// morning so it's waiting at the start of the working day; the mails are queued.
+Schedule::command('tasks:overdue-digest')
+    ->dailyAt('07:30')
+    ->timezone('Pacific/Auckland')
+    ->name('tasks-overdue-digest')
+    ->withoutOverlapping();

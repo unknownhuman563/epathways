@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\TaskAssignedMail;
 use App\Models\Lead;
 use App\Models\LeadTask;
 use App\Models\LeadTaskAttachment;
@@ -11,6 +12,7 @@ use App\Notifications\TaskAssigned;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -34,31 +36,31 @@ class TaskController extends Controller
     public function store(Request $request)
     {
         $taskType = $request->input('task_type'); // linked | dept
-        $user     = $request->user();
+        $user = $request->user();
 
         $rules = [
-            'task_type'         => 'required|in:linked,dept',
-            'title'             => 'required|string|max:200',
-            'description'       => 'nullable|string|max:2000',
-            'note'              => 'nullable|string|max:500',
-            'type'              => ['nullable', Rule::in(LeadTask::TYPES)],
-            'priority'          => ['nullable', Rule::in(LeadTask::PRIORITIES)],
-            'progress'          => 'nullable|integer|min:0|max:100',
-            'due_at'            => 'required|date|after_or_equal:today',
+            'task_type' => 'required|in:linked,dept',
+            'title' => 'required|string|max:200',
+            'description' => 'nullable|string|max:2000',
+            'note' => 'nullable|string|max:500',
+            'type' => ['nullable', Rule::in(LeadTask::TYPES)],
+            'priority' => ['nullable', Rule::in(LeadTask::PRIORITIES)],
+            'progress' => 'nullable|integer|min:0|max:100',
+            'due_at' => 'required|date|after_or_equal:today',
             // Multi-assignee: prefer `assignee_ids[]`, fall back to the
             // legacy single `assignee_id` if the caller only supplies one.
-            'assignee_id'       => 'nullable|exists:users,id',
-            'assignee_ids'      => 'nullable|array|max:20',
-            'assignee_ids.*'    => 'integer|exists:users,id',
-            'department'        => ['nullable', Rule::in(LeadTask::DEPARTMENTS)],
-            'tags'              => 'nullable|array',
-            'tags.*'            => 'string|max:50',
+            'assignee_id' => 'nullable|exists:users,id',
+            'assignee_ids' => 'nullable|array|max:20',
+            'assignee_ids.*' => 'integer|exists:users,id',
+            'department' => ['nullable', Rule::in(LeadTask::DEPARTMENTS)],
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|max:50',
             'recurrence_config' => 'nullable|array',
             'cross_dept_reason' => 'nullable|string|max:500',
             // Any file type up to 20 MB each (images, video, PDF, docs,
             // audio). The kanban card renders the first image as a
             // thumbnail and surfaces the total count on the paperclip.
-            'attachments'   => 'nullable|array|max:8',
+            'attachments' => 'nullable|array|max:8',
             'attachments.*' => \App\Support\UploadValidation::taskAttachment(),
         ];
 
@@ -66,14 +68,14 @@ class TaskController extends Controller
             // `lead_ids[]` is the multi-link path; `lead_id` is kept for
             // backwards compatibility when the caller only links one lead.
             // The rules below require at least one (validated after).
-            $rules['lead_id']    = 'nullable|exists:leads,id';
-            $rules['lead_ids']   = 'nullable|array|max:50';
+            $rules['lead_id'] = 'nullable|exists:leads,id';
+            $rules['lead_ids'] = 'nullable|array|max:50';
             $rules['lead_ids.*'] = 'integer|exists:leads,id';
-            $rules['category']   = 'nullable|string|max:100';
+            $rules['category'] = 'nullable|string|max:100';
         } else {
-            $rules['lead_id']    = 'nullable';
-            $rules['lead_ids']   = 'nullable|array|max:50';
-            $rules['category']   = 'required|string|max:100';
+            $rules['lead_id'] = 'nullable';
+            $rules['lead_ids'] = 'nullable|array|max:50';
+            $rules['category'] = 'required|string|max:100';
         }
 
         $validated = $request->validate($rules);
@@ -96,11 +98,11 @@ class TaskController extends Controller
             $assigneeIds = [$user->id];
         }
         $primaryAssigneeId = $assigneeIds[0];
-        $additionalIds     = array_slice($assigneeIds, 1);
+        $additionalIds = array_slice($assigneeIds, 1);
 
         // Cross-department assignment is allowed without justification —
         // we still persist any reason the caller sends, but never require it.
-        $assignees   = User::whereIn('id', $assigneeIds)->get();
+        $assignees = User::whereIn('id', $assigneeIds)->get();
         $isCrossDept = $department && $assignees->contains(
             fn (User $u) => ! $u->isAdmin() && $u->role && $u->role !== $department
         );
@@ -118,28 +120,28 @@ class TaskController extends Controller
                 return back()->withErrors(['lead_ids' => 'Pick at least one lead.']);
             }
         }
-        $primaryLeadId    = $leadIds[0] ?? null;
+        $primaryLeadId = $leadIds[0] ?? null;
         $additionalLeadIds = count($leadIds) > 1 ? array_slice($leadIds, 1) : null;
 
         try {
             $task = LeadTask::create([
-                'lead_id'                 => $primaryLeadId,
-                'additional_lead_ids'     => $additionalLeadIds,
-                'created_by'              => $user->id,
-                'assignee_id'             => $primaryAssigneeId,
+                'lead_id' => $primaryLeadId,
+                'additional_lead_ids' => $additionalLeadIds,
+                'created_by' => $user->id,
+                'assignee_id' => $primaryAssigneeId,
                 'additional_assignee_ids' => $additionalIds ?: null,
-                'title'                   => $validated['title'],
-                'description'             => $validated['description'] ?? null,
-                'note'                    => $validated['note'] ?? null,
-                'type'                    => $validated['type'] ?? null,
-                'category'                => $validated['category'] ?? null,
-                'department'              => $department,
-                'priority'                => $validated['priority'] ?? 'normal',
-                'progress'                => $validated['progress'] ?? 0,
-                'due_at'                  => $validated['due_at'],
-                'tags'                    => $validated['tags'] ?? null,
-                'recurrence_config'       => $validated['recurrence_config'] ?? null,
-                'cross_dept_reason'       => $isCrossDept ? ($validated['cross_dept_reason'] ?? null) : null,
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'note' => $validated['note'] ?? null,
+                'type' => $validated['type'] ?? null,
+                'category' => $validated['category'] ?? null,
+                'department' => $department,
+                'priority' => $validated['priority'] ?? 'normal',
+                'progress' => $validated['progress'] ?? 0,
+                'due_at' => $validated['due_at'],
+                'tags' => $validated['tags'] ?? null,
+                'recurrence_config' => $validated['recurrence_config'] ?? null,
+                'cross_dept_reason' => $isCrossDept ? ($validated['cross_dept_reason'] ?? null) : null,
             ]);
 
             $this->storeAttachments($request, $task, $user);
@@ -183,26 +185,26 @@ class TaskController extends Controller
         $assigneesBefore = $task->allAssigneeIds();
 
         $validated = $request->validate([
-            'status'            => ['sometimes', Rule::in(LeadTask::STATUSES)],
-            'completion_notes'  => 'sometimes|nullable|string|max:2000',
-            'priority'          => ['sometimes', Rule::in(LeadTask::PRIORITIES)],
-            'progress'          => 'sometimes|integer|min:0|max:100',
-            'title'             => 'sometimes|string|max:200',
-            'description'       => 'sometimes|nullable|string|max:2000',
-            'note'              => 'sometimes|nullable|string|max:500',
-            'due_at'            => 'sometimes|nullable|date',
-            'assignee_id'       => 'sometimes|nullable|exists:users,id',
-            'assignee_ids'      => 'sometimes|nullable|array|max:20',
-            'assignee_ids.*'    => 'integer|exists:users,id',
-            'lead_id'           => 'sometimes|nullable|exists:leads,id',
-            'lead_ids'          => 'sometimes|nullable|array|max:50',
-            'lead_ids.*'        => 'integer|exists:leads,id',
-            'department'        => ['sometimes', Rule::in(LeadTask::DEPARTMENTS)],
+            'status' => ['sometimes', Rule::in(LeadTask::STATUSES)],
+            'completion_notes' => 'sometimes|nullable|string|max:2000',
+            'priority' => ['sometimes', Rule::in(LeadTask::PRIORITIES)],
+            'progress' => 'sometimes|integer|min:0|max:100',
+            'title' => 'sometimes|string|max:200',
+            'description' => 'sometimes|nullable|string|max:2000',
+            'note' => 'sometimes|nullable|string|max:500',
+            'due_at' => 'sometimes|nullable|date',
+            'assignee_id' => 'sometimes|nullable|exists:users,id',
+            'assignee_ids' => 'sometimes|nullable|array|max:20',
+            'assignee_ids.*' => 'integer|exists:users,id',
+            'lead_id' => 'sometimes|nullable|exists:leads,id',
+            'lead_ids' => 'sometimes|nullable|array|max:50',
+            'lead_ids.*' => 'integer|exists:leads,id',
+            'department' => ['sometimes', Rule::in(LeadTask::DEPARTMENTS)],
             'cross_dept_reason' => 'sometimes|nullable|string|max:500',
-            'tags'              => 'sometimes|nullable|array',
-            'tags.*'            => 'string|max:50',
-            'type'              => ['sometimes', 'nullable', Rule::in(LeadTask::TYPES)],
-            'category'          => 'sometimes|nullable|string|max:100',
+            'tags' => 'sometimes|nullable|array',
+            'tags.*' => 'string|max:50',
+            'type' => ['sometimes', 'nullable', Rule::in(LeadTask::TYPES)],
+            'category' => 'sometimes|nullable|string|max:100',
         ]);
 
         try {
@@ -219,7 +221,7 @@ class TaskController extends Controller
             // `assignee_id` if it was sent.
             if (array_key_exists('assignee_ids', $validated)) {
                 $ids = array_values(array_unique(array_filter(array_map('intval', $validated['assignee_ids'] ?? []))));
-                $task->assignee_id             = $ids[0] ?? null;
+                $task->assignee_id = $ids[0] ?? null;
                 $task->additional_assignee_ids = count($ids) > 1 ? array_slice($ids, 1) : null;
             } elseif (array_key_exists('assignee_id', $validated)) {
                 $task->assignee_id = $validated['assignee_id'];
@@ -228,7 +230,7 @@ class TaskController extends Controller
             // Multi-lead replace: same shape as the assignee path.
             if (array_key_exists('lead_ids', $validated)) {
                 $ids = array_values(array_unique(array_filter(array_map('intval', $validated['lead_ids'] ?? []))));
-                $task->lead_id             = $ids[0] ?? null;
+                $task->lead_id = $ids[0] ?? null;
                 $task->additional_lead_ids = count($ids) > 1 ? array_slice($ids, 1) : null;
             } elseif (array_key_exists('lead_id', $validated)) {
                 $task->lead_id = $validated['lead_id'];
@@ -268,8 +270,22 @@ class TaskController extends Controller
 
         try {
             $recipients = User::whereIn('id', $ids)->get();
-            if ($recipients->isNotEmpty()) {
-                Notification::send($recipients, new TaskAssigned($task, Auth::user()?->name));
+            if ($recipients->isEmpty()) {
+                return;
+            }
+
+            // In-app bell notification (instant).
+            Notification::send($recipients, new TaskAssigned($task, Auth::user()?->name));
+
+            // Email each assignee the full task detail + any attachments. Queued
+            // (the Mailable is ShouldQueue), so it never slows task creation.
+            $actorName = Auth::user()?->name;
+            $task->loadMissing('attachments', 'lead');
+            foreach ($recipients as $recipient) {
+                if (! $recipient->email) {
+                    continue;
+                }
+                Mail::to($recipient->email)->queue(new TaskAssignedMail($task, $recipient, $actorName));
             }
         } catch (\Throwable $e) {
             Log::error('Task assignment notify failed', ['task_id' => $task->id, 'error' => $e->getMessage()]);
@@ -290,10 +306,10 @@ class TaskController extends Controller
                 ->orderBy('created_at')
                 ->get()
                 ->map(fn ($c) => [
-                    'id'         => $c->id,
-                    'body'       => $c->body,
+                    'id' => $c->id,
+                    'body' => $c->body,
                     'created_at' => $c->created_at,
-                    'author'     => $c->author ? ['id' => $c->author->id, 'name' => $c->author->name, 'avatar_url' => $c->author->avatar_url] : null,
+                    'author' => $c->author ? ['id' => $c->author->id, 'name' => $c->author->name, 'avatar_url' => $c->author->avatar_url] : null,
                 ]);
 
             return response()->json(['comments' => $rows]);
@@ -318,17 +334,17 @@ class TaskController extends Controller
         try {
             $comment = LeadTaskComment::create([
                 'lead_task_id' => $task->id,
-                'user_id'      => $request->user()->id,
-                'body'         => $validated['body'],
+                'user_id' => $request->user()->id,
+                'body' => $validated['body'],
             ]);
             $comment->load('author:id,name,avatar_path');
 
             return response()->json([
                 'comment' => [
-                    'id'         => $comment->id,
-                    'body'       => $comment->body,
+                    'id' => $comment->id,
+                    'body' => $comment->body,
                     'created_at' => $comment->created_at,
-                    'author'     => $comment->author ? ['id' => $comment->author->id, 'name' => $comment->author->name, 'avatar_url' => $comment->author->avatar_url] : null,
+                    'author' => $comment->author ? ['id' => $comment->author->id, 'name' => $comment->author->name, 'avatar_url' => $comment->author->avatar_url] : null,
                 ],
             ], 201);
         } catch (\Throwable $e) {
@@ -350,12 +366,12 @@ class TaskController extends Controller
 
         $canEdit = $user->isAdmin()
             || $task->assignee_id === $user->id
-            || $task->created_by  === $user->id
+            || $task->created_by === $user->id
             || ($task->department && $task->department === $user->role);
         abort_unless($canEdit, 403, 'You do not have permission to update this task.');
 
         $request->validate([
-            'attachments'   => 'required|array|max:8',
+            'attachments' => 'required|array|max:8',
             'attachments.*' => 'file|max:20480',
         ]);
 
@@ -378,20 +394,24 @@ class TaskController extends Controller
     private function storeAttachments(Request $request, LeadTask $task, User $user): void
     {
         $files = $request->file('attachments') ?? [];
-        if (empty($files)) return;
+        if (empty($files)) {
+            return;
+        }
 
         foreach ($files as $file) {
-            if (! $file || ! $file->isValid()) continue;
+            if (! $file || ! $file->isValid()) {
+                continue;
+            }
 
             $path = $file->store("task-attachments/{$task->id}", 'public');
 
             LeadTaskAttachment::create([
-                'lead_task_id'      => $task->id,
-                'file_path'         => $path,
+                'lead_task_id' => $task->id,
+                'file_path' => $path,
                 'original_filename' => $file->getClientOriginalName(),
-                'mime_type'         => $file->getMimeType() ?: 'application/octet-stream',
-                'size'              => $file->getSize() ?: 0,
-                'uploaded_by'       => $user->id,
+                'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+                'size' => $file->getSize() ?: 0,
+                'uploaded_by' => $user->id,
             ]);
         }
     }
@@ -404,7 +424,7 @@ class TaskController extends Controller
      */
     public function relatedRecords(Request $request)
     {
-        $q     = trim((string) $request->input('q', ''));
+        $q = trim((string) $request->input('q', ''));
         $types = array_filter(explode(',', (string) $request->input('types', 'lead,student,case,client')));
         $allTypes = ['lead', 'student', 'case', 'client'];
 
@@ -432,10 +452,16 @@ class TaskController extends Controller
             $subsetRequested = count($types) > 0 && count(array_diff($allTypes, $types)) > 0;
             if ($subsetRequested) {
                 $query->where(function ($q2) use ($types) {
-                    if (in_array('student', $types, true)) $q2->orWhere('is_student', true);
-                    if (in_array('case',    $types, true)) $q2->orWhere('is_immigration_case', true);
-                    if (in_array('client',  $types, true)) $q2->orWhere('is_accommodation_client', true);
-                    if (in_array('lead',    $types, true)) {
+                    if (in_array('student', $types, true)) {
+                        $q2->orWhere('is_student', true);
+                    }
+                    if (in_array('case', $types, true)) {
+                        $q2->orWhere('is_immigration_case', true);
+                    }
+                    if (in_array('client', $types, true)) {
+                        $q2->orWhere('is_accommodation_client', true);
+                    }
+                    if (in_array('lead', $types, true)) {
                         $q2->orWhere(function ($q3) {
                             $q3->where(fn ($w) => $w->where('is_student', false)->orWhereNull('is_student'))
                                 ->where(fn ($w) => $w->where('is_immigration_case', false)->orWhereNull('is_immigration_case'))
@@ -460,10 +486,10 @@ class TaskController extends Controller
             }
 
             $records = $query->limit(100)->get()->map(fn ($l) => [
-                'id'         => $l->id,
-                'lead_id'    => $l->lead_id,
-                'name'       => trim("{$l->first_name} {$l->last_name}") ?: ($l->email ?: "Lead #{$l->lead_id}"),
-                'email'      => $l->email,
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: ($l->email ?: "Lead #{$l->lead_id}"),
+                'email' => $l->email,
                 'record_type' => $l->is_student ? 'student'
                     : ($l->is_immigration_case ? 'case'
                     : ($l->is_accommodation_client ? 'client' : 'lead')),

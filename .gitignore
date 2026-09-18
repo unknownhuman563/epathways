@@ -39,3 +39,6 @@ storage/app/google/
 prod-db-latest.sql.gz
 *.sql.gz
 *.sql
+
+# Local-only email/template preview routes (never committed)
+/routes/dev-previews.php

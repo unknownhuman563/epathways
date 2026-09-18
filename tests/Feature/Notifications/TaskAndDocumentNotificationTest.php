@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Notifications;
 
+use App\Mail\TaskAssignedMail;
 use App\Models\Lead;
 use App\Models\User;
 use App\Notifications\DocumentSubmittedForReview;
 use App\Notifications\TaskAssigned;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -34,6 +36,28 @@ class TaskAndDocumentNotificationTest extends TestCase
         $this->assertDatabaseHas('lead_tasks', ['title' => 'Follow up call', 'assignee_id' => $assignee->id]);
         Notification::assertSentTo($assignee, TaskAssigned::class);
         Notification::assertNotSentTo($admin, TaskAssigned::class);
+    }
+
+    public function test_task_assignment_emails_the_assignee_with_details(): void
+    {
+        Mail::fake();
+        $admin = User::factory()->create(['role' => 'admin']);
+        $assignee = User::factory()->create(['role' => 'sales']);
+        $lead = Lead::create(['first_name' => 'Mail', 'last_name' => 'Lead']);
+
+        $this->actingAs($admin)->post('/api/tasks', [
+            'task_type' => 'linked',
+            'title' => 'Email me the details',
+            'description' => 'Please action this.',
+            'lead_id' => $lead->id,
+            'due_at' => now()->addDay()->toDateString(),
+            'priority' => 'urgent',
+            'assignee_ids' => [$assignee->id],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        // The assignee is emailed; the creator is not.
+        Mail::assertQueued(TaskAssignedMail::class, fn ($m) => $m->hasTo($assignee->email));
+        Mail::assertNotQueued(TaskAssignedMail::class, fn ($m) => $m->hasTo($admin->email));
     }
 
     public function test_task_assigned_to_self_sends_nothing(): void
