@@ -76,7 +76,7 @@ class TaskAssignedMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'New task assigned: '.($this->task->title ?: 'Untitled task'),
+            subject: '🎯 NEW TASK ASSIGNED: '.($this->task->title ?: 'Untitled task'),
         );
     }
 
