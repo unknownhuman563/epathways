@@ -1,6 +1,6 @@
 import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
-import { LayoutDashboard, Users, UserCircle, Mail, FileSignature, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Users, UserCircle, Mail, FileSignature, GraduationCap, Briefcase } from "lucide-react";
 
 // Hide a nav item whose `module` hasn't been granted to this user. `modules` is
 // auth.modules — the granted-key list from User::grantedModules(); super admins
@@ -34,6 +34,9 @@ export default function AgentLayout({ children }) {
         // hidden — a super admin grants `referral_students` per agent from
         // Module Management. The route carries the same gate.
         { name: "Students", href: "/portal/agent/students", icon: <GraduationCap size={20} />, module: "referral_students" },
+        // The agent's own referrals that became immigration cases. Ships hidden —
+        // a super admin grants `referral_cases` per agent from Module Management.
+        { name: "Cases", href: "/portal/agent/cases", icon: <Briefcase size={20} />, module: "referral_cases" },
         { name: "Compose", href: "/portal/agent/compose", icon: <Mail size={20} /> },
 
         { name: "Account", section: true },

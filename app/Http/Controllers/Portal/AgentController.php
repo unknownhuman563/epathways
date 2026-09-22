@@ -92,6 +92,73 @@ class AgentController extends Controller
         );
     }
 
+    /**
+     * Cases — the agent's OWN referrals that have become immigration cases.
+     *
+     * Renders the SAME "List of Cases" board immigration staff use (via a
+     * re-export at portal/agent/Cases), built from the exact same payload —
+     * ImmigrationController::casesPayload() — narrowed to `agent_id = me`. The
+     * board is fully interactive: a First-Immigration agent works their own
+     * referrals (inline stage / visa / priority, open the case profile) just
+     * like staff, with the board's URLs resolving to the agent-portal case
+     * routes (portal-relative via resources/js/lib/caseRoutes.js). Gated by the
+     * `referral_cases` module; `portal:agent` proves the role only.
+     */
+    public function cases()
+    {
+        $me = Auth::id();
+
+        try {
+            $payload = app(\App\Http\Controllers\Portal\ImmigrationController::class)
+                ->casesPayload(fn ($q) => $q->where('agent_id', $me));
+
+            return inertia('portal/agent/Cases', array_merge($payload, [
+                'portal' => 'agent',
+            ]));
+        } catch (\Throwable $e) {
+            Log::error('Agent cases list failed', ['error' => $e->getMessage()]);
+
+            return inertia('portal/agent/Cases', [
+                'portal' => 'agent',
+                'cases' => [],
+                'distribution' => [],
+                'priorities' => [],
+                'stages' => Lead::IMMIGRATION_STAGES,
+                'visaTypes' => [],
+            ]);
+        }
+    }
+
+    /**
+     * The full immigration Case Profile for one of the agent's own referrals,
+     * rendered under the Agent portal chrome. Ownership is enforced by the
+     * `lead.scope` middleware (agent_id = me) and `is_immigration_case` by
+     * CaseProfileController::show; this delegates with the agent page so app.jsx
+     * wraps it in AgentLayout and its writes stay portal-relative. Advice-bearing
+     * actions remain licence-gated inside the controllers (adviser assists).
+     */
+    public function caseProfile(Lead $lead)
+    {
+        return app(\App\Http\Controllers\Immigration\CaseProfileController::class)->show(
+            $lead,
+            app(\App\Services\Immigration\CaseChecklistService::class),
+            'portal/agent/CaseProfile'
+        );
+    }
+
+    /**
+     * Stream a single case document to the agent. The `lead.scope` middleware
+     * can't scope this route (it carries a document id, not a lead id), so the
+     * ownership predicate lives here: the document's lead must belong to me.
+     */
+    public function downloadCaseDocument(Request $request, $docId)
+    {
+        $doc = \App\Models\LeadDocument::with('lead:id,agent_id')->findOrFail($docId);
+        abort_unless($doc->lead && $doc->lead->agent_id === Auth::id(), 404);
+
+        return app(\App\Http\Controllers\LeadDocumentController::class)->download($request, $docId);
+    }
+
     /** Agent's own account page — mirrors the pattern used by sales /
      *  education / immigration portals. The referral link is exposed too
      *  so the agent can copy it from here as well as the dashboard. */

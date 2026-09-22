@@ -1427,7 +1427,14 @@ class CaseProfileController extends Controller
         abort_unless(
             $user->isAdmin()
                 || $user->role === 'immigration'
-                || in_array($user->role, User::IMMIGRATION_ROLES, true),
+                || in_array($user->role, User::IMMIGRATION_ROLES, true)
+                // A First-Immigration recruiting agent works their OWN referrals'
+                // cases (edit, notes, stage, visa) with the adviser assisting on
+                // advice. They reach these methods only via the agent-portal case
+                // routes, row-scoped by `lead.scope` (agent_id = me) + gated by the
+                // `referral_cases` module. Advice-bearing writes stay licence-gated
+                // separately, so an unlicensed agent still can't author advice.
+                || $user->role === 'agent',
             403,
             'Only immigration staff may open case profiles.'
         );

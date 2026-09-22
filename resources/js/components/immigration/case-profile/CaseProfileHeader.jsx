@@ -9,6 +9,7 @@ import {
     Clock, ShieldCheck, MapPin, CheckCircle2,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
+import { immBase, leadBase } from "@/lib/caseRoutes";
 
 const fmtDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
@@ -71,7 +72,7 @@ export default function CaseProfileHeader({
 
     const changeVisa = (id) => {
         setSavingVisa(true);
-        router.post(`/portal/immigration/cases/${lead.id}/visa`, { visa_type_id: id || null }, {
+        router.post(`${immBase()}/cases/${lead.id}/visa`, { visa_type_id: id || null }, {
             preserveScroll: true,
             onSuccess: () => { toast.success("Visa type updated"); setVisaEditing(false); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not update the visa type"),
@@ -82,7 +83,7 @@ export default function CaseProfileHeader({
     const archive = () => {
         if (! lead?.id) return;
         if (! window.confirm(`Archive ${fullName}?\n\nThe case will be hidden from the Cases list. Notes, tasks, documents, and audit history are preserved and the case can be restored later.`)) return;
-        router.delete(`/admin/leads/${lead.id}`, {
+        router.delete(`${leadBase()}/${lead.id}`, {
             preserveScroll: false,
             onSuccess: () => toast.success(`${fullName} archived`),
             onError: () => toast.error("Could not archive — please try again."),

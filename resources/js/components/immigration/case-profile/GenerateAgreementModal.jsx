@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, ChevronLeft, ChevronRight, FileSignature, AlertCircle, Loader2 } from "lucide-react";
+import { immBase } from "@/lib/caseRoutes";
 
 // Build 11.D Phase 2 — Three-step modal: pick template -> fill variables -> preview & generate.
 // Posts to /portal/immigration/cases/{lead}/agreements; parent refreshes on success.
@@ -23,7 +24,7 @@ export default function GenerateAgreementModal({ lead, onClose, onGenerated }) {
         let alive = true;
         (async () => {
             try {
-                const res = await fetch(`/portal/immigration/cases/${lead.id}/agreements/templates`, {
+                const res = await fetch(`${immBase()}/cases/${lead.id}/agreements/templates`, {
                     credentials: "same-origin",
                     headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
                 });
@@ -83,7 +84,7 @@ export default function GenerateAgreementModal({ lead, onClose, onGenerated }) {
         setSubmitting(true);
         setError(null);
         try {
-            const res = await fetch(`/portal/immigration/cases/${lead.id}/agreements`, {
+            const res = await fetch(`${immBase()}/cases/${lead.id}/agreements`, {
                 method: "POST",
                 credentials: "same-origin",
                 headers: {

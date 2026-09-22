@@ -3,6 +3,7 @@ import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import { Pin, StickyNote, Activity, MessagesSquare, Plus } from "lucide-react";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
+import { leadBase } from "@/lib/caseRoutes";
 
 // Phase 1 ships read-only notes + activity stream. Write actions (add
 // note, etc.) ride on the existing Lead-note endpoints; wiring lands
@@ -119,7 +120,7 @@ function NoteComposer({ leadId }) {
     const submit = () => {
         if (!body.trim()) return;
         setSaving(true);
-        router.post(`/admin/leads/${leadId}/notes`, { body, pinned }, {
+        router.post(`${leadBase()}/${leadId}/notes`, { body, pinned }, {
             preserveScroll: true,
             onSuccess: () => { setBody(""); setPinned(false); toast.success("Note added"); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not add note"),

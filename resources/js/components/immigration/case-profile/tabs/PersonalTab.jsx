@@ -6,6 +6,7 @@ import { Save, ClipboardList, Eye, Download, FileText, Sparkles, Loader2, CheckC
 const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || "");
 import { ASSESSMENT_SECTIONS, formatAssessmentValue } from "@/data/assessmentSections";
 import PhoneField from "@/components/PhoneField";
+import { immBase } from "@/lib/caseRoutes";
 
 // Case Profile "Personal" tab — the applicant's details in INZ-form-shaped
 // sections (left) with the document-verification / lodgement sidebar (right),
@@ -52,7 +53,7 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
     const [savedAt, setSavedAt] = useState(0);
 
     const save = (opts = {}) => {
-        post(`/portal/immigration/cases/${lead.id}/personal`, {
+        post(`${immBase()}/cases/${lead.id}/personal`, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => { form.defaults(); setSavedAt(Date.now()); },
@@ -98,7 +99,7 @@ export default function PersonalTab({ lead = {}, intake = null, assessmentComple
     const [scan, setScan] = useState(null); // { loading, ok, rows, error }
     const runScan = () => {
         setScan({ loading: true });
-        fetch(`/portal/immigration/cases/${lead.id}/identity-scan`, {
+        fetch(`${immBase()}/cases/${lead.id}/identity-scan`, {
             method: "POST",
             headers: { "X-XSRF-TOKEN": xsrf(), Accept: "application/json", "Content-Type": "application/json" },
             body: "{}",
@@ -365,7 +366,7 @@ function Verify({ state, label, sub }) {
 function AssessmentSubmission({ intake, leadId, completeness = null }) {
     const { type, data } = intake;
     const sections = ASSESSMENT_SECTIONS[type] || [];
-    const base = `/portal/immigration/intakes/${type}/${data.id}`;
+    const base = `${immBase()}/intakes/${type}/${data.id}`;
     const submitted = data.created_at
         ? new Date(data.created_at).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" })
         : null;
@@ -376,7 +377,7 @@ function AssessmentSubmission({ intake, leadId, completeness = null }) {
     const fetchAiNote = () => {
         if (aiBusy) return;
         setAiBusy(true); setAiTried(true);
-        fetch(`/portal/immigration/cases/${leadId}/assessment-ai-note`, {
+        fetch(`${immBase()}/cases/${leadId}/assessment-ai-note`, {
             headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
             credentials: "same-origin",
         })

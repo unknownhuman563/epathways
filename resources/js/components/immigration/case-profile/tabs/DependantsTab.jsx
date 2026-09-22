@@ -6,6 +6,7 @@ import {
     Users, Plus, X, Pencil, Trash2, Upload, FileText, Eye, Download, IdCard, FolderOpen, Link as LinkIcon,
     CheckCircle2, Clock, AlertTriangle, XCircle, Circle,
 } from "lucide-react";
+import { immBase, docDownloadUrl } from "@/lib/caseRoutes";
 
 // Case → Family / Dependants. Each dependant has a document CHECKLIST (dependent
 // child visa etc.), with per-item status + overall progress. Clicking a
@@ -27,7 +28,7 @@ export default function DependantsTab({ lead, dependents = [], caseOptions = [],
     const [docsFor, setDocsFor] = useState(null);
     if (!lead?.id) return null;
 
-    const base = `/portal/immigration/cases/${lead.id}/dependents`;
+    const base = `${immBase()}/cases/${lead.id}/dependents`;
 
     const remove = (d) => {
         if (!window.confirm(`Remove ${d.full_name} and their documents from this case?`)) return;
@@ -124,7 +125,7 @@ function DependantRow({ d, onEdit, onRemove, onDocs, onToggleAgreement, onOpenCa
     const p = d.progress || { required_done: 0, required_total: 0 };
     // The child's uploaded Face image, if any — shown as their profile photo.
     const photo = (d.checklist || []).find((i) => i.key?.endsWith("face_image") && i.document)?.document;
-    const photoUrl = photo ? `/admin/documents/${photo.id}/download?inline=1` : null;
+    const photoUrl = photo ? docDownloadUrl(photo.id, { inline: true }) : null;
     return (
         <tr className="hover:bg-gray-50/60">
             <td className="px-4 py-3">
@@ -236,8 +237,8 @@ function DocumentsModal({ d, base, onClose }) {
                     <input ref={(el) => (fileRefs.current[item.key] = el)} type="file" className="hidden" onChange={(e) => upload(item.key, e)} />
                 </>
             )}
-            {doc && <a href={`/admin/documents/${doc.id}/download?inline=1`} target="_blank" rel="noopener noreferrer" title="View" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Eye size={12} /></a>}
-            {doc && <a href={`/admin/documents/${doc.id}/download`} title="Download" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Download size={12} /></a>}
+            {doc && <a href={docDownloadUrl(doc.id, { inline: true })} target="_blank" rel="noopener noreferrer" title="View" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Eye size={12} /></a>}
+            {doc && <a href={docDownloadUrl(doc.id)} title="Download" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Download size={12} /></a>}
             {linked && !doc && <span className="text-[11px] text-gray-400">Not yet submitted</span>}
         </div>
     );
@@ -331,7 +332,7 @@ function DocumentsModal({ d, base, onClose }) {
                                                     <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-800"><FileText size={13} className="text-gray-400" />{doc.original_name}</span>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <a href={`/admin/documents/${doc.id}/download?inline=1`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Eye size={12} /> View</a>
+                                                    <a href={docDownloadUrl(doc.id, { inline: true })} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Eye size={12} /> View</a>
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${(STATUS[doc.status] || STATUS.Submitted).tone}`}>{(STATUS[doc.status] || STATUS.Submitted).label}</span>
@@ -417,7 +418,7 @@ function DependantModal({ dependant, base, caseOptions = [], visaTypes = [], cur
     const pickCase = (id) => {
         setForm((f) => ({ ...f, linked_lead_id: id }));
         if (!id) return;
-        fetch(`/portal/immigration/cases/${id}/dependent-source`, { headers: { Accept: "application/json" }, credentials: "same-origin" })
+        fetch(`${immBase()}/cases/${id}/dependent-source`, { headers: { Accept: "application/json" }, credentials: "same-origin" })
             .then((r) => (r.ok ? r.json() : null))
             .then((d) => {
                 if (!d) return;

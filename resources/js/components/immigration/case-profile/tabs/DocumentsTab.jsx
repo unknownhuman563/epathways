@@ -10,6 +10,7 @@ import {
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
 import { IntakeViewModal } from "@/pages/portal/immigration/Assessments";
+import { immBase, leadBase, docDownloadUrl } from "@/lib/caseRoutes";
 
 // Documents tab — table view that joins the visa-type checklist with
 // uploaded LeadDocuments by checklist_key. Each row is a required (or
@@ -663,7 +664,7 @@ function ReviewerReplyBox({ leadId, docId }) {
     const submit = () => {
         if (! body.trim()) { toast.error("Write a reply first"); return; }
         setPosting(true);
-        router.post(`/portal/immigration/cases/${leadId}/threads`,
+        router.post(`${immBase()}/cases/${leadId}/threads`,
             { anchor_type: "reviewer_note", anchor_id: docId, body, client_visible: false },
             {
                 preserveScroll: true,
@@ -756,7 +757,7 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), keyThread
         if (isStatus) setSavingStatus(true); else setSavingNote(true);
 
         router.post(
-            `/admin/leads/${leadId}/documents/${doc.id}/status`,
+            `${leadBase()}/${leadId}/documents/${doc.id}/status`,
             { status: nextStatus, note: nextNote },
             {
                 preserveScroll: true,
@@ -1188,7 +1189,7 @@ function ProofVerifyModal({ proofs = [], leadId, invoiceId = null, onClose }) {
         if (!proof) return;
         setBusyId(proof.id);
         router.post(
-            `/admin/leads/${leadId}/documents/${proof.id}/status`,
+            `${leadBase()}/${leadId}/documents/${proof.id}/status`,
             { status, invoice_id: status === "Approved" ? invoiceId : null },
             {
                 preserveScroll: true,
@@ -1202,7 +1203,7 @@ function ProofVerifyModal({ proofs = [], leadId, invoiceId = null, onClose }) {
         );
     };
 
-    const inlineUrl = active ? `/admin/documents/${active.id}/download?inline=1` : null;
+    const inlineUrl = active ? docDownloadUrl(active.id, { inline: true }) : null;
     const isPdf = (active?.mime || "").includes("pdf") || /\.pdf$/i.test(active?.original_name || "");
     const isImage = (active?.mime || "").startsWith("image/") || /\.(png|jpe?g|gif|webp|heic)$/i.test(active?.original_name || "");
     const approved = active?.status === "Approved";
@@ -1255,7 +1256,7 @@ function ProofVerifyModal({ proofs = [], leadId, invoiceId = null, onClose }) {
                         <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
                             <FileText size={40} className="text-gray-300" />
                             <p className="mt-3 text-sm text-gray-600">No inline preview for this file type.</p>
-                            <a href={`/admin/documents/${active.id}/download`} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-white"><Download size={13} /> Download to view</a>
+                            <a href={docDownloadUrl(active.id)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-white"><Download size={13} /> Download to view</a>
                         </div>
                     )}
                 </div>
@@ -1327,7 +1328,7 @@ function DownloadAllMenu({ leadId }) {
             {open && (
                 <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-20">
                     <a
-                        href={`/admin/leads/${leadId}/documents/download-all`}
+                        href={`${leadBase()}/${leadId}/documents/download-all`}
                         onClick={() => setOpen(false)}
                         className="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50"
                     >
@@ -1335,7 +1336,7 @@ function DownloadAllMenu({ leadId }) {
                         <span><span className="font-semibold">Approved only</span><span className="block text-[10px] text-gray-400">The lodgement bundle</span></span>
                     </a>
                     <a
-                        href={`/admin/leads/${leadId}/documents/download-all?all=1`}
+                        href={`${leadBase()}/${leadId}/documents/download-all?all=1`}
                         onClick={() => setOpen(false)}
                         className="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50"
                     >
@@ -1447,7 +1448,7 @@ function FileMenu({ doc, leadId, checklistKey = null }) {
 
     const del = () => {
         setBusy(true);
-        router.delete(`/admin/leads/${leadId}/documents/${doc.id}`, {
+        router.delete(`${leadBase()}/${leadId}/documents/${doc.id}`, {
             preserveScroll: true,
             preserveState: true,
             only: ["documents"],
@@ -1460,7 +1461,7 @@ function FileMenu({ doc, leadId, checklistKey = null }) {
     // Send to client = surface this document on the client's portal + /track.
     const sendToClient = () => {
         setSharing(true);
-        router.post(`/admin/leads/${leadId}/documents/${doc.id}/send-to-client`, {}, {
+        router.post(`${leadBase()}/${leadId}/documents/${doc.id}/send-to-client`, {}, {
             preserveScroll: true,
             preserveState: true,
             only: ["documents"],
@@ -1476,7 +1477,7 @@ function FileMenu({ doc, leadId, checklistKey = null }) {
         if (files.length === 0) return;
         setUploading(true);
         router.post(
-            `/admin/leads/${leadId}/documents/checklist/${encodeURIComponent(checklistKey)}/upload`,
+            `${leadBase()}/${leadId}/documents/checklist/${encodeURIComponent(checklistKey)}/upload`,
             { files },
             {
                 forceFormData: true,
@@ -1523,7 +1524,7 @@ function FileMenu({ doc, leadId, checklistKey = null }) {
                         className="z-[60] bg-white rounded-lg shadow-xl border border-gray-100 py-1"
                     >
                         <a
-                            href={`/admin/documents/${doc.id}/download`}
+                            href={docDownloadUrl(doc.id)}
                             onClick={close}
                             className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50"
                         >
@@ -1592,7 +1593,7 @@ function DocPreviewModal({ doc, label, leadId, caseStaff = [], threads = [], onC
         return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
     }, [onClose]);
 
-    const inlineUrl = `/admin/documents/${doc.id}/download?inline=1`;
+    const inlineUrl = docDownloadUrl(doc.id, { inline: true });
     const isPdf = (doc.mime || "").includes("pdf");
     const isImage = (doc.mime || "").startsWith("image/");
 
@@ -1620,12 +1621,12 @@ function DocPreviewModal({ doc, label, leadId, caseStaff = [], threads = [], onC
                             <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
                                 <FileText size={40} className="text-gray-300" />
                                 <p className="mt-3 text-sm text-gray-600">No inline preview for this file type.</p>
-                                <a href={`/admin/documents/${doc.id}/download`} className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[12px] font-semibold hover:bg-white"><Download size={13} /> Download to view</a>
+                                <a href={docDownloadUrl(doc.id)} className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[12px] font-semibold hover:bg-white"><Download size={13} /> Download to view</a>
                             </div>
                         )}
                         <div className="flex items-center gap-1.5 px-4 py-2 border-t border-gray-200 bg-white">
                             <a href={inlineUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Eye size={12} /> Open in tab</a>
-                            <a href={`/admin/documents/${doc.id}/download`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Download size={12} /> Download</a>
+                            <a href={docDownloadUrl(doc.id)} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Download size={12} /> Download</a>
                         </div>
                     </div>
 
@@ -1667,7 +1668,7 @@ function TrackVisibilityCheckbox({ leadId, checklistKey, hidden }) {
         const nextShown = e.target.checked;
         setOptimistic(nextShown);
         router.post(
-            `/admin/leads/${leadId}/documents/track-visibility`,
+            `${leadBase()}/${leadId}/documents/track-visibility`,
             { checklist_keys: [checklistKey], hidden: ! nextShown },
             {
                 preserveScroll: true,
@@ -1713,7 +1714,7 @@ function SectionSelectAll({ leadId, rows }) {
         const nextShown = e.target.checked;
         setOptimistic(nextShown);
         router.post(
-            `/admin/leads/${leadId}/documents/track-visibility`,
+            `${leadBase()}/${leadId}/documents/track-visibility`,
             { checklist_keys: rows.map((r) => r.key), hidden: ! nextShown },
             {
                 preserveScroll: true,
@@ -1835,7 +1836,7 @@ function UploadSlot({ leadId, checklistKey, label = "Upload", empty = false }) {
         if (files.length === 0) return;
         setUploading(true);
         router.post(
-            `/admin/leads/${leadId}/documents/checklist/${encodeURIComponent(checklistKey)}/upload`,
+            `${leadBase()}/${leadId}/documents/checklist/${encodeURIComponent(checklistKey)}/upload`,
             { files },
             {
                 forceFormData: true,
@@ -1901,7 +1902,7 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
         if (submitting) return;
         setSubmitting(true);
         router.post(
-            `/admin/leads/${leadId}/documents/requests`,
+            `${leadBase()}/${leadId}/documents/requests`,
             {
                 items: [{
                     label:       rowLabel,
@@ -2004,7 +2005,7 @@ function RequestRow({ req, leadId }) {
     const cancel = () => {
         if (busy) return;
         setBusy(true);
-        router.delete(`/admin/leads/${leadId}/documents/requests/${req.id}`, {
+        router.delete(`${leadBase()}/${leadId}/documents/requests/${req.id}`, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => toast.success("Request removed"),
@@ -2016,7 +2017,7 @@ function RequestRow({ req, leadId }) {
     const resend = () => {
         if (sending) return;
         setSending(true);
-        router.post(`/admin/leads/${leadId}/documents/requests/${req.id}/resend`, {}, {
+        router.post(`${leadBase()}/${leadId}/documents/requests/${req.id}/resend`, {}, {
             preserveScroll: true,
             preserveState: true,
             onError: (e) => toast.error(Object.values(e)[0] || "Could not send"),
@@ -2109,7 +2110,7 @@ function RfiRequestTableRow({ req, leadId }) {
         const fd = new FormData();
         files.forEach((f) => fd.append("files[]", f));
         setUploading(true);
-        router.post(`/admin/leads/${leadId}/documents/requests/${req.id}/upload`, fd, {
+        router.post(`${leadBase()}/${leadId}/documents/requests/${req.id}/upload`, fd, {
             forceFormData: true, preserveScroll: true, preserveState: true,
             onSuccess: () => toast.success("Uploaded on behalf of the client"),
             onError: (er) => toast.error(Object.values(er)[0] || "Upload failed"),
@@ -2121,7 +2122,7 @@ function RfiRequestTableRow({ req, leadId }) {
     const persistStatus = (nextStatus, nextNote) => {
         if (! doc) return;
         setSavingStatus(true);
-        router.post(`/admin/leads/${leadId}/documents/${doc.id}/status`,
+        router.post(`${leadBase()}/${leadId}/documents/${doc.id}/status`,
             { status: nextStatus, note: nextNote },
             {
                 preserveScroll: true, preserveState: true, only: ["documentRequests", "documents"],
@@ -2139,7 +2140,7 @@ function RfiRequestTableRow({ req, leadId }) {
     const cancel = () => {
         if (busy) return;
         setBusy(true);
-        router.delete(`/admin/leads/${leadId}/documents/requests/${req.id}`, {
+        router.delete(`${leadBase()}/${leadId}/documents/requests/${req.id}`, {
             preserveScroll: true, preserveState: true,
             onSuccess: () => toast.success("Request removed"),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not remove"),
@@ -2149,7 +2150,7 @@ function RfiRequestTableRow({ req, leadId }) {
     const resend = () => {
         if (sending) return;
         setSending(true);
-        router.post(`/admin/leads/${leadId}/documents/requests/${req.id}/resend`, {}, {
+        router.post(`${leadBase()}/${leadId}/documents/requests/${req.id}/resend`, {}, {
             preserveScroll: true, preserveState: true,
             onError: (e) => toast.error(Object.values(e)[0] || "Could not send"),
             onFinish: () => setSending(false),
@@ -2311,7 +2312,7 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
         if (items.length === 0) { toast.error("Pick at least one document to request"); return; }
         setSubmitting(true);
         router.post(
-            `/admin/leads/${leadId}/documents/requests`,
+            `${leadBase()}/${leadId}/documents/requests`,
             { items, message: message.trim() || null },
             {
                 preserveScroll: true,
@@ -2437,7 +2438,7 @@ function VifButtons({ vif, leadId = null, checklistKey = null, keyThreads = [] }
     const canThread = !! (leadId && checklistKey);
     const postToThread = canThread
         ? (body) => new Promise((resolve) => {
-            router.post(`/portal/immigration/cases/${leadId}/threads`,
+            router.post(`${immBase()}/cases/${leadId}/threads`,
                 { anchor_type: "checklist", anchor_key: checklistKey, body, addressed_to_id: null, requires_answer: false, client_visible: false },
                 {
                     preserveScroll: true,

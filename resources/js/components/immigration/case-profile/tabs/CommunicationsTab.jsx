@@ -5,6 +5,7 @@ import {
     Mail, MessageSquare, Inbox, Send, Loader2,
     CheckCircle2, Clock, XCircle, CornerUpLeft, MailOpen,
 } from "lucide-react";
+import { leadBase } from "@/lib/caseRoutes";
 
 // Case-profile Communications tab — a two-pane message centre: the full thread
 // (outbound sends + inbound client replies) on the left, the selected message on
@@ -334,7 +335,7 @@ function ReplyComposer({ lead, defaultChannel = "email", replySubject = "" }) {
         if (! body.trim() || sending) return;
         if (channel === "email" && ! subject.trim()) { toast.error("Add a subject for the email"); return; }
         setSending(true);
-        fetch(`/admin/leads/${lead.id}/compose`, {
+        fetch(`${leadBase()}/${lead.id}/compose`, {
             method: "POST",
             headers: { "X-XSRF-TOKEN": xsrf(), "Content-Type": "application/json", Accept: "application/json" },
             body: JSON.stringify({ channel, subject: channel === "sms" ? null : subject, body }),

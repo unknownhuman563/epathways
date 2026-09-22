@@ -355,6 +355,7 @@ class ImmigrationController extends Controller
                 'stageUpdater:id,name',
                 'lastActivityUser:id,name',
                 'owner:id,name,avatar_path',
+                'agent:id,name',
             ])
                 ->immigrationCase()
                 ->when($scope, $scope)
@@ -484,6 +485,10 @@ class ImmigrationController extends Controller
                             'avatar_url' => $l->owner->avatar_url,
                         ] : null,
                         'owner_since' => optional($l->owner_since)?->toIso8601String(),
+                        // Referring agent (external recruiting agent, role=agent)
+                        // — editable from the row's Edit-case modal.
+                        'agent_id' => $l->agent_id,
+                        'agent' => $l->agent ? ['id' => $l->agent->id, 'name' => $l->agent->name] : null,
                         'custody_stale' => $custodyStale,
                         'idle_days' => $idleDays,
                         // Build 12 phase 6 — open questions on this case addressed
@@ -542,6 +547,15 @@ class ImmigrationController extends Controller
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'avatar_url' => $u->avatar_url])
                 ->values();
 
+            // Referral agents (+ sub-agents) for the "Referring agent" picker on
+            // the Edit-case modal — the external recruiter credited with a case.
+            $agents = \App\Models\User::query()
+                ->whereIn('role', ['agent', 'sub_agent'])
+                ->orderBy('name')
+                ->get(['id', 'name', 'referral_code', 'role'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'referral_code' => $u->referral_code, 'role' => $u->role])
+                ->values();
+
             return [
                 'cases' => $cases,
                 'distribution' => $distribution,
@@ -550,6 +564,7 @@ class ImmigrationController extends Controller
                 'visaTypes' => $visaTypes,
                 'me_id' => auth()->id(),
                 'staff' => $staff,
+                'agents' => $agents,
                 // True queue size vs. how many we loaded — the UI shows an honest
                 // count and warns if the safety ceiling ever truncated the list.
                 'total' => $total,
@@ -564,6 +579,7 @@ class ImmigrationController extends Controller
                 'priorities' => ['urgent' => 0, 'high' => 0, 'medium' => 0, 'low' => 0, 'done' => 0, 'none' => 0],
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => [],
+                'agents' => [],
                 'total' => 0,
                 'loaded' => 0,
             ];
@@ -618,6 +634,7 @@ class ImmigrationController extends Controller
             ->orderByDesc('updated_at')->limit(300)->get()
             ->map(fn ($u) => [
                 'id' => $u->id,
+                'kind' => 'usage',
                 'format_id' => $u->document_format_id,
                 'format_name' => $u->format?->name,
                 'case_id' => $u->lead_id,
@@ -626,6 +643,25 @@ class ImmigrationController extends Controller
                 'state' => $u->state ?: 'edited',
                 'updated_at' => optional($u->updated_at)->toIso8601String(),
             ]);
+
+        // Documents actually sent to a client from the composer (Send to client)
+        // — surfaced in the same "Sent to cases" list so a send is visible here.
+        $sent = \App\Models\LeadDocument::with(['lead:id,lead_id,first_name,last_name'])
+            ->where('source_variant', 'client_document')
+            ->orderByDesc('updated_at')->limit(300)->get()
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'kind' => 'sent',
+                'format_id' => null,
+                'format_name' => $d->original_name,
+                'case_id' => $d->lead_id,
+                'case_name' => $d->lead ? (trim("{$d->lead->first_name} {$d->lead->last_name}") ?: $d->lead->lead_id) : '—',
+                'case_ref' => $d->lead?->lead_id,
+                'state' => 'sent',
+                'updated_at' => optional($d->updated_at)->toIso8601String(),
+            ]);
+
+        $usages = $usages->concat($sent)->sortByDesc('updated_at')->values();
 
         return inertia($page, [
             'portal' => $portal,
@@ -1193,6 +1229,7 @@ class ImmigrationController extends Controller
             'internal_note' => 'nullable|string|max:5000',
             'payment' => 'nullable|string|max:120',
             'visa_type_id' => 'nullable|integer|exists:visa_types,id',
+            'agent_id' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('users', 'id')->whereIn('role', ['agent', 'sub_agent'])],
         ]);
 
         $visa = \App\Models\VisaType::find($data['visa_type_id']);
@@ -1210,6 +1247,7 @@ class ImmigrationController extends Controller
             'immigration_priority' => $data['immigration_priority'] ?? null,
             'inz_visa_type' => $visa?->name,
             'student_payment' => $data['payment'] ?? null,
+            'agent_id' => $data['agent_id'] ?? null,
             // Mark immediately as an immigration case so scopeImmigrationCase
             // picks it up without waiting for a stage hand-off.
             'is_immigration_case' => true,
@@ -1259,6 +1297,7 @@ class ImmigrationController extends Controller
             'internal_note' => 'nullable|string|max:5000',
             'payment' => 'nullable|string|max:120',
             'visa_type_id' => 'nullable|integer|exists:visa_types,id',
+            'agent_id' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('users', 'id')->whereIn('role', ['agent', 'sub_agent'])],
         ]);
 
         $visa = \App\Models\VisaType::find($data['visa_type_id']);
@@ -1275,6 +1314,7 @@ class ImmigrationController extends Controller
             'immigration_priority' => $data['immigration_priority'] ?? null,
             'inz_visa_type' => $visa?->name,
             'student_payment' => $data['payment'] ?? null,
+            'agent_id' => $data['agent_id'] ?? null,
         ]);
 
         // A note is optional on edit — only append when the staffer typed one.

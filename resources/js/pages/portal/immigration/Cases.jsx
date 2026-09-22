@@ -13,15 +13,19 @@ import {
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { priorityRing, priorityRank } from "@/utils/priority";
+import { immBase, leadBase, isAgentCasePortal } from "@/lib/caseRoutes";
 
-// This board is shared by the manager (/portal/immigration) and the adviser
-// (/portal/immigration-adviser) portals. Route the case-profile link to the
-// current portal so opening a case keeps its own sidebar chrome.
+// This board is shared by the manager (/portal/immigration), the adviser
+// (/portal/immigration-adviser), and a First-Immigration recruiting agent
+// (/portal/agent, their own referrals). Route the case-profile link to the
+// current portal so opening a case keeps its own sidebar chrome. immBase()
+// resolves /portal/immigration vs /portal/agent from the URL; the adviser
+// portal is handled explicitly.
 const caseProfileHref = (id, tab) => {
     const onAdviser = typeof window !== "undefined" && window.location.pathname.startsWith("/portal/immigration-adviser");
     const base = onAdviser
         ? `/portal/immigration-adviser/cases/${id}`
-        : `/portal/immigration/cases/${id}/profile`;
+        : `${immBase()}/cases/${id}/profile`;
     return tab ? `${base}?tab=${tab}` : base;
 };
 
@@ -126,7 +130,7 @@ const tabKeyForStage = (stage) => {
     return hit ? hit.key : 'applications';
 };
 
-export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [], me_id = null, staff = [], total: totalCount = null, loaded = null }) {
+export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [], agents = [], me_id = null, staff = [], total: totalCount = null, loaded = null, readOnly = false }) {
     // True queue size vs. how many the server actually loaded. When these
     // differ, the safety ceiling truncated the list — warn loudly rather than
     // silently hiding cases (the "For Assessment cases vanished" bug).
@@ -271,13 +275,15 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                         className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 shadow-sm focus:outline-none focus:border-gray-400 transition-colors"
                     />
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setCreating(true)}
-                    className="px-4 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 flex-shrink-0"
-                >
-                    <Plus size={14} strokeWidth={2.5} /> Add new case
-                </button>
+                {! readOnly && ! isAgentCasePortal() && (
+                    <button
+                        type="button"
+                        onClick={() => setCreating(true)}
+                        className="px-4 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 flex-shrink-0"
+                    >
+                        <Plus size={14} strokeWidth={2.5} /> Add new case
+                    </button>
+                )}
             </div>
 
             {/* Toolbar */}
@@ -403,6 +409,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                     meId={me_id}
                                     stages={stages}
                                     visaTypes={visaTypes}
+                                    readOnly={readOnly}
                                     isExpanded={expandedId === c.id}
                                     onExpand={() => setExpandedId(expandedId === c.id ? null : c.id)}
                                     stageMenuOpen={openStageMenuId === c.id}
@@ -424,6 +431,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                     editing={editingCase}
                     stages={stages}
                     visaTypes={visaTypes}
+                    agents={agents}
                     onClose={() => { setCreating(false); setEditingCase(null); }}
                 />
             )}
@@ -450,7 +458,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
 
 // ─── Create case modal ─────────────────────────────────────────────────
 
-function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
+function CreateCaseModal({ stages, visaTypes, agents = [], editing = null, onClose }) {
     const isEdit = !!editing;
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         first_name: editing?.first_name || '',
@@ -464,6 +472,7 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
         immigration_priority: editing?.immigration_priority || '',
         internal_note: '',
         payment: editing?.payment || '',
+        agent_id: editing?.agent_id || '',
         // The case row stores the visa *name* (inz_visa_type); map it back to
         // the matching option id so the dropdown pre-selects on edit.
         visa_type_id: editing
@@ -476,7 +485,7 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
     const submit = (e) => {
         e?.preventDefault();
         clearErrors();
-        const url = isEdit ? `/portal/immigration/cases/${editing.id}` : `/portal/immigration/cases`;
+        const url = isEdit ? `${immBase()}/cases/${editing.id}` : `${immBase()}/cases`;
         post(url, {
             preserveScroll: true,
             onSuccess: () => { reset(); onClose(); },
@@ -672,6 +681,21 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
                             />
                         </CaseField>
                     </div>
+
+                    <CaseField label="Referring agent" hint="The recruiter credited with this case" error={errors.agent_id}>
+                        <select
+                            value={data.agent_id}
+                            onChange={(e) => setData('agent_id', e.target.value)}
+                            className={caseInput(errors.agent_id)}
+                        >
+                            <option value="">— none —</option>
+                            {agents.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}{a.referral_code ? ` (${a.referral_code})` : ''}{a.role === 'sub_agent' ? ' · sub-agent' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </CaseField>
 
                     <CaseField label="Internal note" hint="Optional — only staff see this" error={errors.internal_note}>
                         <textarea
@@ -972,7 +996,14 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
 
 // ─── Table row ──────────────────────────────────────────────────────────
 
-function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit, onViewFiles, onHandoff }) {
+function CaseRow({ c, meId = null, stages, visaTypes = [], readOnly = false, isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit, onViewFiles, onHandoff }) {
+    // Recruiting agents get this exact board read-only (list of their referrals'
+    // cases). When readOnly, the name isn't a link (no case profile for agents),
+    // the inline editors render as static chips, and the Actions menu is hidden.
+    const CaseNameWrapper = readOnly ? 'div' : Link;
+    const caseNameProps = readOnly
+        ? { className: 'flex items-center gap-2.5 min-w-[200px]' }
+        : { href: caseProfileHref(c.id), className: 'flex items-center gap-2.5 min-w-[200px] group/case' };
     // DOCS progress reflects the visa checklist: how many required items
     // the case has submitted, out of the total required.
     const chkTotal = c.checklist_total || 0;
@@ -999,10 +1030,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
 
                 {/* Case (avatar + name) */}
                 <td className="px-3 py-2.5">
-                    <Link
-                        href={caseProfileHref(c.id)}
-                        className="flex items-center gap-2.5 min-w-[200px] group/case"
-                    >
+                    <CaseNameWrapper {...caseNameProps}>
                         <div
                             className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 overflow-hidden ${c.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(c.immigration_priority)}` : priorityColor(c.immigration_priority)}`}
                             title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : 'No priority set'}
@@ -1038,6 +1066,13 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                                     </span>
                                 </div>
                             )}
+                            {c.agent && (
+                                <div className="mt-1 flex items-center gap-1" title={`Referring agent: ${c.agent.name}`}>
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200">
+                                        <UserPlus size={10} /> {c.agent.name}
+                                    </span>
+                                </div>
+                            )}
                             <AttentionChip openedAt={c.attention_opened_at} />
                         </div>
                         {needsAttention && (
@@ -1045,7 +1080,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                                 <AlertTriangle size={11} className="text-rose-500" />
                             </span>
                         )}
-                    </Link>
+                    </CaseNameWrapper>
                 </td>
 
                 {/* Stage picker + endorser subtitle */}
@@ -1055,6 +1090,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                         stages={stages}
                         value={c.immigration_stage || ''}
                         fallback={c.inz_status}
+                        readOnly={readOnly}
                         open={stageMenuOpen}
                         onToggle={onStageMenuToggle}
                         onClose={onStageMenuClose}
@@ -1063,7 +1099,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
 
                 {/* Visa picker (inline inz_visa_type edit) */}
                 <td className="px-3 py-2.5">
-                    <VisaPicker caseId={c.id} visaTypes={visaTypes} value={c.inz_visa_type || ''} />
+                    <VisaPicker caseId={c.id} visaTypes={visaTypes} value={c.inz_visa_type || ''} readOnly={readOnly} />
                 </td>
 
                 {/* Country */}
@@ -1128,7 +1164,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                 {/* Actions — collapsed into a three-dot menu. Mirrors
                     the row-menu pattern in portal/sales/Leads.jsx. */}
                 <td className="px-3 py-2.5 pr-4 text-right">
-                    <RowMenu
+                    {readOnly ? null : <RowMenu
                         items={[
                             c.tracking_code && {
                                 key: 'copy',
@@ -1167,7 +1203,9 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                                 icon: Pencil,
                                 onClick: () => onEdit?.(),
                             },
-                            {
+                            // A recruiting agent works their referrals but can't
+                            // archive/delete the case — that stays with staff.
+                            ! isAgentCasePortal() && {
                                 key: 'archive',
                                 label: 'Archive case',
                                 icon: Archive,
@@ -1175,14 +1213,14 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                                 onClick: () => archiveCase(c.id, c.name),
                             },
                         ].filter(Boolean)}
-                    />
+                    />}
                 </td>
             </tr>
 
             {isExpanded && (
                 <tr className="bg-amber-50/20 border-t border-amber-100/60">
                     <td colSpan={9} className="px-6 py-4">
-                        <CaseDetail c={c} />
+                        <CaseDetail c={c} readOnly={readOnly} />
                     </td>
                 </tr>
             )}
@@ -1300,7 +1338,7 @@ function HandoffModal({ c, meId = null, staff = [], onClose }) {
     const submit = (targetId) => {
         if (!targetId) return;
         setSubmitting(true);
-        router.post(`/portal/immigration/cases/${c.id}/handoff`, { to_user_id: targetId, note }, {
+        router.post(`${immBase()}/cases/${c.id}/handoff`, { to_user_id: targetId, note }, {
             preserveScroll: true,
             onSuccess: () => onClose(),
             onError: () => toast.error("Could not hand off the case."),
@@ -1405,10 +1443,10 @@ function HandoffModal({ c, meId = null, staff = [], onClose }) {
     );
 }
 
-function CaseDetail({ c }) {
+function CaseDetail({ c, readOnly = false }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <PriorityField c={c} />
+            <PriorityField c={c} readOnly={readOnly} />
             <DetailField label="Email"        value={c.email} />
             <DetailField label="Phone"        value={c.phone} />
             <DetailField label="INZ Status"   value={c.inz_status} />
@@ -1430,15 +1468,28 @@ function CaseDetail({ c }) {
 // Inline priority selector shown in the expanded row — posts immediately
 // on change. Coloured dot mirrors the case avatar (red / orange / green /
 // gray) so the level reads at a glance.
-function PriorityField({ c }) {
+function PriorityField({ c, readOnly = false }) {
     const [saving, setSaving] = useState(false);
     const value = c.immigration_priority || '';
+
+    // Read-only (recruiting agent view): static priority label, no <select>.
+    if (readOnly) {
+        return (
+            <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Priority</p>
+                <div className="flex items-center gap-1.5">
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${priorityColor(value)}`} />
+                    <span className="flex-1 text-xs font-semibold text-gray-900 capitalize">{value || 'No priority'}</span>
+                </div>
+            </div>
+        );
+    }
 
     const change = (e) => {
         const v = e.target.value;
         setSaving(true);
         router.post(
-            `/portal/immigration/cases/${c.id}/priority`,
+            `${immBase()}/cases/${c.id}/priority`,
             { immigration_priority: v || null },
             { preserveScroll: true, preserveState: true, onFinish: () => setSaving(false) },
         );
@@ -1486,7 +1537,7 @@ function DetailField({ label, value }) {
 
 // ─── Stage picker (inline immigration_stage edit) ───────────────────────
 
-function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose }) {
+function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose, readOnly = false }) {
     const [saving, setSaving] = useState(false);
     const [declineOpen, setDeclineOpen] = useState(false);
     // Stages that capture an optional note when the case is moved into them.
@@ -1541,6 +1592,16 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
     const label = value || fallback || 'Set stage';
     const chipClass = value ? stageChipClass(value) : 'bg-gray-100 text-gray-500 border-gray-200 border-dashed';
 
+    // Read-only (recruiting agent view): the stage renders as a static chip —
+    // same look, no dropdown.
+    if (readOnly) {
+        return (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border whitespace-nowrap uppercase ${chipClass}`}>
+                <span className="truncate max-w-[180px]">{label}</span>
+            </span>
+        );
+    }
+
     const select = (stage) => {
         // Declining a visa is more than a stage flip — it opens a modal to
         // attach the decline letter, add a note, and email the client.
@@ -1572,7 +1633,7 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
         setSaving(true);
         onClose();
         router.post(
-            `/portal/immigration/cases/${caseId}/stage`,
+            `${immBase()}/cases/${caseId}/stage`,
             { immigration_stage: stage },
             {
                 preserveScroll: true,
@@ -1678,7 +1739,7 @@ function StageNoteModal({ caseId, stage, onClose }) {
         if (saving) return;
         setSaving(true);
         router.post(
-            `/portal/immigration/cases/${caseId}/stage`,
+            `${immBase()}/cases/${caseId}/stage`,
             { immigration_stage: stage, stage_note: note },
             {
                 preserveScroll: true,
@@ -1754,7 +1815,7 @@ function DeclineVisaModal({ caseId, onClose }) {
         if (saving) return;
         setSaving(true);
         router.post(
-            `/portal/immigration/cases/${caseId}/decline`,
+            `${immBase()}/cases/${caseId}/decline`,
             { document: file, note, notify: notify ? 1 : 0 },
             {
                 forceFormData: true,
@@ -1857,7 +1918,7 @@ function OutcomeModal({ caseId, stage, onClose }) {
         if (saving) return;
         setSaving(true);
         router.post(
-            `/portal/immigration/cases/${caseId}/outcome`,
+            `${immBase()}/cases/${caseId}/outcome`,
             { stage, document: file, note, notify: notify ? 1 : 0 },
             {
                 forceFormData: true,
@@ -1997,7 +2058,7 @@ function RequestInfoModal({ caseId, onClose }) {
         chosen.forEach((f) => fd.append("documents[]", f));
         setAnalyzing(true);
         window.axios
-            .post(`/portal/immigration/cases/${caseId}/rfi/analyze`, fd)
+            .post(`${immBase()}/cases/${caseId}/rfi/analyze`, fd)
             .then(({ data }) => {
                 setAiUsed(!!data.ai_used);
                 setTextFound(data.text_found !== false);
@@ -2029,7 +2090,7 @@ function RequestInfoModal({ caseId, onClose }) {
             .map((d) => ({ label: d.label.trim(), description: d.description.trim(), required: d.required ? 1 : 0 }));
         setSaving(true);
         router.post(
-            `/portal/immigration/cases/${caseId}/rfi`,
+            `${immBase()}/cases/${caseId}/rfi`,
             { deadline, note, notify: notify ? 1 : 0, documents: files, requested_documents },
             {
                 forceFormData: true,
@@ -2255,7 +2316,7 @@ function RequestInfoModal({ caseId, onClose }) {
 // Mirrors StagePicker but self-manages its open state. Posts the chosen
 // visa_type_id; the controller stamps the matching VisaType name onto
 // inz_visa_type (or clears it when "None" is chosen).
-function VisaPicker({ caseId, visaTypes = [], value }) {
+function VisaPicker({ caseId, visaTypes = [], value, readOnly = false }) {
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
@@ -2301,13 +2362,24 @@ function VisaPicker({ caseId, visaTypes = [], value }) {
         setSaving(true);
         setOpen(false);
         router.post(
-            `/portal/immigration/cases/${caseId}/visa`,
+            `${immBase()}/cases/${caseId}/visa`,
             { visa_type_id: visaTypeId },
             { preserveScroll: true, preserveState: true, onFinish: () => setSaving(false) },
         );
     };
 
     const hasValue = !! value;
+
+    // Read-only (recruiting agent view): static visa-type chip, no dropdown.
+    if (readOnly) {
+        return (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border whitespace-nowrap ${
+                hasValue ? 'bg-white text-gray-700 border-gray-200' : 'bg-gray-100 text-gray-400 border-gray-200 border-dashed'
+            }`}>
+                <span className="truncate max-w-[190px]">{value || '—'}</span>
+            </span>
+        );
+    }
 
     return (
         <>
@@ -2620,7 +2692,7 @@ const portalRequestItem = (row, onRequest) => {
 };
 function requestCasePortal(c) {
     if (! window.confirm(`Request Lead Portal access for ${c.name || "this client"}? Admin will review and approve.`)) return;
-    router.post(`/portal/immigration/leads/${c.id}/portal-invitation/request`, {}, {
+    router.post(`${immBase()}/leads/${c.id}/portal-invitation/request`, {}, {
         preserveScroll: true,
         preserveState: true,
         onSuccess: () => toast.success("Portal access requested."),
@@ -2637,7 +2709,7 @@ function requestCasePortal(c) {
 function archiveCase(id, name) {
     const label = (name || 'this case').trim();
     if (! window.confirm(`Archive ${label}?\n\nThe case will be hidden from the Cases list. Notes, tasks, and documents are preserved and the case can be restored later.`)) return;
-    router.delete(`/admin/leads/${id}`, {
+    router.delete(`${leadBase()}/${id}`, {
         preserveScroll: true,
         onSuccess: () => toast.success(`${label} archived`),
         onError: () => toast.error('Could not archive — please try again.'),

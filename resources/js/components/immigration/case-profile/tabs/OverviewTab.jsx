@@ -8,6 +8,7 @@ import { useState, useRef } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import { Pin, CheckSquare, Square, Paperclip, X, FileText, Plus, Pencil } from "lucide-react";
+import { leadBase } from "@/lib/caseRoutes";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—");
 const fmtShort = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "—");
@@ -374,7 +375,7 @@ function NoteReplyBox({ leadId, parentId = null, placeholder, onDone, onCancel }
     const submit = () => {
         if (! body.trim() && ! files.length) return;
         setPosting(true);
-        router.post(`/admin/leads/${leadId}/notes`, { body: body || "(attachment)", parent_id: parentId, files }, {
+        router.post(`${leadBase()}/${leadId}/notes`, { body: body || "(attachment)", parent_id: parentId, files }, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => { setBody(""); setFiles([]); onDone && onDone(); },
@@ -421,7 +422,7 @@ function InternalNotes({ leadId, notes = [], onSeeAll }) {
     const submit = () => {
         if (! body.trim() && ! files.length) return;
         setPosting(true);
-        router.post(`/admin/leads/${leadId}/notes`, { body: body || "(attachment)", pinned, kind, files }, {
+        router.post(`${leadBase()}/${leadId}/notes`, { body: body || "(attachment)", pinned, kind, files }, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => { setBody(""); setPinned(false); setKind("general"); setFiles([]); },
