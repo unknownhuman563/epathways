@@ -6,6 +6,7 @@ import {
     CircleDashed, MinusCircle, Play, DollarSign, Gavel, Stamp,
 } from "lucide-react";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
+import { immBase } from "@/lib/caseRoutes";
 
 const fmtDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : null;
@@ -49,7 +50,7 @@ export default function ProcessTab({ lead, process = { started: false, steps: []
                 </p>
                 <button
                     type="button"
-                    onClick={() => post(`/portal/immigration/cases/${lead.id}/steps/start`, {}, "Process tracking started")}
+                    onClick={() => post(`${immBase()}/cases/${lead.id}/steps/start`, {}, "Process tracking started")}
                     className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black"
                 >
                     <Play size={14} /> Start process tracking
@@ -122,7 +123,7 @@ function VerdictPanel({ leadId, steps, verdict, hasLodgementSignoff, canAttest, 
         if (reasonRequired && ! reason.trim()) return toast.error("A reason is required for this verdict");
         if (needsStep && ! stepKey) return toast.error("Choose which step to send back to");
         post(
-            `/portal/immigration/cases/${leadId}/verdict`,
+            `${immBase()}/cases/${leadId}/verdict`,
             { verdict: choice, reason: reason || null, step_key: needsStep ? stepKey : null },
             "Verdict recorded",
         );
@@ -130,7 +131,7 @@ function VerdictPanel({ leadId, steps, verdict, hasLodgementSignoff, canAttest, 
     };
 
     const submitSignoff = () =>
-        post(`/portal/immigration/cases/${leadId}/lodgement-signoff`, { reason: signoffReason || null }, "Lodgement signed off");
+        post(`${immBase()}/cases/${leadId}/lodgement-signoff`, { reason: signoffReason || null }, "Lodgement signed off");
 
     const cur = verdict ? VERDICT_META[verdict.verdict] : null;
     const reopenable = steps.filter((s) => s.status !== "not_applicable");
@@ -253,7 +254,7 @@ function StepRow({ leadId, step, post, stepThreads = [], caseStaff = [] }) {
     const reopen = () => {
         const trigger = step.step_key === "12" || step.step_key === "13" ? "rfi" : "manual";
         const reason = window.prompt(`Re-open step ${step.step_key}? Optional note:`) ?? "";
-        post(`/portal/immigration/cases/${leadId}/steps/${step.step_key}/reactivate`, { trigger, reason }, "Step re-opened");
+        post(`${immBase()}/cases/${leadId}/steps/${step.step_key}/reactivate`, { trigger, reason }, "Step re-opened");
     };
 
     return (
@@ -283,14 +284,14 @@ function StepRow({ leadId, step, post, stepThreads = [], caseStaff = [] }) {
             <div className="flex items-center gap-1.5 flex-shrink-0">
                 {isActive && step.is_qc && (
                     <>
-                        <button type="button" onClick={() => post(`/portal/immigration/cases/${leadId}/steps/${step.step_key}/complete`, { qc_result: "pass" }, "QC passed")}
+                        <button type="button" onClick={() => post(`${immBase()}/cases/${leadId}/steps/${step.step_key}/complete`, { qc_result: "pass" }, "QC passed")}
                             className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700">QC pass</button>
-                        <button type="button" onClick={() => post(`/portal/immigration/cases/${leadId}/steps/${step.step_key}/complete`, { qc_result: "fail" }, "QC failed")}
+                        <button type="button" onClick={() => post(`${immBase()}/cases/${leadId}/steps/${step.step_key}/complete`, { qc_result: "fail" }, "QC failed")}
                             className="px-2.5 py-1 rounded-lg border border-rose-200 text-rose-600 text-[11px] font-semibold hover:bg-rose-50">QC fail</button>
                     </>
                 )}
                 {isActive && ! step.is_qc && (
-                    <button type="button" onClick={() => post(`/portal/immigration/cases/${leadId}/steps/${step.step_key}/complete`, {}, "Step completed")}
+                    <button type="button" onClick={() => post(`${immBase()}/cases/${leadId}/steps/${step.step_key}/complete`, {}, "Step completed")}
                         className="px-2.5 py-1 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black inline-flex items-center gap-1">
                         <Check size={12} /> Complete
                     </button>
@@ -328,7 +329,7 @@ function PaymentPanel({ leadId, payment, post }) {
     const [method, setMethod] = useState(payment?.method ?? "");
 
     const submit = () =>
-        post(`/portal/immigration/cases/${leadId}/payment`, { amount_expected: expected || 0, amount_received: received || 0, method }, "Payment recorded");
+        post(`${immBase()}/cases/${leadId}/payment`, { amount_expected: expected || 0, amount_received: received || 0, method }, "Payment recorded");
 
     const statusChip = { paid: "bg-emerald-50 text-emerald-700 border-emerald-200", part_paid: "bg-amber-50 text-amber-700 border-amber-200", unpaid: "bg-rose-50 text-rose-700 border-rose-200" };
 
@@ -359,7 +360,7 @@ function PartnerPanel({ leadId, partner, post }) {
     const [docId, setDocId] = useState(partner?.choice_document_id ?? "");
 
     const submit = () =>
-        post(`/portal/immigration/cases/${leadId}/partner-recommendation`, {
+        post(`${immBase()}/cases/${leadId}/partner-recommendation`, {
             recommended_main_applicant: main, recommendation_reason: reason,
             client_choice: choice, choice_document_id: docId || null,
         }, "Partner recommendation saved");

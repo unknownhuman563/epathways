@@ -990,6 +990,10 @@ Route::middleware(['auth'])->group(function () {
 
         // Document formats — staff-built Word-style documents + their per-case use.
         Route::post('/admin/document-formats', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'store'])->name('admin.document-formats.store');
+        // Static path — must be registered before the {format} routes below so
+        // "send-to-case" isn't captured as a route-model binding.
+        Route::post('/admin/document-formats/send-to-case', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'sendToCase'])->name('admin.document-formats.send-to-case');
+        Route::post('/admin/document-formats/download', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'download'])->name('admin.document-formats.download');
         Route::post('/admin/document-formats/{format}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'update'])->name('admin.document-formats.update');
         Route::delete('/admin/document-formats/{format}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'destroy'])->name('admin.document-formats.destroy');
         Route::post('/admin/document-formats/{format}/apply', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'apply'])->name('admin.document-formats.apply');
@@ -1334,6 +1338,11 @@ Route::middleware(['auth'])->group(function () {
             // been converted. Scoped inside students(); no write routes exist.
             Route::get('/students', [\App\Http\Controllers\Portal\AgentController::class, 'students'])
                 ->middleware('module:referral_students')->name('students');
+            // Cases — the agent's own referrals that became immigration cases.
+            // Gated by the referral_cases module; row-scoped to agent_id inside
+            // the controller (portal:agent proves the role only).
+            Route::get('/cases', [\App\Http\Controllers\Portal\AgentController::class, 'cases'])
+                ->middleware('module:referral_cases')->name('cases');
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
             Route::get('/agreement', [\App\Http\Controllers\Portal\AgentController::class, 'agreement'])->name('agreement');
             Route::post('/agreement/details', [\App\Http\Controllers\Portal\AgentController::class, 'updateAgreementDetails'])->name('agreement.details');
@@ -1471,6 +1480,114 @@ Route::middleware(['auth'])->group(function () {
             ->name('portal.agent.profile.')->group($leadProfileRoutes);
         Route::middleware(['portal:sub_agent', 'lead.scope'])->prefix('sub-agent')
             ->name('portal.sub-agent.profile.')->group($leadProfileRoutes);
+
+        /*
+        |----------------------------------------------------------------------
+        | Agent Case management — the immigration Cases board + Case Profile and
+        | their write surface, mirrored under the Agent portal so a First-
+        | Immigration recruiting agent can work their OWN referrals' cases just
+        | like staff (open/edit the profile, leave notes, set stage / visa /
+        | priority), with the licensed adviser assisting on advice.
+        |----------------------------------------------------------------------
+        |
+        | Same controllers immigration staff use — the board + profile are made
+        | portal-relative (resources/js/lib/caseRoutes.js) so their buttons post
+        | here instead of /portal/immigration|/admin. Three gates stack:
+        |   portal:agent          — role
+        |   module:referral_cases — granted per agent in Module Management
+        |   lead.scope            — row-level: the {lead}/{id} must be agent_id=me
+        | Advice-bearing actions (verdict, partner recommendation, lodgement
+        | sign-off) stay licence-gated INSIDE the controllers, so an unlicensed
+        | agent still can't author advice — that's where the adviser assists.
+        */
+        $agentCaseRoutes = function () {
+            $imm = \App\Http\Controllers\Portal\ImmigrationController::class;
+            $cp = \App\Http\Controllers\Immigration\CaseProfileController::class;
+            $agr = \App\Http\Controllers\Immigration\AgreementController::class;
+            $agent = \App\Http\Controllers\Portal\AgentController::class;
+            $docs = \App\Http\Controllers\LeadDocumentController::class;
+
+            // The Case Profile page itself, under Agent chrome.
+            Route::get('/cases/{lead}/profile', [$agent, 'caseProfile']);
+
+            // Board inline actions (stage, outcomes, RFI, visa, priority, handoff,
+            // edit) — {id} is the case/lead id, so lead.scope scopes them. NOTE:
+            // create ('/cases' POST) is deliberately NOT mirrored — an agent works
+            // existing referrals, not brand-new cases.
+            Route::post('/cases/{id}/stage', [$imm, 'updateCaseStage']);
+            Route::post('/cases/{id}/decline', [$imm, 'declineVisa']);
+            Route::post('/cases/{id}/outcome', [$imm, 'recordOutcome']);
+            Route::post('/cases/{id}/rfi/analyze', [$imm, 'analyzeRfi']);
+            Route::post('/cases/{id}/rfi', [$imm, 'requestForInformation']);
+            Route::post('/cases/{id}/visa', [$imm, 'updateCaseVisa']);
+            Route::post('/cases/{id}/priority', [$imm, 'updateCasePriority']);
+            Route::post('/cases/{id}/handoff', [$imm, 'handoff']);
+            Route::post('/cases/{id}', [$imm, 'updateCase']);
+
+            // Case Profile write endpoints ({lead} = case/lead id).
+            Route::post('/cases/{lead}/personal', [$cp, 'updatePersonal']);
+            Route::get('/cases/{lead}/assessment-ai-note', [$cp, 'assessmentAiNote']);
+            Route::post('/cases/{lead}/identity-scan', [$cp, 'identityScan']);
+            Route::post('/cases/{lead}/findings/reevaluate', [$cp, 'reevaluateFindings']);
+            Route::post('/cases/{lead}/findings/group-dismiss', [$cp, 'dismissFindingGroup']);
+            Route::post('/cases/{lead}/findings/{finding}/dismiss', [$cp, 'dismissFinding']);
+            Route::post('/cases/{lead}/steps/start', [$cp, 'startProcess']);
+            Route::post('/cases/{lead}/steps/{step}/complete', [$cp, 'completeStep']);
+            Route::post('/cases/{lead}/steps/{step}/reactivate', [$cp, 'reactivateStep']);
+            Route::post('/cases/{lead}/payment', [$cp, 'recordPayment']);
+            Route::post('/cases/{lead}/partner-recommendation', [$cp, 'partnerRecommendation']);
+            Route::post('/cases/{lead}/verdict', [$cp, 'recordVerdict']);
+            Route::post('/cases/{lead}/lodgement-signoff', [$cp, 'recordLodgementSignoff']);
+            Route::post('/cases/{lead}/threads', [$cp, 'storeThread']);
+            Route::post('/cases/{lead}/threads/{thread}/resolve', [$cp, 'resolveThread']);
+            Route::patch('/cases/{lead}/threads/{thread}', [$cp, 'updateThread']);
+            Route::post('/cases/{lead}/financials', [$cp, 'saveFinancials']);
+            Route::post('/cases/{lead}/financials/payments', [$cp, 'addFinancePayment']);
+            Route::delete('/cases/{lead}/financials/payments/{payment}', [$cp, 'deleteFinancePayment']);
+            Route::post('/cases/{lead}/financials/invoice', [$cp, 'generateInvoice']);
+            Route::get('/cases/{lead}/financials/invoice/preview', [$cp, 'previewInvoice']);
+            Route::post('/cases/{lead}/inz-forms/{code}/generate', [$cp, 'generateInzForm'])->where('code', 'INZ[0-9]+');
+            Route::post('/cases/{lead}/inz-forms/{code}/assign', [$cp, 'assignInzForm'])->where('code', 'INZ[0-9]+');
+
+            // Dependants (sub-records + their documents).
+            Route::post('/cases/{lead}/dependents', [$cp, 'addDependent']);
+            Route::get('/cases/{lead}/dependent-source', [$cp, 'dependentSourceIdentity']);
+            Route::put('/cases/{lead}/dependents/{dependent}', [$cp, 'updateDependent']);
+            Route::patch('/cases/{lead}/dependents/{dependent}/in-agreement', [$cp, 'setDependentInAgreement']);
+            Route::post('/cases/{lead}/dependents/{dependent}/open-case', [$cp, 'openDependentCase']);
+            Route::delete('/cases/{lead}/dependents/{dependent}', [$cp, 'deleteDependent']);
+            Route::post('/cases/{lead}/dependents/{dependent}/documents', [$cp, 'uploadDependentDocument']);
+            Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [$cp, 'setDependentDocumentStatus']);
+            Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/note', [$cp, 'setDependentDocumentNote']);
+            Route::delete('/cases/{lead}/dependents/{dependent}/documents/{document}', [$cp, 'deleteDependentDocument']);
+
+            // Managed agreements — /templates before /{agreement} so the literal wins.
+            Route::prefix('cases/{lead}/agreements')->group(function () use ($agr) {
+                Route::get('/', [$agr, 'index']);
+                Route::get('/templates', [$agr, 'templates']);
+                Route::post('/', [$agr, 'generate']);
+                Route::post('/{agreement}/send', [$agr, 'send']);
+                Route::get('/{agreement}/pdf', [$agr, 'downloadPdf']);
+                Route::post('/{agreement}/void', [$agr, 'void']);
+            });
+
+            // Client-portal invitation request from the board's row menu.
+            Route::post('/leads/{id}/portal-invitation/request', [\App\Http\Controllers\LeadPortalInvitationController::class, 'request']);
+
+            // Lead-scoped endpoints the Case Profile calls that aren't already in
+            // $leadProfileRoutes ({id}/{lead}/{leadId} = lead id → lead.scope).
+            Route::post('/leads/{lead}/compose', [\App\Http\Controllers\Sales\ComposeMessageController::class, 'send']);
+            Route::post('/leads/{id}/engagement/generate', [$docs, 'generateEngagement']);
+            Route::post('/leads/{id}/generate/{type}', [$docs, 'generateDocument']);
+            Route::get('/leads/{id}/generate/{type}/preview', [$docs, 'previewDocument']);
+            Route::post('/leads/{leadId}/documents/requests/{requestId}/upload', [$docs, 'staffRequestUpload']);
+
+            // Single-document download. No lead id in the URL, so lead.scope can't
+            // scope it — the wrapper re-checks the document's lead is agent_id=me.
+            Route::get('/documents/{docId}/download', [$agent, 'downloadCaseDocument']);
+        };
+        Route::middleware(['portal:agent', 'module:referral_cases', 'lead.scope'])->prefix('agent')
+            ->group($agentCaseRoutes);
 
         // Other portals — each has its own controller + dedicated dashboard
         // page. Admins satisfy every portal:* check via canAccessPortal(), so

@@ -7,6 +7,7 @@ import {
     ArrowRight, EyeOff, HelpCircle, ChevronRight, ChevronDown, Layers,
 } from "lucide-react";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
+import { immBase } from "@/lib/caseRoutes";
 
 const fmtWhen = (iso) => {
     if (! iso) return "never";
@@ -108,7 +109,7 @@ export default function AIHealthTab({ lead, findings = { items: [], evaluated_at
 
     const reevaluate = () => {
         setBusy(true);
-        router.post(`/portal/immigration/cases/${lead.id}/findings/reevaluate`, {}, {
+        router.post(`${immBase()}/cases/${lead.id}/findings/reevaluate`, {}, {
             preserveScroll: true,
             onSuccess: () => toast.success("Re-checking — findings refresh shortly."),
             onError: () => toast.error("Could not start a re-check."),
@@ -118,7 +119,7 @@ export default function AIHealthTab({ lead, findings = { items: [], evaluated_at
 
     const dismiss = (f) => {
         if (! reason.trim()) return;
-        router.post(`/portal/immigration/cases/${lead.id}/findings/${f.id}/dismiss`, { reason }, {
+        router.post(`${immBase()}/cases/${lead.id}/findings/${f.id}/dismiss`, { reason }, {
             preserveScroll: true,
             onSuccess: () => { setDismissing(null); setReason(""); },
             onError: () => toast.error("Could not dismiss."),
@@ -127,7 +128,7 @@ export default function AIHealthTab({ lead, findings = { items: [], evaluated_at
 
     const dismissGroup = (prefix) => {
         if (! reason.trim()) return;
-        router.post(`/portal/immigration/cases/${lead.id}/findings/group-dismiss`, { prefix, reason }, {
+        router.post(`${immBase()}/cases/${lead.id}/findings/group-dismiss`, { prefix, reason }, {
             preserveScroll: true,
             onSuccess: () => { setDismissing(null); setReason(""); toast.success("Findings dismissed."); },
             onError: () => toast.error("Could not dismiss."),

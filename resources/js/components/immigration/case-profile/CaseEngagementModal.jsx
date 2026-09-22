@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { X, FileText, FileSignature, Loader2, Send, Check } from "lucide-react";
 import { confirmDialog } from "@/components/ui/ConfirmDialog";
 import GenerationProgress from "@/components/ui/GenerationProgress";
+import { leadBase } from "@/lib/caseRoutes";
 
 // Generate an engagement pack from the case profile — preview on the left,
 // editable settings on the right. Posts to the same endpoint the Engagement
@@ -23,7 +24,7 @@ export default function CaseEngagementModal({ leadId, leadName, engagement = {},
 
     const activePreview = selectedTypes.includes(previewType) ? previewType : (selectedTypes[0] || previewType);
     const labelFor = (k) => (documents.find((d) => d.key === k)?.label) || k;
-    const previewUrl = `/admin/leads/${leadId}/generate/engage_${activePreview}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
+    const previewUrl = `${leadBase()}/${leadId}/generate/engage_${activePreview}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
 
     const toggleType = (k) => setSelectedTypes((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
@@ -40,7 +41,7 @@ export default function CaseEngagementModal({ leadId, leadName, engagement = {},
         if (!ok) return;
 
         setBusy(sendEmail ? "send" : "draft");
-        router.post(`/admin/leads/${leadId}/engagement/generate`, {
+        router.post(`${leadBase()}/${leadId}/engagement/generate`, {
             types: selectedTypes,
             notify: sendEmail,
             signer_id: signerId,

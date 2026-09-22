@@ -2,6 +2,7 @@ import { useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import { MessageSquare, CheckCircle2, CornerDownRight } from "lucide-react";
+import { immBase } from "@/lib/caseRoutes";
 
 // Build 12 phase 6 — shared UI for anchored threads (§7). Reused by the Notes,
 // Documents and Process tabs so a thread looks and behaves the same wherever its
@@ -39,7 +40,7 @@ function Avatar({ name, size = 28 }) {
 // `basePath` lets non-immigration surfaces reuse these threads: the immigration
 // Case Profile posts to /portal/immigration/cases/{lead}/threads (the default),
 // while the general lead-profile Documents tab passes /admin/leads.
-export function resolveThread(leadId, threadId, basePath = "/portal/immigration/cases") {
+export function resolveThread(leadId, threadId, basePath = `${immBase()}/cases`) {
     router.post(`${basePath}/${leadId}/threads/${threadId}/resolve`, {}, {
         preserveScroll: true,
         onSuccess: () => toast.success("Thread resolved"),
@@ -76,7 +77,7 @@ function toneFor(thread) {
  * When `childrenOf`/`anchor` are supplied it renders nested replies and an
  * inline reply box (used for document comments). `isReply` renders it as a
  * plain white sub-card (no tone, no badge). */
-export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = null, anchor = null, caseStaff = [], basePath = "/portal/immigration/cases", isReply = false }) {
+export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = null, anchor = null, caseStaff = [], basePath = `${immBase()}/cases`, isReply = false }) {
     const open = ! thread.resolved_at;
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(thread.body || "");
@@ -218,7 +219,7 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
 }
 
 /** A compact inline reply box, posting a child comment on the same anchor. */
-function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone, basePath = "/portal/immigration/cases" }) {
+function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone, basePath = `${immBase()}/cases` }) {
     const [body, setBody] = useState("");
     const [posting, setPosting] = useState(false);
 
@@ -268,7 +269,7 @@ function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone, basePa
  * general anchor picker (Case / Gate / Stage) for the Notes tab. `stages` is an
  * optional list for the Stage picker.
  */
-export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, stages = [], compact = false, plain = false, placeholder = "Write a note for the team…", basePath = "/portal/immigration/cases" }) {
+export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, stages = [], compact = false, plain = false, placeholder = "Write a note for the team…", basePath = `${immBase()}/cases` }) {
     const [open, setOpen] = useState(! compact);
     const [body, setBody] = useState("");
     const [addressedTo, setAddressedTo] = useState("");

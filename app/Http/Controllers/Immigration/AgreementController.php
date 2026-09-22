@@ -166,11 +166,15 @@ class AgreementController extends Controller
         $user = auth()->user();
         abort_unless($user instanceof User, 403);
 
-        // Mirrors CaseProfileController::ensureCanViewCases.
+        // Mirrors CaseProfileController::ensureCanViewCases. A First-Immigration
+        // agent manages their OWN referral's agreements; they reach this
+        // controller only via the agent-portal case routes, row-scoped by
+        // `lead.scope`.
         abort_unless(
             $user->isAdmin()
                 || $user->role === 'immigration'
-                || in_array($user->role, User::IMMIGRATION_ROLES, true),
+                || in_array($user->role, User::IMMIGRATION_ROLES, true)
+                || $user->role === 'agent',
             403,
             'Only immigration staff may manage case agreements.'
         );

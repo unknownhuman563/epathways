@@ -83,6 +83,16 @@ return [
             'label' => 'Students (referral portals)',
             'description' => 'Let a recruiting agent or sub-agent see the students their own referrals became. Read-only — no edits, no deletes.',
         ],
+        // Cases list + Case Profile inside the Agent portal, scoped to the
+        // agent's OWN referrals that have become immigration cases. Unlike
+        // referral_students this grants full case management (stage, documents,
+        // financials, agreements) — but only over the agent's own referrals,
+        // enforced row-by-row by the `case.owner` middleware, never every case.
+        // Ships hidden; a super admin grants it per agent from Module Management.
+        'referral_cases' => [
+            'label' => 'Cases (referral portal)',
+            'description' => "Let a recruiting agent see a list of the immigration cases their own referrals became. Read-only — scoped to that agent's referrals.",
+        ],
     ],
 
 ];

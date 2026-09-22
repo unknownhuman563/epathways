@@ -6,6 +6,7 @@ import {
     AlertCircle, Globe, FileText,
 } from "lucide-react";
 import GenerateAgreementModal from "@/components/immigration/case-profile/GenerateAgreementModal";
+import { immBase } from "@/lib/caseRoutes";
 
 // Build 11.D Phase 2 — Managed agreement list for the case.
 // Phase 3 layers on signing audit-trail UI (signer name / IP / signed PDF).
@@ -29,7 +30,7 @@ export default function AgreementTab({ lead, agreements = [] }) {
         if (! confirm(`Send "${a.title}" to ${lead.first_name || "the client"}? A signing link will be generated.`)) return;
         setBusyId(a.id);
         try {
-            await postJson(`/portal/immigration/cases/${lead.id}/agreements/${a.id}/send`);
+            await postJson(`${immBase()}/cases/${lead.id}/agreements/${a.id}/send`);
             toast.success("Agreement sent");
             refresh();
         } catch (err) {
@@ -44,7 +45,7 @@ export default function AgreementTab({ lead, agreements = [] }) {
         if (! reason) return;
         setBusyId(a.id);
         try {
-            await postJson(`/portal/immigration/cases/${lead.id}/agreements/${a.id}/void`, { reason });
+            await postJson(`${immBase()}/cases/${lead.id}/agreements/${a.id}/void`, { reason });
             toast.success("Agreement voided");
             refresh();
         } catch (err) {
@@ -169,7 +170,7 @@ function AgreementCard({ agreement: a, lead, busy, onSend, onVoid }) {
                     {a.has_pdf && (
                         <>
                             <a
-                                href={`/portal/immigration/cases/${lead.id}/agreements/${a.id}/pdf?inline=1`}
+                                href={`${immBase()}/cases/${lead.id}/agreements/${a.id}/pdf?inline=1`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 title={a.has_signed_pdf ? "View signed PDF in browser" : "View PDF in browser"}
@@ -178,7 +179,7 @@ function AgreementCard({ agreement: a, lead, busy, onSend, onVoid }) {
                                 <Eye size={11} /> View
                             </a>
                             <a
-                                href={`/portal/immigration/cases/${lead.id}/agreements/${a.id}/pdf`}
+                                href={`${immBase()}/cases/${lead.id}/agreements/${a.id}/pdf`}
                                 title="Download PDF"
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                             >

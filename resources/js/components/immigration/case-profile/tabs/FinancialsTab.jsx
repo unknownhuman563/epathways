@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
     DollarSign, Receipt, Plus, Trash2, CheckCircle2, AlertCircle, UserPlus, Save, Eye, FileDown,
 } from "lucide-react";
+import { immBase } from "@/lib/caseRoutes";
 
 // Case Financials — the money side of the immigration dashboard (fees, invoice,
 // payment ledger). Staff enter the figures once; the system derives total
@@ -43,7 +44,7 @@ export default function FinancialsTab({ lead, financials = { record: null, payme
     const [saving, setSaving] = useState(false);
     const saveFees = () => {
         setSaving(true);
-        router.post(`/portal/immigration/cases/${lead.id}/financials`, form, {
+        router.post(`${immBase()}/cases/${lead.id}/financials`, form, {
             preserveScroll: true,
             onSuccess: () => toast.success("Financials saved"),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not save"),
@@ -54,7 +55,7 @@ export default function FinancialsTab({ lead, financials = { record: null, payme
     const [invoicing, setInvoicing] = useState(false);
     const generateInvoice = () => {
         setInvoicing(true);
-        router.post(`/portal/immigration/cases/${lead.id}/financials/invoice`, {}, {
+        router.post(`${immBase()}/cases/${lead.id}/financials/invoice`, {}, {
             preserveScroll: true,
             onSuccess: () => toast.success("Invoice generated — see Documents"),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not generate invoice"),
@@ -87,7 +88,7 @@ export default function FinancialsTab({ lead, financials = { record: null, payme
                         <DollarSign size={14} /> Fees &amp; invoice
                     </h3>
                     <div className="flex items-center gap-1.5">
-                        <a href={`/portal/immigration/cases/${lead.id}/financials/invoice/preview`} target="_blank" rel="noopener noreferrer"
+                        <a href={`${immBase()}/cases/${lead.id}/financials/invoice/preview`} target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[11px] font-semibold hover:bg-gray-50">
                             <Eye size={13} /> Preview invoice
                         </a>
@@ -175,7 +176,7 @@ function PaymentLedger({ leadId, payments, fmt, owed }) {
     const add = () => {
         if (! row.paid_at || ! row.amount) return toast.error("Date and amount are required");
         setAdding(true);
-        router.post(`/portal/immigration/cases/${leadId}/financials/payments`, row, {
+        router.post(`${immBase()}/cases/${leadId}/financials/payments`, row, {
             preserveScroll: true,
             onSuccess: () => { toast.success("Payment recorded"); setRow({ paid_at: "", amount: "", method: "", reference: "" }); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not record"),
@@ -184,7 +185,7 @@ function PaymentLedger({ leadId, payments, fmt, owed }) {
     };
     const remove = (id) => {
         if (! window.confirm("Remove this payment?")) return;
-        router.delete(`/portal/immigration/cases/${leadId}/financials/payments/${id}`, {
+        router.delete(`${immBase()}/cases/${leadId}/financials/payments/${id}`, {
             preserveScroll: true,
             onSuccess: () => toast.success("Payment removed"),
         });

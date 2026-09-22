@@ -1,14 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
-import { TextStyle, Color, FontSize } from "@tiptap/extension-text-style";
+import { TextStyle, Color, FontSize, FontFamily, LineHeight } from "@tiptap/extension-text-style";
 import { Highlight } from "@tiptap/extension-highlight";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { Link } from "@tiptap/extension-link";
 import {
-    Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, List, ListOrdered,
+    Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading1, Heading2, Heading3, List, ListOrdered,
     AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Highlighter, Baseline, RemoveFormatting,
-    MousePointerClick, Wand2,
+    MousePointerClick, Wand2, Quote, Code, Minus, Undo2, Redo2, ChevronsDownUp, ChevronsUpDown,
 } from "lucide-react";
 
 // A body with tables/images is a rich layout the plain editor can't render — it
@@ -45,6 +45,20 @@ const FONT_SIZES = [
     { label: "Huge", value: "32px" },
 ];
 
+const FONT_FAMILIES = [
+    { label: "Default font", value: "" },
+    { label: "Sans serif", value: "Arial, Helvetica, sans-serif" },
+    { label: "Serif", value: "Georgia, 'Times New Roman', serif" },
+    { label: "Monospace", value: "'Courier New', monospace" },
+];
+
+const LINE_HEIGHTS = [
+    { label: "Line spacing", value: "" },
+    { label: "Single", value: "1.2" },
+    { label: "1.5", value: "1.5" },
+    { label: "Double", value: "2" },
+];
+
 function Btn({ active, disabled, onClick, title, children }) {
     return (
         <button
@@ -69,8 +83,19 @@ const Divider = () => <span className="w-px h-5 bg-gray-200 mx-1" />;
  * images built in the "Customize email body" builder) render as a live preview
  * instead — the plain editor can't hold them, and would flatten them.
  */
-export default function RichTextEditor({ value = "", onChange, onReady }) {
+export default function RichTextEditor({ value = "", onChange, onReady, variant = "email" }) {
     const lastValue = useRef(value);
+
+    // "document" is a full-page canvas (agreements/letters): wider, taller and
+    // roomier than the default email-width canvas.
+    const isDoc = variant === "document";
+    // Word-style ribbon: the document toolbar can collapse its advanced controls
+    // to a compact bar and expand back to the full set. Expanded by default.
+    const [expanded, setExpanded] = useState(true);
+    const showAll = isDoc && expanded;
+    const canvasClass = isDoc
+        ? "tiptap-body min-h-[620px] w-full max-w-[820px] mx-auto bg-white rounded shadow-sm px-12 py-10 outline-none text-[15px] leading-relaxed text-gray-800"
+        : "tiptap-body min-h-[380px] w-full max-w-[600px] mx-auto bg-white rounded shadow-sm px-8 py-6 outline-none text-sm text-gray-800";
 
     const editor = useEditor({
         extensions: [
@@ -82,6 +107,8 @@ export default function RichTextEditor({ value = "", onChange, onReady }) {
             TextStyle,
             Color,
             FontSize,
+            FontFamily,
+            LineHeight.configure({ types: ["heading", "paragraph"] }),
             Highlight.configure({ multicolor: true }),
             TextAlign.configure({ types: ["heading", "paragraph"] }),
         ],
@@ -89,7 +116,7 @@ export default function RichTextEditor({ value = "", onChange, onReady }) {
         immediatelyRender: false,
         editorProps: {
             attributes: {
-                class: "tiptap-body min-h-[380px] w-full max-w-[600px] mx-auto bg-white rounded shadow-sm px-8 py-6 outline-none text-sm text-gray-800",
+                class: canvasClass,
             },
         },
         onUpdate: ({ editor }) => {
@@ -125,6 +152,18 @@ export default function RichTextEditor({ value = "", onChange, onReady }) {
         else editor.chain().focus().unsetFontSize().run();
     };
 
+    const currentFont = editor.getAttributes("textStyle").fontFamily || "";
+    const setFont = (v) => {
+        if (v) editor.chain().focus().setFontFamily(v).run();
+        else editor.chain().focus().unsetFontFamily().run();
+    };
+
+    const currentLh = editor.getAttributes("paragraph").lineHeight || editor.getAttributes("heading").lineHeight || "";
+    const setLh = (v) => {
+        if (v) editor.chain().focus().setLineHeight(v).run();
+        else editor.chain().focus().unsetLineHeight().run();
+    };
+
     const setLink = () => {
         const prev = editor.getAttributes("link").href || "";
         const url = window.prompt("Link URL", prev);
@@ -146,9 +185,26 @@ export default function RichTextEditor({ value = "", onChange, onReady }) {
         <div className="rounded-lg border border-gray-200 focus-within:ring-2 focus-within:ring-gray-300 overflow-hidden bg-white">
             {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-gray-100 bg-gray-50">
+                {showAll && (
+                    <>
+                        <Btn title="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}><Undo2 size={15} /></Btn>
+                        <Btn title="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}><Redo2 size={15} /></Btn>
+                        <Divider />
+                        <select
+                            title="Font"
+                            value={currentFont}
+                            onChange={(e) => setFont(e.target.value)}
+                            className="h-8 text-xs rounded-md border border-gray-200 bg-white px-1.5 text-gray-600 outline-none max-w-[120px]"
+                        >
+                            {FONT_FAMILIES.map((f) => <option key={f.label} value={f.value}>{f.label}</option>)}
+                        </select>
+                        <Divider />
+                    </>
+                )}
                 <Btn title="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}><Bold size={15} /></Btn>
                 <Btn title="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}><Italic size={15} /></Btn>
                 <Btn title="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}><UnderlineIcon size={15} /></Btn>
+                {showAll && <Btn title="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}><Strikethrough size={15} /></Btn>}
 
                 <Divider />
 
@@ -162,6 +218,7 @@ export default function RichTextEditor({ value = "", onChange, onReady }) {
                 </select>
                 <Btn title="Heading" active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}><Heading1 size={15} /></Btn>
                 <Btn title="Subheading" active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><Heading2 size={15} /></Btn>
+                {showAll && <Btn title="Small heading" active={editor.isActive("heading", { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}><Heading3 size={15} /></Btn>}
 
                 <Divider />
 
@@ -197,9 +254,35 @@ export default function RichTextEditor({ value = "", onChange, onReady }) {
                 <Btn title="Link" active={editor.isActive("link")} onClick={setLink}><LinkIcon size={15} /></Btn>
                 <Btn title="Button" active={editor.isActive("link", { style: BUTTON_STYLE })} onClick={setButton}><MousePointerClick size={15} /></Btn>
 
+                {showAll && (
+                    <>
+                        <Divider />
+                        <Btn title="Quote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()}><Quote size={15} /></Btn>
+                        <Btn title="Code block" active={editor.isActive("codeBlock")} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><Code size={15} /></Btn>
+                        <Btn title="Divider line" onClick={() => editor.chain().focus().setHorizontalRule().run()}><Minus size={15} /></Btn>
+                        <select
+                            title="Line spacing"
+                            value={currentLh}
+                            onChange={(e) => setLh(e.target.value)}
+                            className="h-8 text-xs rounded-md border border-gray-200 bg-white px-1.5 text-gray-600 outline-none"
+                        >
+                            {LINE_HEIGHTS.map((l) => <option key={l.label} value={l.value}>{l.label}</option>)}
+                        </select>
+                    </>
+                )}
+
                 <Divider />
 
                 <Btn title="Clear formatting" onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}><RemoveFormatting size={15} /></Btn>
+
+                {isDoc && (
+                    <>
+                        <span className="flex-1" />
+                        <Btn title={expanded ? "Collapse toolbar" : "Show all settings"} onClick={() => setExpanded((e) => !e)}>
+                            {expanded ? <ChevronsDownUp size={15} /> : <ChevronsUpDown size={15} />}
+                        </Btn>
+                    </>
+                )}
             </div>
 
             {hasRichHtml(value) && (
@@ -209,8 +292,8 @@ export default function RichTextEditor({ value = "", onChange, onReady }) {
                 </div>
             )}
 
-            {/* Email-width canvas on a light ground, so it reads like a real email. */}
-            <div className="bg-gray-100 p-4">
+            {/* Canvas on a light ground, so it reads like a real page/email. */}
+            <div className={isDoc ? "bg-gray-100 p-6" : "bg-gray-100 p-4"}>
                 <EditorContent editor={editor} />
             </div>
         </div>

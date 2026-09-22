@@ -1,6 +1,7 @@
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import { FileCheck2, Sparkles, AlertTriangle, Clock, CheckCircle2, Send } from "lucide-react";
+import { immBase } from "@/lib/caseRoutes";
 
 // Case → INZ Forms. The forms available for THIS case (its visa type's category).
 // Staff generate the official PDF filled from case data (a draft for the step-10
@@ -10,14 +11,14 @@ export default function InzFormsTab({ lead, inzForms = [] }) {
     if (! lead?.id) return null;
 
     const generate = (code) =>
-        router.post(`/portal/immigration/cases/${lead.id}/inz-forms/${code}/generate`, {}, {
+        router.post(`${immBase()}/cases/${lead.id}/inz-forms/${code}/generate`, {}, {
             preserveScroll: true,
             onSuccess: () => toast.success(`${code} generated — see Documents`),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not generate"),
         });
 
     const sendToClient = (code) =>
-        router.post(`/portal/immigration/cases/${lead.id}/inz-forms/${code}/assign`, {}, {
+        router.post(`${immBase()}/cases/${lead.id}/inz-forms/${code}/assign`, {}, {
             preserveScroll: true,
             onSuccess: () => toast.success(`${code} sent to the client to fill`),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not send"),
