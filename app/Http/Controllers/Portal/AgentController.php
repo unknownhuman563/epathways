@@ -32,10 +32,15 @@ class AgentController extends Controller
         'Proposal Sent', 'Converted', 'Not Interested', 'Lost',
     ];
 
-    /** Only this agent's leads, newest first. */
+    /**
+     * Only this agent's leads, newest first. Leads that have become immigration
+     * cases are excluded — they live in the Cases module now, so showing them
+     * here too would double-list the same person.
+     */
     private function ownLeadsQuery()
     {
-        return Lead::where('agent_id', Auth::id());
+        return Lead::where('agent_id', Auth::id())
+            ->where(fn ($q) => $q->where('is_immigration_case', false)->orWhereNull('is_immigration_case'));
     }
 
     public function dashboard()

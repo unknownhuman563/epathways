@@ -149,7 +149,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const [editingCase, setEditingCase] = useState(null); // case row being edited
     const [filesCase, setFilesCase] = useState(null);     // case whose files are open
     const [handoffCase, setHandoffCase] = useState(null);  // case being handed off / claimed
-    const [tab, setTab] = useState('applications');
+    const [tab, setTab] = useState('all');
 
     // "In my queue" = I own it OR someone put an answer-requiring question to me
     // on it (Build 12 phase 6). The latter lands the case in my queue even when
