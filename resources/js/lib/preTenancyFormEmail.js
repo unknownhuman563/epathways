@@ -1,11 +1,9 @@
-// Builds the static "Pre-tenancy form" email shown when an applicant is moved to
-// the `pre_tenancy_form_sent` onboarding stage. Like the other onboarding
-// emails, the automation is not wired up yet — this only renders a preview.
-// Recipient name and house address are pulled from the submission / linked
-// property where available, falling back to placeholders.
+// Builds the "Pre-tenancy form" email shown when an applicant is moved to the
+// `pre_tenancy_form_sent` onboarding stage. The link points to the NATIVE
+// per-submission system form (submission.pre_tenancy_form_url) — the Google
+// Form is fully retired. Recipient name and house address are pulled from the
+// submission / linked property where available, falling back to placeholders.
 
-// Pre-tenancy form (Google Form) link is fixed for now.
-export const PRE_TENANCY_FORM_URL = "https://forms.gle/cMYQLrgMNfuvoiFS7";
 const SIGNER_NAME = "Janille";
 const FOOTER_PHONE = "+64 21 227 8999";
 const CONTACT_EMAIL = "exaltinfo@epathways.co.nz";
@@ -23,6 +21,7 @@ export function buildPreTenancyFormEmail(submission = {}) {
 
     const name = firstName(submission);
     const address = property.address || submission.property_interested || "the property";
+    const formUrl = submission.pre_tenancy_form_url || "";
 
     const subject = "Next Step for Your Room Application";
 
@@ -32,7 +31,7 @@ Thanks for confirming your interest in proceeding with the room at ${address}. W
 
 As the next step, please complete the pre-tenancy form below so we can prepare your tenancy documents:
 
-Exalt Property Pre-Tenancy Form link: ${PRE_TENANCY_FORM_URL}
+Exalt Property Pre-Tenancy Form link: ${formUrl}
 
 Once submitted, we'll review everything and send the agreement via email for signing. Please let us know once you've completed the form.
 

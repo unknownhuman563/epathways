@@ -42,3 +42,6 @@ prod-db-latest.sql.gz
 
 # Local-only email/template preview routes (never committed)
 /routes/dev-previews.php
+
+# Local .env backups — never commit (contain secrets)
+.env.bak*

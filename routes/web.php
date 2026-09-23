@@ -225,6 +225,27 @@ Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationCon
 Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotForm'])->name('accommodation.eoi-hot');
 Route::post('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotStore'])->name('accommodation.eoi-hot.store');
+
+// Native Pre-Tenancy form — the tokenised public form the onboarding email
+// links to (replaces the external Google Form). No auth: the token is the
+// bearer credential. Throttled like the other public intake forms.
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/pre-tenancy/{token}', [\App\Http\Controllers\PreTenancyFormController::class, 'show'])->name('pre-tenancy.show');
+    Route::post('/pre-tenancy/{token}', [\App\Http\Controllers\PreTenancyFormController::class, 'submit'])->name('pre-tenancy.submit');
+
+    // Standalone ("general") pre-tenancy form — one shared link, not tied to any
+    // onboarding record. Submissions feed the Forms → Pre-Tenancy list.
+    Route::get('/apply/pre-tenancy', [\App\Http\Controllers\PreTenancyFormController::class, 'general'])->name('pre-tenancy.general');
+    Route::post('/apply/pre-tenancy', [\App\Http\Controllers\PreTenancyFormController::class, 'storeGeneral'])->name('pre-tenancy.general.store');
+
+    // Tokenised accommodation-agreement e-signing (emailed link). The signing
+    // token is the bearer credential, like the immigration tracker signing.
+    Route::get('/agreement/{token}/sign', [\App\Http\Controllers\AccommodationAgreementSigningController::class, 'show'])->name('agreement.sign.show');
+    Route::get('/agreement/{token}/document', [\App\Http\Controllers\AccommodationAgreementSigningController::class, 'document'])->name('agreement.sign.document');
+    Route::post('/agreement/{token}/sign', [\App\Http\Controllers\AccommodationAgreementSigningController::class, 'sign'])->name('agreement.sign');
+    Route::get('/agreement/{token}/signed', [\App\Http\Controllers\AccommodationAgreementSigningController::class, 'signed'])->name('agreement.sign.signed');
+    Route::get('/agreement/{token}/signed-pdf', [\App\Http\Controllers\AccommodationAgreementSigningController::class, 'downloadSigned'])->name('agreement.sign.signed-pdf');
+});
 // Public tenant concern form — declared before /accommodation/{slug}.
 Route::get('/accommodation/concern', [App\Http\Controllers\ConcernController::class, 'form'])->name('accommodation.concern');
 Route::post('/accommodation/concern', [App\Http\Controllers\ConcernController::class, 'store'])->name('accommodation.concern.store');
@@ -2099,7 +2120,24 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/applications/{submission}/link-property', [EoiSubmissionController::class, 'linkToProperty'])->name('applications.link-property');
             Route::post('/applications/{submission}/note', [EoiSubmissionController::class, 'addInternalNote'])->name('applications.note');
             Route::post('/applications/{submission}/convert', [EoiSubmissionController::class, 'convertToTenant'])->name('applications.convert');
+            // Stream a tenant-uploaded pre-tenancy document (Valid ID / Visa).
+            Route::get('/applications/{submission}/pre-tenancy/{kind}/download', [\App\Http\Controllers\PreTenancyFormController::class, 'download'])->name('applications.pre-tenancy.download');
             Route::delete('/applications/{submission}', [EoiSubmissionController::class, 'destroy'])->name('applications.destroy');
+
+            // ----------------------------------------------------------------
+            // Forms — the standalone Pre-Tenancy list + the Agreements builder.
+            // ----------------------------------------------------------------
+            Route::get('/forms/pre-tenancy', [\App\Http\Controllers\Portal\PreTenancyFormsController::class, 'index'])->name('forms.pre-tenancy');
+            Route::get('/forms/pre-tenancy/{form}', [\App\Http\Controllers\Portal\PreTenancyFormsController::class, 'show'])->name('forms.pre-tenancy.show');
+            Route::get('/forms/pre-tenancy/{form}/{kind}/download', [\App\Http\Controllers\Portal\PreTenancyFormsController::class, 'download'])->name('forms.pre-tenancy.download');
+
+            Route::get('/forms/agreements', [\App\Http\Controllers\Portal\AccommodationAgreementController::class, 'index'])->name('forms.agreements');
+            Route::post('/forms/agreements/prefill', [\App\Http\Controllers\Portal\AccommodationAgreementController::class, 'prefill'])->name('forms.agreements.prefill');
+            Route::post('/forms/agreements/preview', [\App\Http\Controllers\Portal\AccommodationAgreementController::class, 'preview'])->name('forms.agreements.preview');
+            Route::post('/forms/agreements/generate', [\App\Http\Controllers\Portal\AccommodationAgreementController::class, 'generate'])->name('forms.agreements.generate');
+            Route::get('/forms/agreements/{agreement}/download', [\App\Http\Controllers\Portal\AccommodationAgreementController::class, 'download'])->name('forms.agreements.download');
+            Route::post('/forms/agreements/{agreement}/resend', [\App\Http\Controllers\Portal\AccommodationAgreementController::class, 'resend'])->name('forms.agreements.resend');
+            Route::delete('/forms/agreements/{agreement}', [\App\Http\Controllers\Portal\AccommodationAgreementController::class, 'destroy'])->name('forms.agreements.destroy');
 
             // ----------------------------------------------------------------
             // Scaffolded sections — sidebar nav is live, real features ship

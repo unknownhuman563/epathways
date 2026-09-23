@@ -27,6 +27,9 @@ class UpdateStatusRequest extends FormRequest
             'move_in_date' => [Rule::requiredIf($target === 'moved_in'), 'nullable', 'date'],
             'declined_reason' => [Rule::requiredIf($target === 'declined'), 'nullable', 'string', 'max:2000'],
             'not_proceeding_reason' => [Rule::requiredIf($target === 'not_proceeding'), 'nullable', 'string', 'max:2000'],
+            // The (staff-editable) stage email to actually send on this move.
+            'email_subject' => ['nullable', 'string', 'max:255'],
+            'email_body' => ['nullable', 'string', 'max:20000'],
         ];
     }
 
@@ -34,8 +37,17 @@ class UpdateStatusRequest extends FormRequest
     public function stageData(): array
     {
         return collect($this->validated())
-            ->except('status')
+            ->except('status', 'email_subject', 'email_body')
             ->filter(fn ($v) => $v !== null && $v !== '')
             ->all();
+    }
+
+    /** The stage email to send on this transition, or null when none supplied. */
+    public function emailPayload(): ?array
+    {
+        $subject = trim((string) $this->input('email_subject'));
+        $body = trim((string) $this->input('email_body'));
+
+        return ($subject !== '' && $body !== '') ? ['subject' => $subject, 'body' => $body] : null;
     }
 }

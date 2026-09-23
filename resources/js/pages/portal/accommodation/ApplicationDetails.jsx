@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Trash2, UserCog, Home, StickyNote, History, UserCheck, X, Mail } from "lucide-react";
+import { ArrowLeft, Trash2, UserCog, Home, StickyNote, History, UserCheck, X, Mail, ClipboardList, Copy, Check, Download, FileSignature, Eye } from "lucide-react";
 import TransitionModal from "@/components/onboarding/TransitionModal";
 import ConvertTenantModal from "@/components/onboarding/ConvertTenantModal";
 import StageEmailModal from "@/components/onboarding/StageEmailModal";
+import PdfPreviewModal from "@/components/ui/PdfPreviewModal";
 import { STATUS_STYLES, STATUS_DOT, statusLabel, tempBadge, daysStyle, STAGE_INPUTS } from "@/lib/onboardingMeta";
 import { hasStageEmail } from "@/lib/stageEmails";
 
@@ -40,16 +41,219 @@ function Panel({ title, icon, action, children }) {
     );
 }
 
-export default function ApplicationDetails({ submission, options = {}, allowedTransitions = [] }) {
+// Staff view of the native Pre-Tenancy form: the link to send (with copy), and
+// the tenant's submitted responses + document downloads once completed.
+function PreTenancyPanel({ submission, onPreview }) {
+    const [copied, setCopied] = useState(false);
+    const d = submission.pre_tenancy_form_data;
+    const url = submission.pre_tenancy_form_url;
+    const copy = () => {
+        if (!url) return;
+        navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+    };
+    const dlBase = `/portal/accommodation/applications/${submission.id}/pre-tenancy`;
+
+    const RowKV = ({ label, value }) => (
+        <div className="flex gap-4 py-1.5">
+            <dt className="w-44 shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">{label}</dt>
+            <dd className="flex-1 text-sm text-gray-800 break-words">{value || "—"}</dd>
+        </div>
+    );
+
+    return (
+        <Panel title="Pre-Tenancy form" icon={<ClipboardList size={16} className="text-[#1F5A8B]" />}>
+            {/* Shareable link */}
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-gray-50/70 p-2.5">
+                <input readOnly value={url || ""} className="min-w-0 flex-1 bg-transparent px-2 text-xs text-gray-600 outline-none" />
+                <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1F5A8B] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#184A73]">
+                    {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy link"}
+                </button>
+            </div>
+
+            {!d ? (
+                <p className="text-sm text-gray-400">Not submitted yet. Send the tenant the link above (it&rsquo;s also included in the pre-tenancy stage email).</p>
+            ) : (
+                <div className="space-y-5">
+                    <div>
+                        <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-400">Applicant</p>
+                        <dl className="divide-y divide-gray-50">
+                            <RowKV label="Full legal name" value={d.main?.full_legal_name} />
+                            <RowKV label="ID / Licence" value={d.main?.id_number} />
+                            <RowKV label="Age" value={d.main?.age} />
+                            <RowKV label="Email" value={d.main?.email} />
+                            <RowKV label="Mobile" value={d.main?.mobile} />
+                            <RowKV label="Current address" value={d.main?.current_address} />
+                        </dl>
+                    </div>
+
+                    {d.has_additional_occupants && (d.occupants || []).length > 0 && (
+                        <div>
+                            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-400">Additional subtenants</p>
+                            {d.occupants.map((o, i) => (
+                                <dl key={i} className="mb-2 divide-y divide-gray-50 rounded-xl border border-gray-100 p-2">
+                                    <RowKV label={`Subtenant ${i + 1}`} value={o.full_name} />
+                                    <RowKV label="ID / Licence" value={o.id_number} />
+                                    <RowKV label="Date of birth" value={o.dob} />
+                                    <RowKV label="Age" value={o.age} />
+                                    <RowKV label="Relationship" value={o.relationship} />
+                                    <RowKV label="Email" value={o.email} />
+                                    <RowKV label="Mobile" value={o.mobile} />
+                                </dl>
+                            ))}
+                        </div>
+                    )}
+
+                    <div>
+                        <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-400">Bank details</p>
+                        <dl className="divide-y divide-gray-50">
+                            <RowKV label="Account name" value={d.bank?.account_name} />
+                            <RowKV label="Account number" value={d.bank?.account_number} />
+                        </dl>
+                    </div>
+
+                    <div>
+                        <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-400">Tenancy</p>
+                        <dl className="divide-y divide-gray-50">
+                            <RowKV label="Property address" value={d.tenancy?.property_address} />
+                            <RowKV label="Move-in date" value={d.tenancy?.move_in_date} />
+                            <RowKV label="Length of stay" value={d.tenancy?.length_of_stay} />
+                            <RowKV label="Room type" value={d.tenancy?.room_type} />
+                            <RowKV label="Rent funding" value={d.tenancy?.rent_funding} />
+                        </dl>
+                    </div>
+
+                    <div>
+                        <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-400">Reference</p>
+                        <dl className="divide-y divide-gray-50">
+                            <RowKV label="Referee name" value={d.reference?.referee_name} />
+                            <RowKV label="Referee phone" value={d.reference?.referee_phone} />
+                            <RowKV label="Referee email" value={d.reference?.referee_email} />
+                        </dl>
+                    </div>
+
+                    <div>
+                        <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">Documents</p>
+                        <div className="flex flex-wrap gap-2">
+                            {[["valid_id", "Valid ID"], ["visa", "Visa"]].map(([k, label]) => d.documents?.[k] && (
+                                <span key={k} className="inline-flex overflow-hidden rounded-lg border border-gray-200">
+                                    <button type="button" onClick={() => onPreview(`${dlBase}/${k}/download?inline=1`, label, `${dlBase}/${k}/download`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                        <Eye size={13} /> {label}
+                                    </button>
+                                    <a href={`${dlBase}/${k}/download`} title="Download" className="inline-flex items-center border-l border-gray-200 px-2 py-1.5 text-gray-500 hover:bg-gray-50">
+                                        <Download size={13} />
+                                    </a>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </Panel>
+    );
+}
+
+// Shows the flat/house-sharing agreement generated for this client in the
+// Forms → Agreements module, so the Agreement stage can source it here.
+function AgreementPanel({ agreement, onPreview }) {
+    const [copied, setCopied] = useState(false);
+    const statusStyle = {
+        sent: "bg-blue-100 text-blue-700", viewed: "bg-amber-100 text-amber-700",
+        signed: "bg-emerald-100 text-emerald-700", draft: "bg-gray-100 text-gray-500", generated: "bg-gray-100 text-gray-500",
+    };
+    const statusText = { sent: "Sent · awaiting signature", viewed: "Viewed by client", signed: "Signed", draft: "Draft", generated: "Generated" };
+    const copy = () => {
+        if (!agreement?.signing_url) return;
+        navigator.clipboard?.writeText(agreement.signing_url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+    };
+    return (
+        <Panel title="Tenancy agreement" icon={<FileSignature size={16} className="text-[#1F5A8B]" />}>
+            {!agreement ? (
+                <p className="text-sm text-gray-400">
+                    No agreement generated yet. Build one in{" "}
+                    <Link href="/portal/accommodation/forms/agreements" className="font-semibold text-[#1F5A8B] hover:underline">Forms → Agreements</Link>{" "}
+                    — this client is in the list — and it will be emailed for signing and appear here.
+                </p>
+            ) : (
+                <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-900">{agreement.type_label}</p>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusStyle[agreement.status] || "bg-gray-100 text-gray-500"}`}>{statusText[agreement.status] || agreement.status}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => onPreview(`${agreement.download_url}?inline=1`, agreement.type_label, agreement.download_url)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <Eye size={14} /> Preview
+                            </button>
+                            <a href={agreement.download_url} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1F5A8B] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#184A73]">
+                                <Download size={14} /> {agreement.signed ? "Signed PDF" : "Download PDF"}
+                            </a>
+                        </div>
+                    </div>
+                    {!agreement.signed && agreement.signing_url && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Copied" : "Copy signing link"}
+                            </button>
+                            <button onClick={() => router.post(agreement.resend_url, {}, { preserveScroll: true })} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <Mail size={14} /> Resend email
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+        </Panel>
+    );
+}
+
+export default function ApplicationDetails({ submission, options = {}, allowedTransitions = [], agreement = null }) {
     const [modal, setModal] = useState(null);          // 'assign' | 'link' | 'note' | 'convert'
     const [transitionTo, setTransitionTo] = useState(null);
     const [emailTarget, setEmailTarget] = useState(null);  // stage with a static email preview
+    const [stagePreview, setStagePreview] = useState(null); // reached stage being previewed (read-only)
+    const [preview, setPreview] = useState(null);           // { url, title, downloadUrl } for the PDF/doc modal
+    const openPreview = (url, title, downloadUrl) => setPreview({ url, title, downloadUrl });
     const stages = options.stages ?? [];
     const currentIdx = stages.indexOf(submission.status);
     const isTerminal = (options.terminals ?? []).includes(submission.status);
     const canConvert = submission.status === "payment_confirmed" || (submission.status === "moved_in" && !submission.converted_to_tenant_id);
 
+    // When each stage was reached (for the read-only stage preview).
+    const stageDates = {
+        new: submission.created_at,
+        viewing_email_sent: submission.viewing_email_sent_at,
+        viewing_booked: submission.viewing_scheduled_at,
+        viewing_completed: submission.viewing_completed_at,
+        post_viewing_followup: submission.post_viewing_followup_at,
+        pre_tenancy_form_sent: submission.pre_tenancy_form_sent_at,
+        pre_tenancy_form_completed: submission.pre_tenancy_form_completed_at,
+        agreement_sent: submission.tenancy_agreement_sent_at,
+        agreement_signed: submission.tenancy_agreement_signed_at,
+        invoice_sent: submission.invoice_sent_at,
+        payment_confirmed: submission.payment_confirmed_at,
+        moved_in: submission.move_in_date,
+    };
+    // Any extra captured detail worth showing for a given stage: [label, value].
+    const stageDetail = (s) => {
+        switch (s) {
+            case "viewing_booked": return submission.viewing_scheduled_at ? ["Viewing scheduled for", fmtDateTime(submission.viewing_scheduled_at)] : null;
+            case "viewing_completed": return submission.viewing_outcome ? ["Outcome", submission.viewing_outcome] : null;
+            case "invoice_sent": return submission.invoice_amount_nzd ? ["Invoice amount", `NZD ${submission.invoice_amount_nzd}`] : null;
+            case "declined": return submission.declined_reason ? ["Reason", submission.declined_reason] : null;
+            case "not_proceeding": return submission.not_proceeding_reason ? ["Reason", submission.not_proceeding_reason] : null;
+            default: return null;
+        }
+    };
+
+    // The pre-tenancy stage can only be completed by the tenant actually
+    // submitting the form (which auto-advances the stage). Staff can't mark it
+    // done manually — the button below is locked until the submission exists.
+    const preTenancyPending = (t) => t === "pre_tenancy_form_completed" && !submission.pre_tenancy_form_data;
+
     const go = (target) => {
+        if (preTenancyPending(target)) {
+            alert("Waiting for the tenant to submit their pre-tenancy form. This stage completes automatically once they submit it.");
+            return;
+        }
         if (target === "moved_in") { setModal("convert"); return; }
         if (hasStageEmail(target)) { setEmailTarget(target); return; }
         if (STAGE_INPUTS[target]) { setTransitionTo(target); return; }
@@ -104,18 +308,37 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
             </div>
 
             {/* Stage stepper */}
-            <div className="rounded-3xl border border-gray-50 bg-white p-5 shadow-sm overflow-x-auto">
-                <div className="flex items-center gap-1 min-w-max">
+            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm overflow-x-auto">
+                <div className="flex items-start gap-0 min-w-max">
                     {stages.map((s, i) => {
                         const done = currentIdx >= 0 && i < currentIdx;
                         const current = i === currentIdx;
+                        // Reached stages (completed or current) are previewable;
+                        // future stages haven't happened yet, so they stay inert.
+                        const clickable = done || current;
                         return (
-                            <div key={s} className="flex items-center">
-                                <div className="flex flex-col items-center w-[90px] text-center">
-                                    <span className={`h-3 w-3 rounded-full ${current ? STATUS_DOT[s] : done ? "bg-emerald-400" : "bg-gray-200"}`} />
-                                    <span className={`mt-1 text-[10px] leading-tight ${current ? "font-bold text-gray-900" : "text-gray-400"}`}>{statusLabel(s)}</span>
-                                </div>
-                                {i < stages.length - 1 && <span className={`h-0.5 w-4 ${done ? "bg-emerald-300" : "bg-gray-200"}`} />}
+                            <div key={s} className="flex items-start">
+                                <button
+                                    type="button"
+                                    disabled={!clickable}
+                                    onClick={() => setStagePreview(s)}
+                                    title={clickable ? "Preview this stage" : "Not reached yet"}
+                                    className={`group flex w-[88px] flex-col items-center text-center ${clickable ? "cursor-pointer" : "cursor-default"}`}
+                                >
+                                    <span
+                                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-transform ${clickable ? "group-hover:scale-110" : ""} ${
+                                            done
+                                                ? "border-emerald-500 bg-emerald-500 text-white"
+                                                : current
+                                                    ? `border-transparent text-white ring-2 ring-gray-100 ${STATUS_DOT[s]}`
+                                                    : "border-gray-200 bg-white"
+                                        }`}
+                                    >
+                                        {done ? <Check size={12} strokeWidth={3} /> : current ? <span className="h-1.5 w-1.5 rounded-full bg-white/90" /> : <span className="h-1.5 w-1.5 rounded-full bg-gray-300" />}
+                                    </span>
+                                    <span className={`mt-1.5 text-[10px] leading-tight ${current ? "font-bold text-gray-900" : done ? "text-gray-500 group-hover:text-[#1F5A8B]" : "text-gray-400"}`}>{statusLabel(s)}</span>
+                                </button>
+                                {i < stages.length - 1 && <span className={`mt-[9px] h-0.5 w-5 rounded-full transition-colors ${done ? "bg-emerald-400" : "bg-gray-200"}`} />}
                             </div>
                         );
                     })}
@@ -135,16 +358,31 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
                     >
                         <option value="">Move to stage…</option>
                         {allowedTransitions.map((t) => (
-                            <option key={t} value={t}>{t === "moved_in" ? "Convert to Tenant" : statusLabel(t)}</option>
+                            <option key={t} value={t} disabled={preTenancyPending(t)}>
+                                {t === "moved_in" ? "Convert to Tenant" : statusLabel(t)}{preTenancyPending(t) ? " (awaiting tenant)" : ""}
+                            </option>
                         ))}
                     </select>
                 )}
                 {allowedTransitions.map((t) => {
                     const danger = t === "declined" || t === "not_proceeding";
+                    const locked = preTenancyPending(t);
                     const label = t === "moved_in" ? "Convert to Tenant" : `→ ${statusLabel(t)}`;
                     return (
-                        <button key={t} onClick={() => go(t)} className={`rounded-full px-4 py-2 text-sm font-semibold ${danger ? "border border-rose-200 text-rose-600 hover:bg-rose-50" : "bg-[#1F5A8B] text-white hover:bg-[#184A73]"}`}>
-                            {label}
+                        <button
+                            key={t}
+                            onClick={() => go(t)}
+                            disabled={locked}
+                            title={locked ? "Waiting for the tenant to submit their pre-tenancy form" : undefined}
+                            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                                locked
+                                    ? "cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400"
+                                    : danger
+                                        ? "border border-rose-200 text-rose-600 hover:bg-rose-50"
+                                        : "bg-[#1F5A8B] text-white hover:bg-[#184A73]"
+                            }`}
+                        >
+                            {label}{locked ? " · awaiting tenant" : ""}
                         </button>
                     );
                 })}
@@ -202,6 +440,14 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
                         )}
                     </Panel>
                 </div>
+
+                <div className="md:col-span-2">
+                    <PreTenancyPanel submission={submission} onPreview={openPreview} />
+                </div>
+
+                <div className="md:col-span-2">
+                    <AgreementPanel agreement={agreement} onPreview={openPreview} />
+                </div>
             </div>
 
             {/* Read-only application sections */}
@@ -256,9 +502,47 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
             </Section>
 
             {/* Modals */}
+            {stagePreview && (() => {
+                const idx = stages.indexOf(stagePreview);
+                const current = idx === currentIdx;
+                const when = stageDates[stagePreview];
+                const detail = stageDetail(stagePreview);
+                const emailStage = hasStageEmail(stagePreview);
+                return (
+                    <Shell title={statusLabel(stagePreview)} onClose={() => setStagePreview(null)}>
+                        <div className="space-y-4">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${current ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                                {current ? "Current stage" : "Completed"}
+                            </span>
+                            <dl className="divide-y divide-gray-50">
+                                <div className="flex gap-4 py-2">
+                                    <dt className="w-36 shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400 pt-0.5">Reached on</dt>
+                                    <dd className="flex-1 text-sm text-gray-800">{fmtDateTime(when)}</dd>
+                                </div>
+                                {detail && (
+                                    <div className="flex gap-4 py-2">
+                                        <dt className="w-36 shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400 pt-0.5">{detail[0]}</dt>
+                                        <dd className="flex-1 whitespace-pre-wrap text-sm text-gray-800">{detail[1]}</dd>
+                                    </div>
+                                )}
+                            </dl>
+                            {emailStage && (
+                                <button
+                                    onClick={() => { setStagePreview(null); setEmailTarget(stagePreview); }}
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1F5A8B] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#184A73]"
+                                >
+                                    <Mail size={15} /> Preview the email for this stage
+                                </button>
+                            )}
+                            <p className="text-center text-[11px] text-gray-400">Read-only preview — this doesn&rsquo;t change the application&rsquo;s stage.</p>
+                        </div>
+                    </Shell>
+                );
+            })()}
             {transitionTo && <TransitionModal submission={submission} target={transitionTo} onClose={() => setTransitionTo(null)} />}
             {modal === "convert" && <ConvertTenantModal submission={submission} properties={options.properties ?? []} contractTypes={options.contract_types ?? []} onClose={() => setModal(null)} />}
             {emailTarget && <StageEmailModal submission={submission} target={emailTarget} onClose={() => setEmailTarget(null)} />}
+            <PdfPreviewModal open={!!preview} onClose={() => setPreview(null)} url={preview?.url} title={preview?.title} downloadUrl={preview?.downloadUrl} />
             {modal === "assign" && <AssignModal submission={submission} team={options.team ?? []} onClose={() => setModal(null)} />}
             {modal === "link" && <LinkModal submission={submission} properties={options.properties ?? []} onClose={() => setModal(null)} />}
             {modal === "note" && <NoteModal submission={submission} onClose={() => setModal(null)} />}

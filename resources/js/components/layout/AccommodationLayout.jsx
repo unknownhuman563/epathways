@@ -2,6 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import { Clock,
     LayoutDashboard, Home, Users, Workflow, Receipt, Wallet,
     CalendarDays, CalendarCheck, ClipboardList, Flame, MessageSquare, MessageSquareWarning, BarChart3, User, Bell, Ticket,
+    FileText, FileSignature,
 } from "lucide-react";
 
 const ACCOMMODATION_NAV = [
@@ -18,6 +19,10 @@ const ACCOMMODATION_NAV = [
     { name: "Gas Delivery Tracker", href: "/portal/accommodation/gas-delivery", icon: <Flame size={20} /> },
     { name: "Email Templates", href: "/portal/accommodation/email-templates", icon: <MessageSquare size={20} /> },
     { name: "Compose", href: "/portal/accommodation/compose", icon: <MessageSquare size={20} /> },
+
+    { name: "Forms", section: true },
+    { name: "Pre-Tenancy Form", href: "/portal/accommodation/forms/pre-tenancy", icon: <FileText size={20} /> },
+    { name: "Agreements", href: "/portal/accommodation/forms/agreements", icon: <FileSignature size={20} /> },
 
     { name: "Setup", section: true },
     { name: "Properties", href: "/portal/accommodation/properties", icon: <Home size={20} /> },

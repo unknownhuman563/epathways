@@ -15,6 +15,7 @@ class EoiSubmission extends Model
     protected $table = 'accommodation_eoi_submissions';
 
     protected $fillable = [
+        'public_token',
         // Section 1
         'full_legal_name', 'id_number', 'visa_status', 'visa_status_other',
         'nationality', 'nationality_other', 'preferred_name', 'email', 'mobile', 'age',
@@ -84,6 +85,33 @@ class EoiSubmission extends Model
     }
 
     /** Label used in the activity log feed. */
+    /**
+     * Ensure the record has a public token (bearer credential for the emailed
+     * Pre-Tenancy form link) and return it. Generated lazily the first time the
+     * link is needed, then reused.
+     */
+    public function ensurePublicToken(): string
+    {
+        if (! $this->public_token) {
+            $this->public_token = \Illuminate\Support\Str::random(48);
+            $this->saveQuietly();
+        }
+
+        return $this->public_token;
+    }
+
+    /** Absolute URL to the tenant's native Pre-Tenancy form. */
+    public function preTenancyFormUrl(): string
+    {
+        return rtrim(config('app.url'), '/').'/pre-tenancy/'.$this->ensurePublicToken();
+    }
+
+    /** Has the tenant submitted the Pre-Tenancy form? */
+    public function preTenancyFormCompleted(): bool
+    {
+        return (bool) $this->pre_tenancy_form_completed_at;
+    }
+
     public function activityLabel(): string
     {
         return $this->full_legal_name ?? 'EOI submission';

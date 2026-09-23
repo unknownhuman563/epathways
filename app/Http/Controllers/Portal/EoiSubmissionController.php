@@ -64,11 +64,29 @@ class EoiSubmissionController extends Controller
         // address/code for display; internet_passcode + house_code feed the
         // move-in welcome email preview (staff-only portal page).
         $submission->property?->makeVisible(['code', 'address', 'internet_passcode', 'house_code']);
+        // Native Pre-Tenancy form link (replaces the Google Form) — drives the
+        // stage email + the copy-link button on the detail page.
+        $submission->setAttribute('pre_tenancy_form_url', $submission->preTenancyFormUrl());
+
+        // The generated flat/house-sharing agreement built for this client in
+        // Forms → Agreements, so the Agreement stage can source & show it.
+        $agreement = \App\Models\AccommodationAgreement::where('eoi_submission_id', $submission->id)
+            ->latest()->first();
 
         return inertia('portal/accommodation/ApplicationDetails', [
             'submission' => $submission,
             'options' => $this->options(),
             'allowedTransitions' => OnboardingPipeline::allowedFrom($submission->status),
+            'agreement' => $agreement ? [
+                'id' => $agreement->id,
+                'type_label' => $agreement->typeLabel(),
+                'status' => $agreement->status,
+                'signed' => $agreement->status === \App\Models\AccommodationAgreement::STATUS_SIGNED,
+                'signing_url' => $agreement->signingUrl(),
+                'created_at' => optional($agreement->created_at)->toIso8601String(),
+                'download_url' => route('portal.accommodation.forms.agreements.download', $agreement),
+                'resend_url' => route('portal.accommodation.forms.agreements.resend', $agreement),
+            ] : null,
         ]);
     }
 
@@ -80,7 +98,30 @@ class EoiSubmissionController extends Controller
             return redirect()->back()->with('error', 'Use “Convert to Tenant” to complete move-in.');
         }
 
+        // The pre-tenancy stage is completed by the tenant submitting the form
+        // (which auto-advances the stage) — staff can't mark it done manually.
+        if ($request->input('status') === 'pre_tenancy_form_completed' && empty($submission->pre_tenancy_form_data)) {
+            return redirect()->back()->with('error', 'The tenant has not submitted their pre-tenancy form yet — this stage completes automatically once they do.');
+        }
+
         $service->transition($submission, $request->input('status'), $request->stageData());
+
+        // Actually send the staff-composed stage email (e.g. the Pre-Tenancy
+        // form invite with its native link) to the applicant, if one was
+        // supplied and we have an address to send to.
+        $email = $request->emailPayload();
+        if ($email && $submission->email) {
+            try {
+                \Illuminate\Support\Facades\Mail::to($submission->email)
+                    ->queue(new \App\Mail\OnboardingStageEmail($email['subject'], $email['body']));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Onboarding stage email failed', ['submission' => $submission->id, 'error' => $e->getMessage()]);
+
+                return redirect()->back()->with('error', 'Stage updated, but the email could not be sent.');
+            }
+
+            return redirect()->back()->with('success', 'Stage updated and email sent.');
+        }
 
         return redirect()->back()->with('success', 'Stage updated.');
     }

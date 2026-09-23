@@ -38,7 +38,9 @@ export default function StageEmailModal({ submission, target, onClose }) {
         setProcessing(true);
         router.patch(
             `/portal/accommodation/applications/${submission.id}/status`,
-            { status: target },
+            // Send the (possibly edited) email along with the move — the backend
+            // emails the applicant this exact subject/body.
+            { status: target, email_subject: subject, email_body: body },
             { preserveScroll: true, onSuccess: onClose, onFinish: () => setProcessing(false) },
         );
     };
@@ -55,12 +57,12 @@ export default function StageEmailModal({ submission, target, onClose }) {
                     <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><X size={18} /></button>
                 </div>
 
-                <div className="mb-3 flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+                <div className={`mb-3 flex items-start gap-2 rounded-2xl px-4 py-2.5 text-xs ${previewOnly ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}>
                     <Info size={15} className="mt-0.5 shrink-0" />
                     {previewOnly ? (
-                        <span>Email automation isn't live yet — this is the move-in welcome email. You can edit it below for your own copy; edits aren't saved as a template.</span>
+                        <span>This is the move-in welcome email — preview only. You can edit it below for your own copy; edits aren't saved as a template.</span>
                     ) : (
-                        <span>Email automation isn't live yet — confirming moves this application to <strong>{statusLabel(target)}</strong> without actually sending the email. You can edit the Subject and Body for this send; edits aren't saved as a reusable template.</span>
+                        <span>Confirming <strong>sends this email</strong> to {recipient || "the applicant"} and moves the application to <strong>{statusLabel(target)}</strong>. You can edit the Subject and Body for this send; edits aren't saved as a reusable template.</span>
                     )}
                 </div>
 
