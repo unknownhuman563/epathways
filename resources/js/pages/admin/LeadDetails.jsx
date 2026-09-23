@@ -543,7 +543,19 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
     const currentUrl = usePage().url || '';
-    const backToLeadsUrl = currentUrl.replace(/\/leads\/[^/?#]+.*$/, '/leads') || '/admin/leads';
+    const leadsListUrl = currentUrl.replace(/\/leads\/[^/?#]+.*$/, '/leads') || '/admin/leads';
+    // A `?nav=<section>` hint means this page was opened from another sidebar
+    // section (e.g. the Students screen). Send "Back" there instead of the Leads
+    // list, and label it accordingly — every portal that links here with a hint
+    // has a matching `${base}/<section>` route.
+    const backNavHint = (() => {
+        const q = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
+        return new URLSearchParams(q).get('nav');
+    })();
+    const backToLeadsUrl = backNavHint
+        ? leadsListUrl.replace(/\/leads$/, `/${backNavHint}`)
+        : leadsListUrl;
+    const backToLabel = backNavHint || 'leads';
 
     // Honour ?tab=documents (or stats / personal / activity) in the URL so
     // links from the Education Documents folder list land directly on the
@@ -652,7 +664,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
             <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                 <p className="text-gray-600 font-medium font-inter">Loading lead details...</p>
-                <Link href={backToLeadsUrl} className="text-blue-600 hover:underline text-sm font-semibold">Back to Leads</Link>
+                <Link href={backToLeadsUrl} className="text-blue-600 hover:underline text-sm font-semibold">Back to {backToLabel.charAt(0).toUpperCase() + backToLabel.slice(1)}</Link>
             </div>
         );
     }
@@ -877,7 +889,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 from here. The pipeline stage sits inline rather than in its own
                 block, and the stat strip below carries the rest. */}
             <Link href={backToLeadsUrl} className="inline-flex items-center gap-1.5 -mb-2 text-[12px] font-semibold text-gray-400 hover:text-gray-700 transition-colors">
-                <ArrowLeft size={13} /> Back to leads
+                <ArrowLeft size={13} /> Back to {backToLabel}
             </Link>
 
             {/* Identity + the five facts underneath read as one block, so they

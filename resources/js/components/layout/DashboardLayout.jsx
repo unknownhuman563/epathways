@@ -90,11 +90,28 @@ export default function DashboardLayout({
             : []),
     ];
 
+    // Shared detail pages (e.g. the lead detail screen) are reached from more
+    // than one sidebar entry — the Leads list AND the Students screen both open
+    // /leads/{id}. By URL alone they always light up "List of Leads". A link can
+    // instead declare which section it belongs to with a `?nav=<slug>` hint; the
+    // slug is matched against the last path segment of each nav item's href.
+    const navHint = (() => {
+        const i = url.indexOf("?");
+        if (i === -1) return null;
+        return new URLSearchParams(url.slice(i + 1)).get("nav");
+    })();
+    const hrefSlug = (href) => href.replace(/\/+$/, "").split("/").pop();
+
     // Match `/leads` against `/leads/123` (lead detail) but NOT against
     // `/leads/proposals-agreements` — otherwise sibling children share
     // a prefix and both light up. Path must either equal the href or
-    // continue with a `/`.
-    const isPathMatch = (href) => url === href || url.startsWith(href + "/");
+    // continue with a `/`. When a `?nav=` hint is present it wins: ONLY the
+    // item whose href slug equals the hint is active, so the shared page lights
+    // up the section it was opened from rather than the one its URL sits under.
+    const isPathMatch = (href) =>
+        navHint
+            ? hrefSlug(href) === navHint
+            : url === href || url.startsWith(href + "/");
 
     // The single best top-level match — the item whose href is the LONGEST
     // prefix of the current URL — so sibling prefixes don't both light up

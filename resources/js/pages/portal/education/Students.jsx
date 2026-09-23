@@ -841,7 +841,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                             <td className="px-3 py-2.5">
                                                 <div className="min-w-[180px]">
                                                 <Link
-                                                    href={`${portalBase()}/leads/${s.id}`}
+                                                    href={`${portalBase()}/leads/${s.id}?nav=students`}
                                                     className="flex items-center gap-2.5 group/student"
                                                 >
                                                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden ${s.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(s.priority)}` : (s.priority ? priorityDot(s.priority) : avatarColor(s.id))}`}>
@@ -882,10 +882,16 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 or endorsed this record. */}
                                             <td className="px-3 py-2.5 relative">
                                                 {(() => {
-                                                    // While searching, show each result under its own
-                                                    // department's stage set (so a match from another tab
-                                                    // keeps a meaningful status chip).
-                                                    const rc = searching ? TAB_STAGE_CONFIG[primaryDeptOf(s)] : tabConfig;
+                                                    // While searching, results span every tab. Keep the
+                                                    // status chip anchored to the tab the staffer is on
+                                                    // whenever this row actually belongs to it — a
+                                                    // student+case on the Education tab must still read
+                                                    // its education_stage, not the immigration one. Only
+                                                    // rows that surfaced from another department fall back
+                                                    // to their own primary department's stage set.
+                                                    const rc = searching
+                                                        ? (departmentsOf(s).has(view) ? tabConfig : TAB_STAGE_CONFIG[primaryDeptOf(s)])
+                                                        : tabConfig;
                                                     const val = s[rc.field] || "";
                                                     // Immigration owns its own stages — the Education team
                                                     // can't change them here, so show a read-only chip. The
@@ -1014,7 +1020,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                             // No /leads/{id}/documents route exists in any
                                                             // portal — the profile's Documents tab is the
                                                             // real destination.
-                                                            href: `${portalBase()}/leads/${s.id}?tab=documents`,
+                                                            href: `${portalBase()}/leads/${s.id}?tab=documents&nav=students`,
                                                         },
                                                         {
                                                             key: 'files',
@@ -1250,13 +1256,13 @@ function StudentDashboardPanel({ student: s }) {
             {/* 6 — Quick actions */}
             <section className="flex flex-wrap gap-2">
                 <Link
-                    href={`${portalBase()}/leads/${s.id}?tab=documents`}
+                    href={`${portalBase()}/leads/${s.id}?tab=documents&nav=students`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-900 text-white hover:bg-gray-800 transition-colors"
                 >
                     <FolderOpen size={12} /> Open profile
                 </Link>
                 <Link
-                    href={`${portalBase()}/leads/${s.id}`}
+                    href={`${portalBase()}/leads/${s.id}?nav=students`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                     <FileText size={12} /> Lead detail
