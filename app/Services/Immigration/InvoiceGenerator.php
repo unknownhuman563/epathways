@@ -33,8 +33,8 @@ class InvoiceGenerator
 
     public const COMPANY = [
         'name' => 'ePathways Migration',
-        'address_1' => '21 Vazey Way, Hobsonville',
-        'address_2' => 'Auckland 0618',
+        'address_1' => '4/15L Mercari Way, Albany',
+        'address_2' => 'Auckland 0632',
         'country' => 'NEW ZEALAND',
         'gst' => '144-821-777',
     ];
