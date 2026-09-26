@@ -28,7 +28,7 @@ class BookingConfirmationMail extends Mailable implements ShouldQueue
         $title = $this->booking->visaType?->name ?: ($this->booking->service_type ?: 'ePathways Consultation');
 
         // Send from and reply to the support address (default MAIL_FROM =
-        // ePathways Support <support@epathways.co.nz>).
+        // ePathways Support <support@luvep.com>).
         $support = config('mail.from.address');
         $supportName = config('mail.from.name');
 

@@ -22,7 +22,7 @@
         $facebook     = config('services.contact.facebook');
         $footerSiteUrl  = 'https://luvep.com/immigration';
         $footerSiteHost = 'luvep.com/immigration';
-        $contactEmail = 'migration@epathways.co.nz';
+        $contactEmail = 'migration@luvep.com';
         $whatsapp     = '+64 22 188 2800';
     @endphp
 

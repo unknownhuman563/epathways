@@ -7,7 +7,7 @@
 const CONTACT_NAME = "Janille";
 const CONTACT_PHONE = "+64 21 280 4611";
 const FOOTER_PHONE = "+64 21 227 8999";
-const CONTACT_EMAIL = "exaltinfo@epathways.co.nz";
+const CONTACT_EMAIL = "exaltinfo@luvep.com";
 const SIGN_OFF = "EXALT PROPERTY MANAGEMENT LTD";
 
 const firstName = (s) => {

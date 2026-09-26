@@ -18,19 +18,19 @@ use Illuminate\Support\Carbon;
  * throwaway event. Tells you WORKING vs BLOCKED before you point real bookings
  * at a calendar. Kept out of the app flow; run by hand.
  *
- *   php artisan google:test-calendar                       # tests emma@epathways.co.nz (read only)
- *   php artisan google:test-calendar you@epathways.co.nz   # tests a different account
+ *   php artisan google:test-calendar                       # tests emma@luvep.com (read only)
+ *   php artisan google:test-calendar you@luvep.com   # tests a different account
  *   php artisan google:test-calendar --write               # also create+delete a test event
  */
 class GoogleTestCalendar extends Command
 {
-    protected $signature = 'google:test-calendar {email? : Workspace account to impersonate (default emma@epathways.co.nz)} {--write : Also create then delete a throwaway event to prove write access}';
+    protected $signature = 'google:test-calendar {email? : Workspace account to impersonate (default emma@luvep.com)} {--write : Also create then delete a throwaway event to prove write access}';
 
     protected $description = 'Check whether the booking service account can read/write a Workspace user\'s Google Calendar (domain-wide delegation test).';
 
     public function handle(): int
     {
-        $email = $this->argument('email') ?: 'emma@epathways.co.nz';
+        $email = $this->argument('email') ?: 'emma@luvep.com';
         $calendarId = (string) config('services.google_calendar.calendar_id', 'primary');
 
         $this->line('');

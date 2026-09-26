@@ -120,7 +120,7 @@ export default function SetupAccount({ token, lead }) {
                 </div>
 
                 <p className="text-center text-[10px] text-gray-400 font-light mt-6">
-                    Need help? Email <a href="mailto:info@epathways.co.nz" className="underline">info@epathways.co.nz</a>
+                    Need help? Email <a href="mailto:info@luvep.com" className="underline">info@luvep.com</a>
                 </p>
             </div>
         </div>

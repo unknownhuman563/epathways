@@ -8,7 +8,7 @@
 export const VIEWING_BOOKING_CALENDAR_URL = "https://calendar.app.google/zH9mNZihJypkdvg86";
 const CONTACT_NAME = "Janille";
 const CONTACT_PHONE = "+64 21 280 4611";
-const CONTACT_EMAIL = "exaltinfo@epathways.co.nz";
+const CONTACT_EMAIL = "exaltinfo@luvep.com";
 const SIGN_OFF = "EXALT PROPERTY MANAGEMENT LTD";
 
 const firstName = (s) => {

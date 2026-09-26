@@ -11,8 +11,8 @@ class PortalUsersSeeder extends Seeder
      * Create one login per department portal so each scaffold can be exercised.
      *
      * Reuses ADMIN_SEED_PASSWORD (does nothing if it's not set). Emails default
-     * to <dept>@epathways.co.nz and can be overridden with <DEPT>_SEED_EMAIL,
-     * e.g. SALES_SEED_EMAIL=sales.lead@epathways.co.nz.
+     * to <dept>@luvep.com and can be overridden with <DEPT>_SEED_EMAIL,
+     * e.g. SALES_SEED_EMAIL=sales.lead@luvep.com.
      */
     public function run(): void
     {
@@ -25,7 +25,7 @@ class PortalUsersSeeder extends Seeder
         }
 
         foreach (User::PORTAL_ROLES as $role) {
-            $email = env(strtoupper($role).'_SEED_EMAIL', "{$role}@epathways.co.nz");
+            $email = env(strtoupper($role).'_SEED_EMAIL', "{$role}@luvep.com");
 
             User::updateOrCreate(
                 ['email' => $email],
@@ -41,11 +41,11 @@ class PortalUsersSeeder extends Seeder
         // and the adviser (LIA — own portal). The adviser gets a current IAA
         // licence so advice-bearing sign-off is exercisable.
         User::updateOrCreate(
-            ['email' => env('IMMIGRATION_MANAGER_SEED_EMAIL', 'immigration.manager@epathways.co.nz')],
+            ['email' => env('IMMIGRATION_MANAGER_SEED_EMAIL', 'immigration.manager@luvep.com')],
             ['name' => 'Immigration Manager', 'password' => bcrypt($password), 'role' => User::ROLE_IMMIGRATION_MANAGER],
         );
         User::updateOrCreate(
-            ['email' => env('IMMIGRATION_ADVISER_SEED_EMAIL', 'immigration.adviser@epathways.co.nz')],
+            ['email' => env('IMMIGRATION_ADVISER_SEED_EMAIL', 'immigration.adviser@luvep.com')],
             [
                 'name' => 'Immigration Adviser',
                 'password' => bcrypt($password),
@@ -63,7 +63,7 @@ class PortalUsersSeeder extends Seeder
         // with a current IAA licence so the signer default resolves; production
         // uses his real licence details.
         User::updateOrCreate(
-            ['email' => env('SIGNING_ADVISER_SEED_EMAIL', 'hendry@epathways.co.nz')],
+            ['email' => env('SIGNING_ADVISER_SEED_EMAIL', 'hendry@luvep.com')],
             [
                 'name' => 'Hendry Dai',
                 'password' => bcrypt($password),

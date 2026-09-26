@@ -145,7 +145,7 @@
             <p>@yield('message', 'An unexpected error occurred. Please try again or reach out if the problem persists.')</p>
             <div class="actions">
                 <a href="/" class="btn primary">Back to home</a>
-                <a href="mailto:{{ config('services.contact.email', 'info@epathways.co.nz') }}" class="btn secondary">Contact us</a>
+                <a href="mailto:{{ config('services.contact.email', 'info@luvep.com') }}" class="btn secondary">Contact us</a>
             </div>
         </div>
     </main>

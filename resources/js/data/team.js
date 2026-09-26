@@ -26,7 +26,7 @@ export const team = [
     links: {
       booking: "https://calendar.app.google/FYfMdmB1HxfBs7A28",
       whatsapp: "+64 22 188 2800",
-      email: "dev@epathways.co.nz",
+      email: "dev@luvep.com",
       facebook: "https://www.facebook.com/dev.bhageerutty",
       linkedin: "https://linkedin.com/in/dev-bhageerutty", // TODO: replace with Dev's real LinkedIn URL
       wechatId: "ep-dev", // TODO: pending — replace with Dev's WeChat QR image (set wechatQr)
@@ -43,7 +43,7 @@ export const team = [
     links: {
       booking: "https://calendar.app.google/NNorTcatG68Rjwd46",
       whatsapp: "+64 27 777 5586",
-      email: "dinah@epathways.co.nz",
+      email: "dinah@luvep.com",
       facebook: "https://www.facebook.com/dinah.jabonesuarin",
       linkedin: "https://linkedin.com/in/dinah-suarin", // TODO: replace with Dinah's real LinkedIn URL
       wechatId: "ep-dinah", // TODO: pending — replace with Dinah's WeChat QR image (set wechatQr)
@@ -60,7 +60,7 @@ export const team = [
     links: {
       booking: "https://calendly.com/epathways/emma", // TODO
       whatsapp: "+64 21 555 0103", // TODO
-      email: "emma@epathways.co.nz", // TODO
+      email: "emma@luvep.com", // TODO
       facebook: "https://facebook.com/epathways", // TODO
       linkedin: "https://linkedin.com/in/emma-ceballo", // TODO
       wechatId: "ep-emma", // TODO
@@ -77,7 +77,7 @@ export const team = [
     links: {
       booking: "https://calendly.com/epathways/hendry", // TODO
       whatsapp: "+64 21 555 0104", // TODO
-      email: "hendry@epathways.co.nz", // TODO
+      email: "hendry@luvep.com", // TODO
       facebook: "https://facebook.com/epathways", // TODO
       linkedin: "https://linkedin.com/in/hendry-dai", // TODO
       wechatId: "ep-hendry", // TODO

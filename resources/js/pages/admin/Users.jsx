@@ -195,7 +195,7 @@ function UserModal({ open, onClose, editing, roles, agents = [] }) {
 
                         <div>
                             <Label required>Email</Label>
-                            <Input type="email" value={data.email} onChange={e => setField('email', e.target.value)} placeholder="jane@epathways.co.nz" />
+                            <Input type="email" value={data.email} onChange={e => setField('email', e.target.value)} placeholder="jane@luvep.com" />
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">

@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
  * smoke-testing role gating and result shaping after changes.
  *
  *   php artisan ep:search "maria"
- *   php artisan ep:search "exalt" --user=sales@epathways.co.nz
+ *   php artisan ep:search "exalt" --user=sales@luvep.com
  */
 class Search extends Command
 {
@@ -24,7 +24,7 @@ class Search extends Command
     {
         $query = (string) $this->argument('query');
         if (mb_strlen(trim($query)) < SearchService::MIN_QUERY) {
-            $this->error('Query must be at least ' . SearchService::MIN_QUERY . ' characters.');
+            $this->error('Query must be at least '.SearchService::MIN_QUERY.' characters.');
 
             return self::FAILURE;
         }

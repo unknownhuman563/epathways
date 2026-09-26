@@ -110,8 +110,8 @@ export default function Footer() {
 
               <div>
                 <p className="font-bold text-black mb-1">Email :</p>
-                <a href={`mailto:${contact.email || "info@epathways.co.nz"}`} className="hover:text-green-600 transition-colors flex items-center gap-2">
-                  {contact.email || "info@epathways.co.nz"}
+                <a href={`mailto:${contact.email || "info@luvep.com"}`} className="hover:text-green-600 transition-colors flex items-center gap-2">
+                  {contact.email || "info@luvep.com"}
                 </a>
               </div>
 

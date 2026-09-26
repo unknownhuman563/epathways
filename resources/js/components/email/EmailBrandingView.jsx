@@ -78,7 +78,7 @@ function FooterForm({ basePath, dept, item }) {
             </div>
             <label className="block">
                 <span className="block text-[10px] text-gray-400 mb-0.5">E-mail</span>
-                <input className={input} value={f.footer_email} onChange={set("footer_email")} placeholder={eff.email || "info@epathways.co.nz"} />
+                <input className={input} value={f.footer_email} onChange={set("footer_email")} placeholder={eff.email || "info@luvep.com"} />
             </label>
             <label className="block">
                 <span className="block text-[10px] text-gray-400 mb-0.5">WhatsApp (one per line)</span>

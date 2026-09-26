@@ -11,7 +11,7 @@ class SuperAdminSeeder extends Seeder
      * Create the top-of-house super-admin login (lands on /admin/super-dashboard).
      *
      * Mirrors AdminSeeder: credentials come from env so they never live in the
-     * repo. Email defaults to superadmin@epathways.co.nz; password falls back to
+     * repo. Email defaults to superadmin@luvep.com; password falls back to
      * ADMIN_SEED_PASSWORD so a single secret can seed both admin and super-admin.
      */
     public function run(): void
@@ -25,7 +25,7 @@ class SuperAdminSeeder extends Seeder
         }
 
         User::updateOrCreate(
-            ['email' => env('SUPER_ADMIN_SEED_EMAIL', 'superadmin@epathways.co.nz')],
+            ['email' => env('SUPER_ADMIN_SEED_EMAIL', 'superadmin@luvep.com')],
             [
                 'name' => 'Admin',
                 'password' => bcrypt($password),

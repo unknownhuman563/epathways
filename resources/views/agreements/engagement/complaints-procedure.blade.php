@@ -12,7 +12,7 @@
     <p>If a client is not satisfied with any service provided by the licensed immigration adviser or by our company, was not treated well, believes the adviser breached the Code of Conduct or any New Zealand law, believes an application was unsuccessful due to adviser error, or has any other unresolved concern, the complaint should be raised with our licensed immigration adviser, {{ $adviser['name'] }}, using the details below. Please describe what happened, clearly explain the problem, and state the outcome you are seeking.</p>
     <table class="data">
         <tr><td class="label">Licensed Immigration Adviser</td><td>{{ $adviser['name'] }}</td></tr>
-        <tr><td class="label">Email</td><td>{{ $adviser['email'] ?: 'hendry@epathways.co.nz' }}</td></tr>
+        <tr><td class="label">Email</td><td>{{ $adviser['email'] ?: 'hendry@luvep.com' }}</td></tr>
         <tr><td class="label">Phone</td><td>{{ $adviser['phone'] ?: '+64 21 120 3363' }}</td></tr>
     </table>
 

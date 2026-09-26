@@ -994,7 +994,7 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                             {/* Contact row */}
                             <div className="pt-2 border-t border-gray-100 flex flex-col gap-2 text-[11px] text-gray-500">
                                 <a href="tel:+64277775586" className="flex items-center gap-2 hover:text-[#00A693] transition-colors"><Phone size={12} /> +64 27 777 5586</a>
-                                <a href="mailto:info@epathways.co.nz" className="flex items-center gap-2 hover:text-[#00A693] transition-colors"><Mail size={12} /> info@epathways.co.nz</a>
+                                <a href="mailto:info@luvep.com" className="flex items-center gap-2 hover:text-[#00A693] transition-colors"><Mail size={12} /> info@luvep.com</a>
                                 <span className="flex items-center gap-2"><MapPin size={12} /> Auckland, New Zealand</span>
                             </div>
                         </motion.div>

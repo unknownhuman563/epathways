@@ -305,7 +305,7 @@ export function SchoolFormModal({ initial, onClose }) {
                     <SectionHeading icon={KeyRound}>Portal</SectionHeading>
                     <div className="grid grid-cols-2 gap-3">
                         <ModalField label="Email / Username" error={errors.portal_username}>
-                            <input type="text" value={form.portal_username} onChange={set("portal_username")} maxLength={191} className={inputClass} placeholder="login@epathways.co.nz" />
+                            <input type="text" value={form.portal_username} onChange={set("portal_username")} maxLength={191} className={inputClass} placeholder="login@luvep.com" />
                         </ModalField>
                         <ModalField label="Password" error={errors.portal_password}>
                             <input type="text" value={form.portal_password} onChange={set("portal_password")} maxLength={191} className={inputClass} placeholder="Portal password" />

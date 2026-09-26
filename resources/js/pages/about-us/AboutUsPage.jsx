@@ -190,7 +190,7 @@ export default function AboutUs() {
                                         <div className="text-3xl font-bold mb-2">Dev Bhageerutty</div>
                                         <div className="text-[10px] text-gray-300 uppercase tracking-[0.2em] font-medium leading-relaxed mb-6">
                                             (LIA 202401351)<br />
-                                            dev@epathways.co.nz
+                                            dev@luvep.com
                                         </div>
                                         <div className="flex gap-2">
                                             <div className="w-2.5 h-2.5 rounded-full bg-white shadow-glow"></div>
@@ -316,7 +316,7 @@ export default function AboutUs() {
                             {[
                                 { 
                                     id: 'nz', name: "New Zealand", city: "Auckland", top: "72%", left: "87%",
-                                    address: "Auckland, New Zealand", email: "admin@epathways.co.nz", phone: "+64 21 000 0000",
+                                    address: "Auckland, New Zealand", email: "admin@luvep.com", phone: "+64 21 000 0000",
                                     head: { name: "Dinah Jabone", image: DinaImg },
                                     team: [
                                         { name: "Dev Bhageerutty", role: "Licence Immigration Adviser (Provisional)", image: DevImg },
@@ -338,7 +338,7 @@ export default function AboutUs() {
                                 },
                                 { 
                                     id: 'in', name: "India", city: "New Delhi", top: "37%", left: "63%",
-                                    address: "New Delhi, India", email: "india@epathways.co.nz", phone: "+91 000 000 0000",
+                                    address: "New Delhi, India", email: "india@luvep.com", phone: "+91 000 000 0000",
                                     head: { name: "Dinah Jabone", image: DinaImg },
                                     team: [
                                         { name: "Dinah Jabone", role: "Co-Founding Member", image: DinaImg }
@@ -346,7 +346,7 @@ export default function AboutUs() {
                                 },
                                 { 
                                     id: 'my', name: "Malaysia", city: "Kuala Lumpur", top: "50%", left: "71%",
-                                    address: "Kuala Lumpur, Malaysia", email: "my@epathways.co.nz", phone: "+60 00 000 0000",
+                                    address: "Kuala Lumpur, Malaysia", email: "my@luvep.com", phone: "+60 00 000 0000",
                                     head: { name: "Emily Dela Pena", image: EmilyImg },
                                     team: [
                                         { name: "Emily Dela Pena", role: "Finance Admin Champion", image: EmilyImg }

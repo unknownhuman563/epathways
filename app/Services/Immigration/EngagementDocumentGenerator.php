@@ -26,7 +26,7 @@ class EngagementDocumentGenerator
 
     /** Immigration-team contact block shown on every cover. */
     private const CONTACT = [
-        'email' => 'dev@epathways.co.nz',
+        'email' => 'dev@luvep.com',
         'phone' => '+64 22 188 2800',
         'website' => 'luvep.com/immigration',
     ];

@@ -332,7 +332,7 @@ export default function TemplateEditorView({
                             <div className="grid grid-cols-2 gap-4">
                                 <label className="block">
                                     <span className="block text-xs font-semibold text-gray-600 mb-1">Reply-to address <span className="text-gray-400 font-normal">(optional)</span></span>
-                                    <input value={data.reply_to_email} onChange={(e) => setData("reply_to_email", e.target.value)} placeholder="you@epathways.co.nz" className={inp} />
+                                    <input value={data.reply_to_email} onChange={(e) => setData("reply_to_email", e.target.value)} placeholder="you@luvep.com" className={inp} />
                                     {errors.reply_to_email && <span className="text-xs text-rose-600">{errors.reply_to_email}</span>}
                                 </label>
                                 <label className="block">
@@ -345,18 +345,18 @@ export default function TemplateEditorView({
                             <div className="grid grid-cols-2 gap-4">
                                 <label className="block col-span-2">
                                     <span className="block text-xs font-semibold text-gray-600 mb-1">To — also send to <span className="text-gray-400 font-normal">(optional)</span></span>
-                                    <input value={data.to_extra} onChange={(e) => setData("to_extra", e.target.value)} placeholder="team@epathways.co.nz, another@…" className={inp} />
+                                    <input value={data.to_extra} onChange={(e) => setData("to_extra", e.target.value)} placeholder="team@luvep.com, another@…" className={inp} />
                                     {errors.to_extra && <span className="text-xs text-rose-600">{errors.to_extra}</span>}
                                     <span className="block text-[11px] text-gray-400 mt-1">The client is always the main recipient. These extra addresses are added to the To line on every send (e.g. so your internal team gets the same email).</span>
                                 </label>
                                 <label className="block">
                                     <span className="block text-xs font-semibold text-gray-600 mb-1">Cc <span className="text-gray-400 font-normal">(optional)</span></span>
-                                    <input value={data.cc} onChange={(e) => setData("cc", e.target.value)} placeholder="team@epathways.co.nz, other@…" className={inp} />
+                                    <input value={data.cc} onChange={(e) => setData("cc", e.target.value)} placeholder="team@luvep.com, other@…" className={inp} />
                                     {errors.cc && <span className="text-xs text-rose-600">{errors.cc}</span>}
                                 </label>
                                 <label className="block">
                                     <span className="block text-xs font-semibold text-gray-600 mb-1">Bcc <span className="text-gray-400 font-normal">(optional)</span></span>
-                                    <input value={data.bcc} onChange={(e) => setData("bcc", e.target.value)} placeholder="records@epathways.co.nz" className={inp} />
+                                    <input value={data.bcc} onChange={(e) => setData("bcc", e.target.value)} placeholder="records@luvep.com" className={inp} />
                                     {errors.bcc && <span className="text-xs text-rose-600">{errors.bcc}</span>}
                                 </label>
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Comma-separated. These addresses are copied on every send of this template.</p>

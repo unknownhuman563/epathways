@@ -26,7 +26,7 @@
                     <p style="margin:18px 0 0; font-size:14px;">Ngā mihi,<br>Exalt Property Management Ltd</p>
                 </td></tr>
                 <tr><td style="padding:16px 28px; background:#f9fafb; color:#9ca3af; font-size:12px;">
-                    exaltinfo@epathways.co.nz · +64 21 227 8999
+                    exaltinfo@luvep.com · +64 21 227 8999
                 </td></tr>
             </table>
         </td></tr>

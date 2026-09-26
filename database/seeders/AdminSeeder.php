@@ -18,7 +18,7 @@ class AdminSeeder extends Seeder
         }
 
         User::updateOrCreate(
-            ['email' => env('ADMIN_SEED_EMAIL', 'admin@epathways.co.nz')],
+            ['email' => env('ADMIN_SEED_EMAIL', 'admin@luvep.com')],
             [
                 'name' => 'Admin',
                 'password' => bcrypt($password),

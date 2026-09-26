@@ -275,7 +275,7 @@
             <td class="exec-cell"><div class="exec-val">{!! $fld('affiliate_business_address', '____________') !!}</div><div class="sig-label">BUSINESS ADDRESS</div></td>
         </tr>
         <tr>
-            <td class="exec-cell"><div class="exec-val">dinah@epathways.co.nz</div><div class="sig-label">EMAIL</div></td>
+            <td class="exec-cell"><div class="exec-val">dinah@luvep.com</div><div class="sig-label">EMAIL</div></td>
             <td class="exec-cell"><div class="exec-val">{!! $fld('affiliate_email', '____________') !!}</div><div class="sig-label">EMAIL</div></td>
         </tr>
         <tr>
