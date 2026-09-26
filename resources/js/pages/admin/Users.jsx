@@ -6,7 +6,7 @@ import {
     Search, Plus, Edit2, Trash2, ChevronDown, ChevronLeft, ChevronRight,
     Users as UsersIcon, ShieldCheck, Briefcase, X, AlertCircle, AlertTriangle, Mail,
     Building2, UserPlus, GraduationCap, FileSignature, ArrowRight, Camera,
-    Lock, Eye, EyeOff, BadgeCheck,
+    Lock, Eye, EyeOff, BadgeCheck, RotateCcw, Ban, CircleCheck, Trash,
 } from 'lucide-react';
 
 const ROLE_STYLES = {
@@ -364,7 +364,7 @@ function UserModal({ open, onClose, editing, roles, agents = [] }) {
     );
 }
 
-export default function Users({ users = [], agents = [], roles = [], leads = [], students = [], cases = [] }) {
+export default function Users({ users = [], deletedUsers = [], agents = [], roles = [], leads = [], students = [], cases = [] }) {
     const { props } = usePage();
     const currentUserId = props.auth?.user?.id;
 
@@ -389,6 +389,7 @@ export default function Users({ users = [], agents = [], roles = [], leads = [],
 
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('All');
+    const [showDeleted, setShowDeleted] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
 
     const [showModal, setShowModal] = useState(false);
@@ -404,7 +405,8 @@ export default function Users({ users = [], agents = [], roles = [], leads = [],
     const openEdit = (user) => { setEditing(user); setShowModal(true); };
     const closeModal = () => { setShowModal(false); setEditing(null); };
 
-    const filtered = users.filter(u => {
+    const source = showDeleted ? deletedUsers : users;
+    const filtered = source.filter(u => {
         const matchesSearch = !search ||
             u.name?.toLowerCase().includes(search.toLowerCase()) ||
             u.email?.toLowerCase().includes(search.toLowerCase());
@@ -418,7 +420,7 @@ export default function Users({ users = [], agents = [], roles = [], leads = [],
     const endIdx = pageSize === 'all' ? totalItems : Math.min(startIdx + pageSize, totalItems);
     const pageItems = pageSize === 'all' ? filtered : filtered.slice(startIdx, endIdx);
 
-    useEffect(() => { setCurrentPage(1); }, [search, roleFilter, pageSize]);
+    useEffect(() => { setCurrentPage(1); }, [search, roleFilter, pageSize, showDeleted]);
     useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
     const getPageNumbers = () => {
@@ -455,6 +457,15 @@ export default function Users({ users = [], agents = [], roles = [], leads = [],
     };
 
     const cancelDelete = () => { if (!isDeleting) setDeleteTarget(null); };
+
+    const restoreUser = (user) => {
+        setActiveDropdown(null);
+        router.post('/admin/users/' + user.id + '/restore', {}, { preserveScroll: true });
+    };
+    const toggleActive = (user) => {
+        setActiveDropdown(null);
+        router.post('/admin/users/' + user.id + '/toggle-active', {}, { preserveScroll: true });
+    };
 
     return (
         <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
@@ -528,6 +539,12 @@ export default function Users({ users = [], agents = [], roles = [], leads = [],
                             {tab === 'All' ? 'All' : roleLabel(tab)}
                         </button>
                     ))}
+                    <span className="mx-1 h-5 w-px bg-gray-200" />
+                    <button
+                        onClick={() => setShowDeleted(v => !v)}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${showDeleted ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                        <Trash size={13} /> Deleted{deletedUsers.length ? ` (${deletedUsers.length})` : ''}
+                    </button>
                 </div>
             </div>
 
@@ -572,9 +589,16 @@ export default function Users({ users = [], agents = [], roles = [], leads = [],
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${roleStyle(user.role)}`}>
-                                                {roleLabel(user.role)}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${roleStyle(user.role)}`}>
+                                                    {roleLabel(user.role)}
+                                                </span>
+                                                {showDeleted ? (
+                                                    <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-bold border bg-rose-50 text-rose-600 border-rose-200">Deleted</span>
+                                                ) : user.is_active === false ? (
+                                                    <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200">Inactive</span>
+                                                ) : null}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-600">{formatDate(user.created_at)}</td>
                                         <td className="px-6 py-4 text-right pr-6 relative">
@@ -587,21 +611,42 @@ export default function Users({ users = [], agents = [], roles = [], leads = [],
                                             {activeDropdown === user.id && (
                                                 <>
                                                     <div className="fixed inset-0 z-40" onClick={() => setActiveDropdown(null)} />
-                                                    <div className="absolute right-6 top-14 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2">
-                                                        <button
-                                                            onClick={() => { openEdit(user); setActiveDropdown(null); }}
-                                                            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                                                        >
-                                                            <Edit2 size={16} className="text-gray-400" /> Edit
-                                                        </button>
-                                                        <button
-                                                            onClick={() => requestDelete(user)}
-                                                            disabled={isSelf}
-                                                            title={isSelf ? "You can't delete your own account" : undefined}
-                                                            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                                        >
-                                                            <Trash2 size={16} /> Delete
-                                                        </button>
+                                                    <div className="absolute right-6 top-14 w-52 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2">
+                                                        {showDeleted ? (
+                                                            <button
+                                                                onClick={() => restoreUser(user)}
+                                                                className="flex w-full items-center gap-3 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                            >
+                                                                <RotateCcw size={16} /> Restore user
+                                                            </button>
+                                                        ) : (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => { openEdit(user); setActiveDropdown(null); }}
+                                                                    className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                                                                >
+                                                                    <Edit2 size={16} className="text-gray-400" /> Edit
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => toggleActive(user)}
+                                                                    disabled={isSelf}
+                                                                    title={isSelf ? "You can't deactivate your own account" : undefined}
+                                                                    className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                                                >
+                                                                    {user.is_active === false
+                                                                        ? <><CircleCheck size={16} className="text-emerald-600" /> Activate</>
+                                                                        : <><Ban size={16} className="text-amber-600" /> Deactivate</>}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => requestDelete(user)}
+                                                                    disabled={isSelf}
+                                                                    title={isSelf ? "You can't delete your own account" : undefined}
+                                                                    className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                                                >
+                                                                    <Trash2 size={16} /> Delete
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </>
                                             )}

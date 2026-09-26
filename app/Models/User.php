@@ -4,13 +4,14 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /** Highest tier — can hard-delete + edit anything across departments. */
     public const ROLE_SUPER_ADMIN = 'super_admin';
@@ -68,6 +69,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'is_active',
         'module_permissions',
         'portal_access',
         'referral_code',
@@ -112,6 +114,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'is_active' => 'boolean',
             'iaa_licence_expiry' => 'date',
             'iaa_licence_verified_at' => 'date',
             'signature_updated_at' => 'datetime',

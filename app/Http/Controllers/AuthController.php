@@ -67,6 +67,12 @@ class AuthController extends Controller
         $remember = $request->boolean('remember');
 
         if (Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']], $remember)) {
+            // Deactivated accounts have a valid password but no access.
+            if (! Auth::user()->is_active) {
+                Auth::logout();
+
+                return back()->withErrors(['email' => 'This account has been deactivated. Please contact an administrator.'])->onlyInput('email');
+            }
             // Clean slate on success — failed-attempt counters reset.
             RateLimiter::clear($emailKey);
             RateLimiter::clear($ipKey);
@@ -164,8 +170,8 @@ class AuthController extends Controller
     public function resetPassword(Request $request)
     {
         $request->validate([
-            'token'    => ['required'],
-            'email'    => ['required', 'email'],
+            'token' => ['required'],
+            'email' => ['required', 'email'],
             'password' => self::passwordRules(),
         ]);
 
@@ -173,7 +179,7 @@ class AuthController extends Controller
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function ($user, $password) {
                 $user->forceFill([
-                    'password'       => Hash::make($password),
+                    'password' => Hash::make($password),
                     'remember_token' => Str::random(60),
                 ])->save();
 

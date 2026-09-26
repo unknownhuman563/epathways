@@ -31,12 +31,18 @@ class UserController extends Controller
         // staff directory.
         $users = User::whereNotIn('role', ['lead', 'revoked_lead'])
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'phone', 'location', 'role', 'avatar_path', 'created_at',
+            ->get(['id', 'name', 'email', 'phone', 'location', 'role', 'is_active', 'avatar_path', 'created_at',
                 // Sub-agent → recruiting agent link; the edit modal pre-fills it.
                 'parent_agent_id',
                 // IAA licence — admin-managed (Build 12 fast-follow); the edit
                 // modal pre-fills from these.
                 'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry', 'iaa_licence_verified_at']);
+
+        // Soft-deleted staff accounts — shown in the "Deleted" view for restore.
+        $deletedUsers = User::onlyTrashed()
+            ->whereNotIn('role', ['lead', 'revoked_lead'])
+            ->orderByDesc('deleted_at')
+            ->get(['id', 'name', 'email', 'role', 'avatar_path', 'created_at', 'deleted_at']);
 
         // Cross-link rolls for the User Management tabs. Each list is a
         // thin name + email + stage projection that the frontend renders
@@ -67,6 +73,7 @@ class UserController extends Controller
 
         return inertia('admin/Users', [
             'users' => $users,
+            'deletedUsers' => $deletedUsers,
             'agents' => $agents,
             'roles' => $this->roleValues(),
             'leads' => $leads,
@@ -228,6 +235,38 @@ class UserController extends Controller
         ]);
 
         return back()->with('success', 'User deleted successfully.');
+    }
+
+    /** Restore a soft-deleted user. */
+    public function restore(Request $request, $id)
+    {
+        $user = User::onlyTrashed()->findOrFail($id);
+        $user->restore();
+        ActivityLog::record('user.restored', [
+            'description' => "Restored user {$user->name} ({$user->email})",
+            'properties' => ['target_id' => $user->id, 'target_name' => $user->name, 'target_email' => $user->email, 'target_role' => $user->role],
+        ]);
+
+        return back()->with('success', 'User restored successfully.');
+    }
+
+    /** Activate / deactivate a user account (reversible suspension). */
+    public function toggleActive(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        if ($user->is($request->user())) {
+            return back()->withErrors(['user' => 'You cannot deactivate your own account.']);
+        }
+
+        $user->is_active = ! $user->is_active;
+        $user->save();
+
+        ActivityLog::record($user->is_active ? 'user.activated' : 'user.deactivated', [
+            'description' => ($user->is_active ? 'Activated' : 'Deactivated')." user {$user->name} ({$user->email})",
+            'properties' => ['target_id' => $user->id, 'target_name' => $user->name, 'target_email' => $user->email, 'target_role' => $user->role],
+        ]);
+
+        return back()->with('success', $user->is_active ? 'User activated.' : 'User deactivated.');
     }
 
     // ─── Profile avatar ───────────────────────────────────────────────────

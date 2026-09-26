@@ -662,6 +662,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/users', [UserController::class, 'store']);
         Route::post('/admin/users/{id}', [UserController::class, 'update']);
         Route::delete('/admin/users/{id}', [UserController::class, 'destroy']);
+        Route::post('/admin/users/{id}/restore', [UserController::class, 'restore']);
+        Route::post('/admin/users/{id}/toggle-active', [UserController::class, 'toggleActive']);
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
 

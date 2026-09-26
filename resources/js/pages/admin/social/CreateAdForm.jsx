@@ -143,7 +143,7 @@ export default function CreateAdForm() {
                         </div>
 
                         <label className="block"><span className={lbl}>Headline</span><input className={inp} maxLength={255} value={form.headline} onChange={(e) => set('headline', e.target.value)} placeholder="Your headline" /></label>
-                        <label className="block"><span className={lbl}>Destination URL</span><input className={inp} value={form.linkUrl} onChange={(e) => set('linkUrl', e.target.value)} placeholder="https://epathways.co.nz/…" /></label>
+                        <label className="block"><span className={lbl}>Destination URL</span><input className={inp} value={form.linkUrl} onChange={(e) => set('linkUrl', e.target.value)} placeholder="https://luvep.com/…" /></label>
                         <label className="block"><span className={lbl}>Call to action</span>
                             <select className={inp} value={form.callToAction} onChange={(e) => set('callToAction', e.target.value)}>
                                 {CTA_OPTIONS.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}

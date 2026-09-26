@@ -20,8 +20,8 @@
         // Immigration-brand footer contacts (fixed — not the generic
         // config('services.contact.*'), which is the PH marketing brand).
         $facebook     = config('services.contact.facebook');
-        $footerSiteUrl  = 'https://epathways.co.nz/immigration';
-        $footerSiteHost = 'epathways.co.nz/immigration';
+        $footerSiteUrl  = 'https://luvep.com/immigration';
+        $footerSiteHost = 'luvep.com/immigration';
         $contactEmail = 'migration@epathways.co.nz';
         $whatsapp     = '+64 22 188 2800';
     @endphp
