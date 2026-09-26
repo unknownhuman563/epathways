@@ -176,6 +176,12 @@ class ProgramController extends Controller
         abort_if($program->status !== 'published', 404);
         $this->appendImageUrl($program);
 
-        return inertia('programs/ProgramDetails', ['program' => $program]);
+        return inertia('programs/ProgramDetails', [
+            'program' => $program,
+            // Per-programme SEO metadata (unique title/description/canonical/OG +
+            // breadcrumb JSON-LD), rendered server-side in app.blade.php. Takes
+            // precedence over the config-driven lookup for this path.
+            'seo' => app(\App\Support\Seo::class)->forProgram($program),
+        ]);
     }
 }

@@ -7,37 +7,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>ePathways</title>
 
     {{--
-        Central, server-rendered SEO defaults. The canonical URL is built from
-        the fixed canonical base (config('app.canonical_url')) + the request
-        path, so every public page advertises https://luvep.com/... regardless
-        of the request host. Per-page <title> is overridden client-side via
-        Inertia's <Head>. Query strings are dropped from the canonical to avoid
-        duplicate-URL signals.
+        Central, server-rendered per-page SEO. Metadata comes from config/seo.php
+        via App\Support\Seo. A controller may pass a dynamic `seo` Inertia prop
+        (e.g. programme detail pages) which takes precedence over the config
+        lookup. Canonical / OG URLs are built from the fixed canonical base
+        (config('app.canonical_url')), never the request host, with query
+        strings dropped — so staging / localhost / the old domain never leak.
+
+        The app has no Inertia SSR, so @inertiaHead emits nothing here on the
+        served HTML: these server-rendered tags are the single source crawlers
+        see, with no duplicate-title conflict from client-side <Head> components.
     --}}
     @php
-        $canonicalBase = rtrim(config('app.canonical_url'), '/');
-        $canonicalPath = trim(request()->path(), '/');
-        $canonicalUrl = $canonicalBase.($canonicalPath === '' ? '/' : '/'.$canonicalPath);
-        $defaultDescription = 'ePathways — New Zealand education and immigration consultancy. Study pathways, visa assessments, licensed immigration advice and student accommodation support.';
-        $ogImage = $canonicalBase.'/favicon.png';
+        $seo = data_get($page ?? [], 'props.seo') ?: app(\App\Support\Seo::class)->forPath(request()->path());
     @endphp
-    <link rel="canonical" href="{{ $canonicalUrl }}">
-    <meta name="description" content="{{ $defaultDescription }}">
+    <title>{{ $seo['title'] }}</title>
+    <meta name="description" content="{{ $seo['description'] }}">
+    <meta name="robots" content="{{ $seo['robots'] }}">
+    <link rel="canonical" href="{{ $seo['canonical'] }}">
 
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="ePathways">
-    <meta property="og:title" content="ePathways — Education & Immigration NZ">
-    <meta property="og:description" content="{{ $defaultDescription }}">
-    <meta property="og:url" content="{{ $canonicalUrl }}">
-    <meta property="og:image" content="{{ $ogImage }}">
+    <meta property="og:type" content="{{ $seo['og']['type'] }}">
+    <meta property="og:site_name" content="{{ $seo['og']['site_name'] }}">
+    <meta property="og:title" content="{{ $seo['og']['title'] }}">
+    <meta property="og:description" content="{{ $seo['og']['description'] }}">
+    <meta property="og:url" content="{{ $seo['og']['url'] }}">
+    @if (!empty($seo['og']['image']))
+        <meta property="og:image" content="{{ $seo['og']['image'] }}">
+    @endif
 
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="ePathways — Education & Immigration NZ">
-    <meta name="twitter:description" content="{{ $defaultDescription }}">
-    <meta name="twitter:image" content="{{ $ogImage }}">
+    <meta name="twitter:card" content="{{ $seo['twitter']['card'] }}">
+    <meta name="twitter:title" content="{{ $seo['twitter']['title'] }}">
+    <meta name="twitter:description" content="{{ $seo['twitter']['description'] }}">
+    @if (!empty($seo['twitter']['image']))
+        <meta name="twitter:image" content="{{ $seo['twitter']['image'] }}">
+    @endif
+
+    @foreach ($seo['jsonld'] ?? [] as $schema)
+        <script type="application/ld+json">{!! json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+    @endforeach
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
