@@ -64,7 +64,7 @@ class LeadAnalysisService
     protected function getAnalysisSystemPrompt(): string
     {
         return <<<'PROMPT'
-You are an analyst for the ePathways CRM. Given a lead's data, analyze:
+You are an analyst for the EP CRM. Given a lead's data, analyze:
 - Engagement level (has the lead been seen / responded recently?)
 - Information completeness (do we have name, contact, email, intent?)
 - Time-sensitivity (how long since last touch? are deadlines approaching?)

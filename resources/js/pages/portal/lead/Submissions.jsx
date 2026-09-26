@@ -26,7 +26,7 @@ const TONE = {
 export default function LeadSubmissions({ submissions = [] }) {
     return (
         <div className="space-y-10 max-w-4xl mx-auto pb-16">
-            <Head title="My Submissions — ePathways Portal" />
+            <Head title="My Submissions — EP Portal" />
 
             {/* Header */}
             <div>
@@ -40,7 +40,7 @@ export default function LeadSubmissions({ submissions = [] }) {
                     My submissions <span className="text-[#009688] font-light italic">& activity.</span>
                 </h1>
                 <p className="text-base text-gray-500 font-light leading-relaxed mt-4 max-w-xl">
-                    Every form you&apos;ve signed against ePathways, in one place — with the current status of each.
+                    Every form you&apos;ve signed against EP, in one place — with the current status of each.
                 </p>
             </div>
 

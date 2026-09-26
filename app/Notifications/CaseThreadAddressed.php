@@ -58,7 +58,7 @@ class CaseThreadAddressed extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('ePathways: a question for you on '.$this->caseName())
+            ->subject('EP: a question for you on '.$this->caseName())
             ->greeting("Hi {$notifiable->name},")
             ->line("{$this->fromName} has a question for you on **{$this->caseName()}** ({$this->anchorLabel()}):")
             ->line('> '.$this->thread->body)

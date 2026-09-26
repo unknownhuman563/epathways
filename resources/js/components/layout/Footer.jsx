@@ -23,7 +23,7 @@ export default function Footer() {
           <div className="md:w-1/4">
             <div className="flex flex-col items-center md:items-start space-y-8">
               <a href="/" className="block w-48">
-                <img src={Logo} alt="ePathways Logo" className="w-full" />
+                <img src={Logo} alt="EP Logo" className="w-full" />
               </a>
               <div className="w-72">
                 <img src={IcefLogo} alt="ICEF Logo" className="w-full" />

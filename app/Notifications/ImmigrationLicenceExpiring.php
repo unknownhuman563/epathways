@@ -54,7 +54,7 @@ class ImmigrationLicenceExpiring extends Notification
         $forSelf = $notifiable instanceof User && $notifiable->is($this->adviser);
 
         $mail = (new MailMessage)
-            ->subject('ePathways: '.$this->headline())
+            ->subject('EP: '.$this->headline())
             ->greeting("Hi {$notifiable->name},")
             ->line($this->headline().'.')
             ->line("**Licence:** {$this->adviser->iaa_licence_number}")

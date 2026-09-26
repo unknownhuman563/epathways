@@ -23,7 +23,7 @@ export default function LeadProfile({ lead }) {
             <PortalPageHeader
                 eyebrow="Account"
                 title="Profile"
-                description="Your personal details on file with ePathways."
+                description="Your personal details on file with EP."
             />
 
             {/* How to get details changed — Messages is read-only for now, so

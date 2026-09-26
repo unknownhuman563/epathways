@@ -1,5 +1,5 @@
 <x-mail::message>
-# Track your ePathways application, {{ $firstName }}
+# Track your EP application, {{ $firstName }}
 
 Everything for your {{ $context }} now lives in one place — your personal tracker. There's **no login**: just keep the link below safe.
 
@@ -20,5 +20,5 @@ If the button doesn't work, copy and paste this URL into your browser:
 Please keep this link private — anyone with it can view your application.
 
 Ngā mihi,<br>
-The ePathways team
+The EP team
 </x-mail::message>

@@ -21,7 +21,7 @@ export default function LeadLayout({ children }) {
     const preview = usePage().props?.leadPortalPreview;
     return (
         <DashboardLayout
-            brand="ePathways."
+            brand="EP."
             subtitle={preview?.active ? "Client Portal (preview)" : "Your Portal"}
             accent="bg-[#009688]"
             nav={LEAD_NAV}

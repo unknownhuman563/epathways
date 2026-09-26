@@ -233,7 +233,7 @@ function ChannelIcon({ channel, size = 13, className = "" }) {
 function MessageRow({ m, active, onSelect }) {
     const inbound = m.dir === "in";
     const meta = inbound ? { label: m.is_read ? "Read" : "Unread", tone: "teal" } : statusMeta(m.status);
-    const who = inbound ? (m.from_name || "Client") : "ePathways";
+    const who = inbound ? (m.from_name || "Client") : "EP";
     const title = m.subject || (m.channel === "sms" ? "SMS message" : "(no subject)");
     return (
         <button type="button" onClick={onSelect}
@@ -372,7 +372,7 @@ function ReplyComposer({ lead, defaultChannel = "email", replySubject = "" }) {
 
             <div className="flex items-center justify-between gap-3 mt-3">
                 <p className="text-[11px] text-gray-400">
-                    {channel === "sms" ? "Sent by SMS to their mobile." : "Sent by email from the ePathways client address."}
+                    {channel === "sms" ? "Sent by SMS to their mobile." : "Sent by email from the EP client address."}
                 </p>
                 <button type="button" onClick={send} disabled={sending || ! body.trim()}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 text-white text-[13px] font-bold hover:bg-teal-700 disabled:opacity-40">

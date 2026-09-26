@@ -72,7 +72,7 @@ export default function WelcomeModal() {
               </p>
               <img
                 src={EPathwaysLogo}
-                alt="ePathways"
+                alt="EP"
                 style={{ width: "180px", objectFit: "contain" }}
               />
             </div>

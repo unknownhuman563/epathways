@@ -145,7 +145,7 @@ export default function TemplateEditorView({
             email: "client@example.com", phone: "+64 21 000 0000",
             tracker_url: "#", engagement_url: "#", client_portal_url: "#",
             visa_type: "Skilled Migrant Category Resident Visa", password: "Xy7$kP2m", invoice_number: "INV-0117",
-            assigned_staff_name: "the ePathways team", status: "In progress", status_detail: "a quick update",
+            assigned_staff_name: "the EP team", status: "In progress", status_detail: "a quick update",
             event_name: "Sample Event", event_date: "1 Jan 2026", event_time: "10:00 AM", event_location: "Auckland",
             document_name: "Sample Document.pdf", reason: "sample reason",
         };
@@ -325,7 +325,7 @@ export default function TemplateEditorView({
                                 </label>
                                 <label className="block">
                                     <span className="block text-xs font-semibold text-gray-600 mb-1">From name <span className="text-gray-400 font-normal">(optional)</span></span>
-                                    <input value={data.from_name} onChange={(e) => setData("from_name", e.target.value)} placeholder="ePathways Philippines" className={inp} />
+                                    <input value={data.from_name} onChange={(e) => setData("from_name", e.target.value)} placeholder="EP" className={inp} />
                                 </label>
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Blank = default sender. The address must be verified in your mail provider (Brevo).</p>
                             </div>
@@ -337,7 +337,7 @@ export default function TemplateEditorView({
                                 </label>
                                 <label className="block">
                                     <span className="block text-xs font-semibold text-gray-600 mb-1">Reply-to name <span className="text-gray-400 font-normal">(optional)</span></span>
-                                    <input value={data.reply_to_name} onChange={(e) => setData("reply_to_name", e.target.value)} placeholder="Your Name - ePathways" className={inp} />
+                                    <input value={data.reply_to_name} onChange={(e) => setData("reply_to_name", e.target.value)} placeholder="Your Name - EP" className={inp} />
                                     {errors.reply_to_name && <span className="text-xs text-rose-600">{errors.reply_to_name}</span>}
                                 </label>
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Where client replies land. Blank = the shared reply inbox, then the From address.</p>

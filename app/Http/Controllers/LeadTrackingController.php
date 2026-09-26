@@ -79,7 +79,7 @@ class LeadTrackingController extends Controller
             // Friendly "not found" — the same tracker shell with a message,
             // but a real 404 status so it isn't mistaken for a valid page.
             $payload['error'] = $isCase
-                ? 'This application is now managed in your secure client portal. Please sign in to your ePathways client portal to view its progress and documents.'
+                ? 'This application is now managed in your secure client portal. Please sign in to your EP client portal to view its progress and documents.'
                 : 'We could not find an application with that tracking code. Please double-check it and try again.';
 
             return inertia('track/TrackingPage', $payload)->toResponse($request)->setStatusCode(404);

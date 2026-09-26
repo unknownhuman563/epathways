@@ -34,7 +34,7 @@ export default function TeamProfilePage({ slug }) {
         <Navbar />
         <div className="flex min-h-[70vh] flex-col items-center justify-center px-4 text-center">
           <span className="mb-4 text-[10px] font-bold uppercase tracking-[0.3em] text-[#436235]">
-            ePathways
+            EP
           </span>
           <h1 className="mb-3 text-4xl font-bold text-[#282728]">Profile not found</h1>
           <p className="mb-8 max-w-sm text-gray-500">
@@ -193,7 +193,7 @@ export default function TeamProfilePage({ slug }) {
 
               <div className="mt-8 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300">
                 <span className="h-px w-6 bg-gray-200" />
-                ePathways
+                EP
                 <span className="h-px flex-1 bg-gray-200" />
               </div>
             </div>

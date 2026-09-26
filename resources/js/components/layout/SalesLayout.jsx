@@ -56,7 +56,7 @@ export default function SalesLayout({ children }) {
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Sales Portal" accent="bg-blue-600" nav={SALES_NAV}>
+        <DashboardLayout brand="EP." subtitle="Sales Portal" accent="bg-blue-600" nav={SALES_NAV}>
             {children}
         </DashboardLayout>
     );

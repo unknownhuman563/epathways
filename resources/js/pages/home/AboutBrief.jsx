@@ -20,11 +20,11 @@ export default function AboutBrief() {
                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-4">About</span>
                         
                         <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-[1.1] mb-6 sm:mb-8 max-w-md">
-                            Luvep guides your <span className="text-[#436235]">journey forward</span>
+                            EP guides your <span className="text-[#436235]">journey forward</span>
                         </h2>
 
                         <p className="text-gray-600 text-sm md:text-base font-light leading-relaxed mb-10 max-w-xl">
-                            Luvep (formerly ePathways) is a New Zealand education and immigration consultancy helping students, professionals and families explore opportunities to study, work and build their future in New Zealand. From your first assessment to arrival, we make the journey seamless.
+                            EP (formerly ePathways) is a New Zealand education and immigration consultancy helping students, professionals and families explore opportunities to study, work and build their future in New Zealand. From your first assessment to arrival, we make the journey seamless.
                         </p>
                         
                         <ul className="space-y-5 mb-12">
@@ -69,7 +69,7 @@ export default function AboutBrief() {
                         <div className="h-full rounded-[2rem] overflow-hidden shadow-2xl relative group min-h-[300px] sm:min-h-[400px] lg:min-h-[450px]">
                             <img 
                                 src={AboutImg} 
-                                alt="Luvep team"
+                                alt="EP team"
                                 loading="lazy"
                                 className="w-full h-full object-cover grayscale-[0.1] group-hover:grayscale-0 transition-all duration-700"
                             />

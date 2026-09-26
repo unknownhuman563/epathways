@@ -406,20 +406,20 @@ export default function QuickRegisterPage({ referral = null, visa_types = [] }) 
 
     return (
         <div className="min-h-screen bg-[#f6f6f5] font-urbanist text-[#282728] flex flex-col">
-            <Head title="Register — ePathways" />
+            <Head title="Register — EP" />
             <Navbar />
 
             {/* Hero banner — constrained to the form's width so its margins match */}
             <div className="max-w-3xl w-full mx-auto px-4 sm:px-6 pt-8 md:pt-10">
                 <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-                    <img src={heroBg} alt="Register with ePathways" className="w-full h-auto block" />
+                    <img src={heroBg} alt="Register with EP" className="w-full h-auto block" />
                 </div>
             </div>
 
             {/* Welcome copy — same width / margin as the banner + form */}
             <div className="max-w-3xl w-full mx-auto px-4 sm:px-6 pt-8">
                 <span className="text-[11px] font-bold tracking-[0.32em] uppercase text-[#436235]">Registration</span>
-                <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mt-2 leading-[1.12] text-[#282728]">Kia ora! Welcome to ePathways</h1>
+                <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mt-2 leading-[1.12] text-[#282728]">Kia ora! Welcome to EP</h1>
                 <p className="mt-4 text-gray-600 leading-relaxed">
                     Helping people turn their New Zealand dreams into reality — please take a few minutes to complete this registration form so we can get to know you, accurately assess your application, and keep our records up to date. The details you share allow our advisers to tailor the most suitable study, work, and migration pathways to your background and goals, and to prepare personalised guidance and opportunities ahead of your consultation.
                 </p>
@@ -703,7 +703,7 @@ export default function QuickRegisterPage({ referral = null, visa_types = [] }) 
                             <div className="space-y-3 pt-2">
                                 <label className="flex items-start gap-2.5 cursor-pointer">
                                     <input type="checkbox" required checked={data.terms_accepted} onChange={e => setData('terms_accepted', e.target.checked)} className="mt-0.5 accent-[#282728] w-4 h-4" />
-                                    <span className="text-[12px] text-gray-600 leading-relaxed">I consent to receive follow-up communication regarding this consultation, including reminders and related offers from ePathways.</span>
+                                    <span className="text-[12px] text-gray-600 leading-relaxed">I consent to receive follow-up communication regarding this consultation, including reminders and related offers from EP.</span>
                                 </label>
                                 <label className="flex items-start gap-2.5 cursor-pointer">
                                     <input type="checkbox" required checked={data.declaration_accepted} onChange={e => setData('declaration_accepted', e.target.checked)} className="mt-0.5 accent-[#282728] w-4 h-4" />

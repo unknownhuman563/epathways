@@ -187,11 +187,11 @@ return [
         'facebook' => env('CONTACT_FACEBOOK', 'https://www.facebook.com/epathwaysnz'),
         'email' => env('CONTACT_EMAIL', 'hello@epathways.ph'),
         // Where the email "Book now" CTA points. Overridable per environment.
-        'booking_url' => env('BOOKING_URL', 'https://epathways.co.nz/booking'),
+        'booking_url' => env('BOOKING_URL', 'https://luvep.com/booking'),
         // Sender for event-registration emails (must be verified in Brevo).
         // Used by the built-in fallback; the template carries its own from_email.
         'event_from_email' => env('EVENT_FROM_EMAIL', 'hello@epathways.ph'),
-        'event_from_name' => env('EVENT_FROM_NAME', 'Fhilip Bryll - ePathways Philippines'),
+        'event_from_name' => env('EVENT_FROM_NAME', 'Fhilip Bryll - EP'),
         // Central "Reply-To" — when set, replies to any of our emails route
         // to this monitored inbox. Null = replies go to each email's From.
         'reply_to' => env('REPLY_TO_EMAIL'),

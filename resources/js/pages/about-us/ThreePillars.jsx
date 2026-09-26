@@ -39,10 +39,10 @@ export default function ThreePillars() {
                 <div className="text-center mb-16">
                     <p className="text-sm font-semibold tracking-widest text-gray-500 uppercase mb-2">Why Choose Us</p>
                     <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
-                        How ePathways Helps You
+                        How EP Helps You
                     </h2>
                     <p className="text-gray-300 max-w-4xl mx-auto text-lg leading-relaxed font-light">
-                        ePathways is your trusted partner in visa and migration, providing expert guidance and end-to-end support—
+                        EP is your trusted partner in visa and migration, providing expert guidance and end-to-end support—
                         from eligibility assessment to compliant, stress-free application processing.
                     </p>
                 </div>

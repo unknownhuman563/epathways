@@ -29,7 +29,7 @@ class LeadPortalInvitation extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your ePathways portal access is ready',
+            subject: 'Your EP portal access is ready',
         );
     }
 

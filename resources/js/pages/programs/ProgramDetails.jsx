@@ -45,7 +45,7 @@ export default function ProgramDetails({ program }) {
                     className="absolute inset-0 w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-center">
-                    <h1 className="text-6xl md:text-8xl font-bold text-white mb-2 tracking-tight">ePathways</h1>
+                    <h1 className="text-6xl md:text-8xl font-bold text-white mb-2 tracking-tight">EP</h1>
                     <p className="text-sm md:text-base text-white/90 font-light tracking-wide">New Zealand Journey</p>
                 </div>
             </div>

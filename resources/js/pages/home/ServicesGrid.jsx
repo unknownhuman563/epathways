@@ -77,7 +77,7 @@ export default function ServicesGrid() {
                             What We <span className="text-[#436235]">Offer</span>
                         </h2>
                         <p className="text-gray-600 text-sm md:text-base font-light mx-auto">
-                            Luvep is your trusted New Zealand partner, providing expert guidance and end-to-end support—from assessment to success.
+                            EP is your trusted New Zealand partner, providing expert guidance and end-to-end support—from assessment to success.
                         </p>
                     </div>
                 </div>

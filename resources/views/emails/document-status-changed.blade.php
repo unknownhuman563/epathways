@@ -22,5 +22,5 @@ If the button doesn't work, copy and paste this URL into your browser:
 {{ $trackUrl }}
 
 Ngā mihi,<br>
-The ePathways team
+The EP team
 </x-mail::message>

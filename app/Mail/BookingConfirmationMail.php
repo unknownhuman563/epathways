@@ -25,7 +25,7 @@ class BookingConfirmationMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         $paid = $this->booking->payment_status === Booking::PAYMENT_PAID;
-        $title = $this->booking->visaType?->name ?: ($this->booking->service_type ?: 'ePathways Consultation');
+        $title = $this->booking->visaType?->name ?: ($this->booking->service_type ?: 'EP Consultation');
 
         // Send from and reply to the support address (default MAIL_FROM =
         // ePathways Support <support@luvep.com>).

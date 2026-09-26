@@ -77,7 +77,7 @@ class CaseAnalysisService
     protected function getAnalysisSystemPrompt(): string
     {
         return <<<'PROMPT'
-You are a compliance analyst for the ePathways CRM, reviewing an immigration case.
+You are a compliance analyst for the EP CRM, reviewing an immigration case.
 
 You assess procedural health — NOT visa outcome. Never predict whether a visa will be approved or denied. Never give legal advice. You only flag procedural and documentary issues that a consultant should address.
 

@@ -46,7 +46,7 @@ import { AvatarPhoto } from "@/components/ui/Avatar";
 export default function DashboardLayout({
     children,
     nav = [],
-    brand = "ePathways.",
+    brand = "EP.",
     subtitle = null,
     accent = "bg-gray-900",
     settingsHref = null,
@@ -205,7 +205,7 @@ export default function DashboardLayout({
                     <Link
                         href="/assistant"
                         onClick={() => setSidebarOpen(false)}
-                        title="ePathways AI Assistant"
+                        title="EP AI Assistant"
                         className={`group flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${
                             isPathMatch("/assistant")
                                 ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/25"

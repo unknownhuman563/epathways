@@ -10,8 +10,8 @@ export default function UserReviewDetails({ review, department = 'immigration' }
     // — those are the prompts the public review form actually shows; the admin
     // page used to ship with the original Lorem ipsum placeholders.
     const questions = [
-        'What made you choose ePathways?',
-        'How was your overall experience working with ePathways?',
+        'What made you choose EP?',
+        'How was your overall experience working with EP?',
         'Would you recommend us to friends and family — and why?',
     ];
 

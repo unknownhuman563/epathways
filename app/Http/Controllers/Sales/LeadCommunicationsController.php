@@ -112,7 +112,7 @@ class LeadCommunicationsController extends Controller
             $attachments[] = ['path' => $file->store('compose-attachments', 'local'), 'name' => $file->getClientOriginalName()];
         }
 
-        $subject = $comms->render($lead, trim((string) ($data['subject'] ?? ''))) ?: 'A message from ePathways';
+        $subject = $comms->render($lead, trim((string) ($data['subject'] ?? ''))) ?: 'A message from EP';
         $body = $comms->render($lead, $data['body']);
 
         $log = $comms->sendComposedEmail($lead->email, $subject, $body, $attachments, $rawHtml, $lead->id);

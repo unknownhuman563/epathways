@@ -17,12 +17,12 @@ export default function SetupAccount({ token, lead }) {
 
     return (
         <div className="min-h-screen bg-[#f7f8f6] font-urbanist flex items-center justify-center px-6 py-12">
-            <Head title="Activate your ePathways portal" />
+            <Head title="Activate your EP portal" />
 
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-10">
-                    <img src={Logo} alt="ePathways" className="h-9 mx-auto mb-6" />
+                    <img src={Logo} alt="EP" className="h-9 mx-auto mb-6" />
                     <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">
                         Portal access
                     </p>

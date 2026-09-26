@@ -149,7 +149,7 @@
                     {{-- Copyright --}}
                     <tr>
                         <td align="center" style="padding:6px 40px 2px 40px;">
-                            <p style="margin:0; font-size:11px; color:#aaaaaa;">Copyright &copy; {{ date('Y') }} ePathways. All rights reserved.</p>
+                            <p style="margin:0; font-size:11px; color:#aaaaaa;">Copyright &copy; {{ date('Y') }} EP. All rights reserved.</p>
                         </td>
                     </tr>
 

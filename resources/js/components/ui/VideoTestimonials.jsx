@@ -103,7 +103,7 @@ export default function VideoTestimonials({ testimonials = [], variant = "defaul
                         <div className="h-px w-12 bg-[#436235]/50" />
                     </div>
                     <h2 className="text-3xl sm:text-4xl font-medium text-[#282728] tracking-tight leading-[1.1] mb-4">Hear it straight from our clients</h2>
-                    <p className="text-base text-gray-700 leading-relaxed max-w-xl">Real stories from clients who shared their ePathways journey on Facebook.</p>
+                    <p className="text-base text-gray-700 leading-relaxed max-w-xl">Real stories from clients who shared their EP journey on Facebook.</p>
                 </div>
 
                 <div className="relative">

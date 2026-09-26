@@ -11,7 +11,7 @@ const SESSION_KEY = 'epathways_chat_session';
 const MESSAGES_KEY = 'epathways_chat_messages';
 const WELCOME_MESSAGE = {
     role: 'assistant',
-    content: 'Hi, I\'m Pathy — your ePathways guide. How can I help you navigate your New Zealand journey today?',
+    content: 'Hi, I\'m Pathy — your EP guide. How can I help you navigate your New Zealand journey today?',
 };
 
 function getChatSessionId() {
@@ -193,7 +193,7 @@ const ChatBot = ({ isOpen, onClose }) => {
                             </div>
                             <div>
                                 <h3 className="text-white font-black text-sm tracking-tight">Pathy</h3>
-                                <p className="text-[10px] text-white/50 font-medium tracking-wider">Your ePathways Guide.</p>
+                                <p className="text-[10px] text-white/50 font-medium tracking-wider">Your EP Guide.</p>
                             </div>
                         </div>
                         <button 

@@ -37,7 +37,7 @@ class DocumentReadyNotification extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Your {$this->nounTitle} is ready — ePathways",
+            subject: "Your {$this->nounTitle} is ready — EP",
         );
     }
 

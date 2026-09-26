@@ -21,7 +21,7 @@ export default function FloatingContact() {
 
     const whatsappHref = contact?.whatsapp
         ? `https://wa.me/${String(contact.whatsapp).replace(/[^\d]/g, "")}?text=${encodeURIComponent(
-              "Hi ePathways — I'd like to know more about migrating to New Zealand."
+              "Hi EP — I'd like to know more about migrating to New Zealand."
           )}`
         : null;
 

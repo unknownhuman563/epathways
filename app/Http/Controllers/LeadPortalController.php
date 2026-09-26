@@ -793,7 +793,7 @@ class LeadPortalController extends Controller
                 'id' => $m->id,
                 'subject' => $m->subject,
                 'body' => $m->body,
-                'from' => $m->triggeredBy?->name ?? 'ePathways',
+                'from' => $m->triggeredBy?->name ?? 'EP',
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);
 
@@ -1026,7 +1026,7 @@ class LeadPortalController extends Controller
         Auth::logout();
 
         return redirect('/login')->withErrors([
-            'email' => 'Portal account is not linked to a lead record. Please contact ePathways.',
+            'email' => 'Portal account is not linked to a lead record. Please contact EP.',
         ]);
     }
 

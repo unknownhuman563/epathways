@@ -21,7 +21,7 @@
 
 return [
     'default' => [
-        'label' => 'Default ePathways',
+        'label' => 'Default EP',
         'banner' => 'images/email/team-header.png',
         'footer' => 'images/coffee-cta.png',
     ],

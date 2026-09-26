@@ -33,7 +33,7 @@ class LeadPortalCredentials extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your ePathways portal login details',
+            subject: 'Your EP portal login details',
         );
     }
 

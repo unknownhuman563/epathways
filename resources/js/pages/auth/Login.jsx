@@ -23,7 +23,7 @@ export default function Login() {
 
     return (
         <div className="min-h-screen bg-white font-urbanist">
-            <Head title="Log in — ePathways" />
+            <Head title="Log in — EP" />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
 
@@ -42,10 +42,10 @@ export default function Login() {
                     <div className="absolute top-8 left-8 z-10">
                         <Link href="/" className="inline-flex items-center gap-3 group">
                             <div className="w-11 h-11 rounded-full bg-white/95 backdrop-blur flex items-center justify-center shadow-lg">
-                                <img src={Logo} alt="ePathways" className="w-7 h-7 object-contain" />
+                                <img src={Logo} alt="EP" className="w-7 h-7 object-contain" />
                             </div>
                             <span className="text-white font-medium text-lg tracking-tight group-hover:opacity-90 transition-opacity">
-                                ePathways
+                                EP
                             </span>
                         </Link>
                     </div>
@@ -79,7 +79,7 @@ export default function Login() {
                     {/* Mobile-only header bar with logo + back link */}
                     <div className="lg:hidden absolute top-6 left-6 right-6 flex items-center justify-between">
                         <Link href="/" className="inline-flex items-center gap-2">
-                            <img src={Logo} alt="ePathways" className="h-9 w-auto" />
+                            <img src={Logo} alt="EP" className="h-9 w-auto" />
                         </Link>
                         <Link
                             href="/"
@@ -106,7 +106,7 @@ export default function Login() {
                         {/* Heading */}
                         <div className="mb-9">
                             <h1 className="text-[34px] sm:text-[40px] font-medium text-[#282728] tracking-tight leading-[1.05] mb-2">
-                                Welcome back to <span className="italic font-light text-[#436235]">ePathways!</span>
+                                Welcome back to <span className="italic font-light text-[#436235]">EP!</span>
                             </h1>
                             <p className="text-sm text-[#282728]/55 font-light">
                                 Sign in to your account

@@ -129,7 +129,7 @@ export default function AssessmentPay({ assessment, visaType, priceRefreshed, pr
                             )}
 
                             <p className="text-[10px] text-gray-400 text-center mt-4">
-                                By continuing you agree to ePathways' terms of engagement. A receipt will be emailed to {assessment.email}.
+                                By continuing you agree to EP's terms of engagement. A receipt will be emailed to {assessment.email}.
                             </p>
                         </div>
                     </form>

@@ -133,7 +133,7 @@ export default function RegistrationModal({ open, onClose }) {
 
                                 <label className="flex items-start gap-2.5 cursor-pointer pt-0.5">
                                     <input type="checkbox" required checked={data.terms_accepted} onChange={e => setConsent(e.target.checked)} className="mt-0.5 accent-[#282728] w-4 h-4" />
-                                    <span className="text-[12px] text-gray-500 leading-relaxed">I agree to ePathways' terms and confirm the information I've provided is accurate.</span>
+                                    <span className="text-[12px] text-gray-500 leading-relaxed">I agree to EP's terms and confirm the information I've provided is accurate.</span>
                                 </label>
 
                                 <button

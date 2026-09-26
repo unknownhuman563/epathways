@@ -43,7 +43,7 @@ class CaseHandedOff extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject('ePathways: '.$this->caseName().' handed to you')
+            ->subject('EP: '.$this->caseName().' handed to you')
             ->greeting("Hi {$notifiable->name},")
             ->line("{$this->fromName} has handed **{$this->caseName()}** to you — you now own this case.");
 

@@ -43,9 +43,9 @@
         <tr>
             <td>
                 @if(!empty($logo_data))
-                    <img src="{{ $logo_data }}" alt="ePathways" style="height:74px; margin-bottom:4px;">
+                    <img src="{{ $logo_data }}" alt="EP" style="height:74px; margin-bottom:4px;">
                 @else
-                    <div class="brand">ePathways.</div>
+                    <div class="brand">EP.</div>
                 @endif
                 <div class="eyebrow" style="margin-top:4px;">Daily Time &amp; Task Records</div>
                 <h1>Weekly Time Records</h1>
@@ -130,7 +130,7 @@
 
     <div class="foot">
         System-generated weekly Daily Time Records covering {{ $rangeLabel }}.
-        Generated {{ $generatedAt }} &middot; ePathways Daily Time &amp; Task Record.
+        Generated {{ $generatedAt }} &middot; EP Daily Time &amp; Task Record.
     </div>
 </body>
 </html>

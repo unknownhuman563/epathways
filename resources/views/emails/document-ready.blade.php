@@ -21,5 +21,5 @@ If the button doesn't work, copy and paste this URL into your browser:
 Please keep this link private — anyone with it can view your application.
 
 Ngā mihi,<br>
-The ePathways team
+The EP team
 </x-mail::message>

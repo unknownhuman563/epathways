@@ -155,7 +155,7 @@ export default function ReviewsSection({
     stats = { count: 0, average: 0 },
     eyebrow = "Client reviews",
     headline = "What our clients say",
-    intro = "Real voices from people who navigated their NZ journey with ePathways. Every review here was submitted by a real client and approved by our team.",
+    intro = "Real voices from people who navigated their NZ journey with EP. Every review here was submitted by a real client and approved by our team.",
     department = "immigration",
     // Show the "Worked with our team? Write a review" CTA card under the
     // grid. Off on /home (merged feed across departments — submission lives

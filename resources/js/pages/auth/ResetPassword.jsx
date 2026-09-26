@@ -19,11 +19,11 @@ export default function ResetPassword({ token, email }) {
 
     return (
         <div className="min-h-screen bg-white font-urbanist flex items-center justify-center px-6 py-12">
-            <Head title="Set a new password — ePathways" />
+            <Head title="Set a new password — EP" />
 
             <div className="w-full max-w-[420px]">
                 <Link href="/" className="inline-flex items-center gap-2 mb-10">
-                    <img src={Logo} alt="ePathways" className="h-10 w-auto" />
+                    <img src={Logo} alt="EP" className="h-10 w-auto" />
                 </Link>
 
                 <h1 className="text-[32px] font-medium text-[#282728] tracking-tight leading-tight mb-2">

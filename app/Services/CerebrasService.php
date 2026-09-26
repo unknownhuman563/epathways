@@ -93,7 +93,7 @@ class CerebrasService
     /**
      * Suggest paid-ad audience targeting for a boosted post: an age range, ISO
      * country codes and interest keyword names (resolved to Zernio interest ids
-     * by the caller), plus a one-line rationale. Grounded in the ePathways
+     * by the caller), plus a one-line rationale. Grounded in the EP
      * audience — students/migrants bound for New Zealand.
      */
     public function suggestAdTargeting(array $brief): array
@@ -148,9 +148,9 @@ class CerebrasService
     private function buildTargetingPrompt(): string
     {
         return <<<'PROMPT'
-        You are a paid-social media buyer for ePathways, a New Zealand education & immigration consultancy. Given an ad's goal, platform and post content, propose the best paid-ad AUDIENCE.
+        You are a paid-social media buyer for EP, a New Zealand education & immigration consultancy. Given an ad's goal, platform and post content, propose the best paid-ad AUDIENCE.
 
-        Context: ePathways helps international students and migrants move to New Zealand to study and settle. Typical prospects are 18-40, in source markets like India, the Philippines, Nepal, Sri Lanka, Vietnam, Pakistan and Bangladesh, plus onshore audiences already in New Zealand. Interests skew to study abroad, overseas education, student visas, IELTS/PTE, immigration, working in New Zealand, and fields like nursing, IT, business and trades.
+        Context: EP helps international students and migrants move to New Zealand to study and settle. Typical prospects are 18-40, in source markets like India, the Philippines, Nepal, Sri Lanka, Vietnam, Pakistan and Bangladesh, plus onshore audiences already in New Zealand. Interests skew to study abroad, overseas education, student visas, IELTS/PTE, immigration, working in New Zealand, and fields like nursing, IT, business and trades.
 
         ## Output Format
         CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
@@ -176,7 +176,7 @@ class CerebrasService
         $platform = $brief['platform'] ?? 'facebook';
 
         return <<<PROMPT
-        You are a senior social-media copywriter for ePathways, a New Zealand education & immigration consultancy. Write platform-ready {$platform} post variants for a paid/organic campaign.
+        You are a senior social-media copywriter for EP, a New Zealand education & immigration consultancy. Write platform-ready {$platform} post variants for a paid/organic campaign.
 
         Voice: warm, credible, specific. Real value props (free assessment, licensed immigration advisers, NZQA-recognised programmes, end-to-end support). No fake urgency. Tasteful emojis okay (1-4). Match the requested tone exactly.
 
@@ -247,10 +247,10 @@ class CerebrasService
 
         if ($type === 'email') {
             return <<<PROMPT
-You are a senior marketing copywriter for ePathways, a New Zealand education and immigration consultancy. Your job is to produce conversion-focused EMAIL CAMPAIGN copy for the marketing team.
+You are a senior marketing copywriter for EP, a New Zealand education and immigration consultancy. Your job is to produce conversion-focused EMAIL CAMPAIGN copy for the marketing team.
 
 ## Voice
-- Warm, supportive, expert. ePathways is the trusted guide for people moving to New Zealand to study or settle.
+- Warm, supportive, expert. EP is the trusted guide for people moving to New Zealand to study or settle.
 - Concrete and specific. Reference real benefits (free assessment, NZQA-recognised programmes, licensed immigration advisers, end-to-end support).
 - No clickbait, no fake urgency, no excessive emojis (one or two tasteful ones in subject lines is fine).
 
@@ -260,7 +260,7 @@ CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fen
 Produce exactly {$variantCount} variants. Each variant has:
 - "subject": string (40-65 chars ideal, must be compelling and specific)
 - "preheader": string (60-90 chars — the preview text after the subject in the inbox)
-- "body": string (the full email body in plain text, 120-220 words, with short paragraphs, one clear CTA line near the end, sign off "— The ePathways team")
+- "body": string (the full email body in plain text, 120-220 words, with short paragraphs, one clear CTA line near the end, sign off "— The EP team")
 
 Shape:
 {
@@ -272,10 +272,10 @@ PROMPT;
         }
 
         return <<<PROMPT
-You are a senior social-media copywriter for ePathways, a New Zealand education and immigration consultancy. Produce high-engagement SOCIAL POST copy for Facebook / Instagram / LinkedIn.
+You are a senior social-media copywriter for EP, a New Zealand education and immigration consultancy. Produce high-engagement SOCIAL POST copy for Facebook / Instagram / LinkedIn.
 
 ## Voice
-- Warm, supportive, expert. ePathways guides people moving to New Zealand to study or settle.
+- Warm, supportive, expert. EP guides people moving to New Zealand to study or settle.
 - Specific over generic. Mention real value props (free assessment, licensed immigration advisers, NZQA-recognised programmes, end-to-end support).
 - No fake urgency. Tasteful emojis are okay (1-4 per post, never spammy).
 - Match the requested tone exactly.
@@ -285,7 +285,7 @@ CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fen
 
 Produce exactly {$variantCount} variants. Each variant has:
 - "post": string (the post copy, 60-180 words depending on platform; LinkedIn longer, Instagram/Facebook shorter; include one clear CTA line)
-- "hashtags": array of 6-12 lowercase hashtag strings WITHOUT the # symbol (e.g. ["studyinnz", "epathways"])
+- "hashtags": array of 6-12 lowercase hashtag strings WITHOUT the # symbol (e.g. ["studyinnz", "ep"])
 
 Shape:
 {
@@ -435,7 +435,7 @@ PROMPT;
     private function buildSystemPrompt(): string
     {
         return <<<'PROMPT'
-You are an immigration education consultant AI for ePathways, a New Zealand education consultancy. Analyze the applicant data and produce an eligibility score out of 100.
+You are an immigration education consultant AI for EP, a New Zealand education consultancy. Analyze the applicant data and produce an eligibility score out of 100.
 
 ## Scoring Categories
 

@@ -39,7 +39,7 @@ export default function ImmigrationAdviserLayout({ children }) {
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Adviser Portal" accent="bg-[#009688]" nav={NAV}>
+        <DashboardLayout brand="EP." subtitle="Adviser Portal" accent="bg-[#009688]" nav={NAV}>
             {children}
         </DashboardLayout>
     );

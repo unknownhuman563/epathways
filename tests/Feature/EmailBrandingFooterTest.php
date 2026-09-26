@@ -18,7 +18,7 @@ class EmailBrandingFooterTest extends TestCase
     {
         $f = EmailBranding::resolveFooter('immigration');
 
-        $this->assertSame('ePathways', $f['company']);
+        $this->assertSame('EP', $f['company']);
         $this->assertArrayHasKey('email', $f);
         $this->assertArrayHasKey('whatsapp', $f);
         $this->assertArrayHasKey('location', $f);
@@ -46,6 +46,6 @@ class EmailBrandingFooterTest extends TestCase
         $this->assertNotSame('', $f['website_url']);
 
         // A different department without a row still gets the defaults.
-        $this->assertSame('ePathways', EmailBranding::resolveFooter('education')['company']);
+        $this->assertSame('EP', EmailBranding::resolveFooter('education')['company']);
     }
 }

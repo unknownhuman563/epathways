@@ -130,7 +130,7 @@ export default function TrackingPage({
     return (
         <DocApiContext.Provider value={docApi}>
         <div className={embedded ? 'font-sans' : 'min-h-screen bg-white font-urbanist flex flex-col'}>
-            <Head title={embedded ? 'Application Tracker — ePathways' : 'Track Your Application — ePathways'} />
+            <Head title={embedded ? 'Application Tracker — EP' : 'Track Your Application — EP'} />
             {!embedded && <Navbar />}
 
             <main className={embedded ? '' : 'flex-1 bg-gray-50'}>
@@ -1817,7 +1817,7 @@ function DocsTrustStrip() {
                 <ShieldCheck size={13} className="text-emerald-600" strokeWidth={2} />
                 <span>
                     <span className="font-semibold text-[#282728]">Private &amp; encrypted.</span>{' '}
-                    Only your assigned adviser at ePathways can view what you upload here.
+                    Only your assigned adviser at EP can view what you upload here.
                 </span>
             </p>
         </div>

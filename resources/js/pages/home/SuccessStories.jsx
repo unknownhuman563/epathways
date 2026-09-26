@@ -62,7 +62,7 @@ export default function SuccessStories() {
                         </h2>
                     </div>
                     <p className="text-sm sm:text-base text-gray-500 font-light leading-relaxed max-w-md">
-                        Filipino, Indian and other migrant families have built new lives in New Zealand with ePathways. Yours could be next.
+                        Filipino, Indian and other migrant families have built new lives in New Zealand with EP. Yours could be next.
                     </p>
                 </div>
 
@@ -139,7 +139,7 @@ export default function SuccessStories() {
                                             <path d="M0 0h4l3 10 3-10h6l3 10 3-10h4L17 16h-4l-3-9-3 9H3L0 0z" fill="#1a1a1a"/>
                                         </svg>
                                         <span className="text-sm font-bold text-[#1a1a1a] tracking-tight">
-                                            ePathways
+                                            EP
                                         </span>
                                     </div>
                                 </div>

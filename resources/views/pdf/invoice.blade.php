@@ -55,7 +55,7 @@
         <table>
             <tr>
                 <td>
-                    <div class="brand">ePathways<span class="dot">.</span></div>
+                    <div class="brand">EP<span class="dot">.</span></div>
                     <div class="sub">Education &amp; Immigration Consultancy · New Zealand</div>
                     @if($issuedFrom)<div class="sub">Issued from: {{ $issuedFrom }}</div>@endif
                 </td>
@@ -119,7 +119,7 @@
     @if($notes)<div class="note"><strong>Notes:</strong> {{ $notes }}</div>@endif
     @if($disbursement > 0)<div class="note">Includes a pass-through disbursement of {{ $currency }} {{ number_format($disbursement, 2) }} (INZ application fee).</div>@endif
 
-    <div class="foot">Invoice {{ $invoiceNo }} · Generated {{ $generatedAt }} · ePathways</div>
+    <div class="foot">Invoice {{ $invoiceNo }} · Generated {{ $generatedAt }} · EP</div>
 
 @if($wrap)</div>@endif
 </body>

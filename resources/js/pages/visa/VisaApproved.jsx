@@ -66,7 +66,7 @@ export default function VisaApproved({ visaApprovals = [], category = 'student' 
                 <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none p-20">
                     <img
                         src={LogoBackdrop}
-                        alt="ePathways Logo Backdrop"
+                        alt="EP Logo Backdrop"
                         className="w-full max-w-4xl object-contain opacity-50 grayscale"
                     />
                 </div>
@@ -84,7 +84,7 @@ export default function VisaApproved({ visaApprovals = [], category = 'student' 
                     <p className="text-lg text-gray-600 max-w-2xl mx-auto font-light leading-relaxed">
                         {isArtist
                             ? "Celebrating the artists and performers we've supported in bringing unforgettable concerts, shows, and live experiences to audiences across New Zealand."
-                            : "Every approval is a step towards a new life. We celebrate the success of our clients who have successfully obtained their New Zealand visas through ePathways."}
+                            : "Every approval is a step towards a new life. We celebrate the success of our clients who have successfully obtained their New Zealand visas through EP."}
                     </p>
                 </div>
             </section>

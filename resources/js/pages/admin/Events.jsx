@@ -1191,7 +1191,7 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hidden lg:flex mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Events</h1>
-                    <p className="text-sm text-gray-600 mt-1">Manage, schedule, and track all ePathways events.</p>
+                    <p className="text-sm text-gray-600 mt-1">Manage, schedule, and track all EP events.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-semibold shadow-sm">

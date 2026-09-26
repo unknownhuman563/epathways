@@ -12,7 +12,7 @@ export default function AiChatButton({ aiEnabled = true }) {
     return (
         <Link
             href="/assistant"
-            title="ePathways AI Assistant"
+            title="EP AI Assistant"
             aria-label="Open AI assistant"
             className="relative p-2 rounded-full text-gray-600 hover:bg-gray-100 transition-colors inline-flex"
         >

@@ -16,7 +16,7 @@ const ENGLISH_NAV = [
 
 export default function EnglishLayout({ children }) {
     return (
-        <DashboardLayout brand="ePathways." subtitle="English Portal" accent="bg-emerald-600" nav={ENGLISH_NAV}>
+        <DashboardLayout brand="EP." subtitle="English Portal" accent="bg-emerald-600" nav={ENGLISH_NAV}>
             {children}
         </DashboardLayout>
     );
