@@ -35,7 +35,7 @@ export default function Home({ events = [], programGroups = [], activePromos = [
         {/* Accessible/SEO primary heading. The hero is a full-bleed video with
             no visible headline, so this sr-only H1 gives the page one logical
             H1 without altering the visual design. */}
-        <h1 className="sr-only">EP — Education & Immigration Services in New Zealand</h1>
+        <h1 className="sr-only">EP — Education, Immigration, Employment & Settlement Services in New Zealand</h1>
 
         {/* Live promo strip — renders nothing if no promos are active */}
         <PromoBanner promos={activePromos} variant="strip" />

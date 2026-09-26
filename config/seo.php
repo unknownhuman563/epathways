@@ -28,7 +28,7 @@ return [
     'brand' => 'EP',
 
     // Fallback title/description for any page not listed in 'pages'.
-    'default_title' => 'EP | Education & Immigration Services in New Zealand',
+    'default_title' => 'EP | Education, Immigration, Employment & Settlement Services in New Zealand',
     'default_description' => 'EP is a New Zealand education and immigration consultancy. Explore study pathways, visa assessments, licensed immigration advice and student accommodation support.',
 
     // Default Open Graph / Twitter share image, relative to the canonical base.
@@ -87,7 +87,7 @@ return [
     */
     'pages' => [
         '/' => [
-            'title' => 'EP | Education & Immigration Services in New Zealand',
+            'title' => 'EP | Education, Immigration, Employment & Settlement Services in New Zealand',
             'description' => 'EP is a New Zealand education and immigration consultancy. Explore study pathways, visa assessments, licensed immigration advice and student accommodation support.',
         ],
         '/about-us' => [
