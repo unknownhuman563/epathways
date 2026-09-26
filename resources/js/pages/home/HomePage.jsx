@@ -87,7 +87,7 @@ export default function Home({ events = [], programGroups = [], activePromos = [
             titlePre="Artists We've Helped"
             titleHi="Bring to New Zealand"
             intro="Celebrating the artists and performers we've supported in bringing unforgettable concerts, shows, and live experiences to audiences across New Zealand."
-            cardSubtitle="New Zealand Artist ePathways"
+            cardSubtitle="New Zealand Artist · Luvep"
             viewAllHref="/visa-approved?category=artist"
             allowLegacy={false}
             hideIfEmpty

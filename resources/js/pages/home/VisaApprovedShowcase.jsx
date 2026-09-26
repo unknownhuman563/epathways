@@ -33,8 +33,8 @@ export default function VisaApprovedShowcase({
     eyebrow = "Success Stories",
     titlePre = "Visa Approved",
     titleHi = "Milestones",
-    intro = "Every approval is a step towards a new life. We celebrate the success of our clients who have successfully obtained their New Zealand visas through ePathways.",
-    cardSubtitle = "New Zealand Student ePathways",
+    intro = "Every approval is a step towards a new life. We celebrate the success of our clients who have successfully obtained their New Zealand visas through Luvep.",
+    cardSubtitle = "New Zealand Student · Luvep",
     viewAllHref = "/visa-approved",
     allowLegacy = true,   // fall back to the bundled sample images (student only)
     hideIfEmpty = false,  // artist section: render nothing when there's no data

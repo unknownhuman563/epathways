@@ -138,6 +138,17 @@ class SeoTest extends TestCase
         }
     }
 
+    public function test_homepage_key_internal_links_are_reachable(): void
+    {
+        // The homepage links to these SEO pages via descriptive anchors. Guard
+        // that none 404 (the ServicesGrid "Engagement Services" tile previously
+        // pointed at a non-existent /contact route).
+        foreach (['/education-journey', '/programs-levels', '/fee-guide', '/immigration', '/accommodation', '/booking'] as $path) {
+            $status = $this->get($path)->getStatusCode();
+            $this->assertNotSame(404, $status, "Homepage link target {$path} must not 404 (got {$status})");
+        }
+    }
+
     public function test_important_public_pages_have_unique_titles(): void
     {
         $paths = [
