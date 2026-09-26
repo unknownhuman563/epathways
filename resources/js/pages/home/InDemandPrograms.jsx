@@ -122,6 +122,7 @@ export default function InDemandPrograms() {
                                 <img
                                     src={cat.image}
                                     alt={cat.title}
+                                    loading="lazy"
                                     className="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500"
                                 />
                                 {intake && (

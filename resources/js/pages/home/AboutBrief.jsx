@@ -70,6 +70,7 @@ export default function AboutBrief() {
                             <img 
                                 src={AboutImg} 
                                 alt="Luvep team"
+                                loading="lazy"
                                 className="w-full h-full object-cover grayscale-[0.1] group-hover:grayscale-0 transition-all duration-700"
                             />
                             {/* Clean Grayish Overlay */}

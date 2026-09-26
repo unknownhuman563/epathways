@@ -41,9 +41,10 @@ const AccreditationSection = () => {
                         transition={{ duration: 0.6 }}
                         className="flex-1 w-full flex justify-center items-center"
                     >
-                        <img 
-                            src={ICEFLogo} 
-                            alt="ICEF Accreditation" 
+                        <img
+                            src={ICEFLogo}
+                            alt="ICEF Accreditation"
+                            loading="lazy"
                             className="w-full max-w-lg h-auto object-contain transition-transform duration-500 hover:scale-105"
                         />
                     </motion.div>

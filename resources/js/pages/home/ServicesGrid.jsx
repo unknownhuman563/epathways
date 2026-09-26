@@ -105,10 +105,11 @@ export default function ServicesGrid() {
                                     className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"
                                 />
                             ) : (
-                                <img 
-                                    src={service.image} 
-                                    alt={service.title} 
-                                    className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" 
+                                <img
+                                    src={service.image}
+                                    alt={service.title}
+                                    loading="lazy"
+                                    className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"
                                 />
                             )}
                             
