@@ -56,6 +56,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Canonical URL
+    |--------------------------------------------------------------------------
+    |
+    | The public production origin used for SEO output (sitemap + canonical
+    | tags). It is deliberately independent of APP_URL so the sitemap and
+    | canonical links always advertise the live domain and never leak a
+    | staging or localhost host. Defaults to the production domain.
+    |
+    */
+
+    'canonical_url' => env('APP_CANONICAL_URL', 'https://luvep.com'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

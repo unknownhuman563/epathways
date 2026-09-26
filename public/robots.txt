@@ -1,2 +1,40 @@
+# ePathways / luvep.com — robots policy
+# Public marketing & service pages are crawlable. Private portals, token-bearer
+# surfaces, transactional funnels and internal APIs are disallowed.
+
 User-agent: *
-Disallow:
+Allow: /
+
+# Authenticated staff & client areas
+Disallow: /admin/
+Disallow: /portal/
+Disallow: /lead-portal/
+Disallow: /dtr
+
+# Authentication
+Disallow: /login
+Disallow: /logout
+Disallow: /forgot-password
+Disallow: /reset-password
+
+# Token-bearer / private client surfaces
+Disallow: /track
+Disallow: /engagement/
+Disallow: /agreement/
+Disallow: /pre-tenancy/
+Disallow: /apply/
+
+# Transactional funnels (payment, booking management, assessment tokens)
+Disallow: /assessment/
+Disallow: /assessment-result
+Disallow: /booking/payment
+Disallow: /booking/reschedule
+Disallow: /booking/cancel
+Disallow: /booking/busy
+
+# Internal APIs, webhooks & payment endpoints
+Disallow: /api/
+Disallow: /webhook/
+Disallow: /stripe/
+
+Sitemap: https://luvep.com/sitemap.xml

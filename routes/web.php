@@ -46,6 +46,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index']);
 
+// Public XML sitemap for search engines. Lists only public/indexable pages;
+// URLs use the fixed canonical base (never the request host). See SitemapController.
+Route::get('/sitemap.xml', [\App\Http\Controllers\SitemapController::class, 'index'])->name('sitemap');
+
 // Local-only: render the engagement-documents email in the browser so the
 // banner/icons/footer (served from this app's public/) load — email clients
 // can't fetch localhost image URLs, so a delivered test shows broken images.
