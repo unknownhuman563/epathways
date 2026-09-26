@@ -54,7 +54,7 @@ export default function LeadVisaAssessment({ vif = {}, assessment = null }) {
                         <div className="min-w-0 flex-1">
                             <h2 className="text-base font-semibold text-gray-900">Visa Information Form</h2>
                             <p className="text-[13px] text-gray-500 mt-0.5">
-                                Built from your assessment answers in the official ePathways format.
+                                Built from your assessment answers in the official EP format.
                             </p>
 
                             {vif.generated ? (

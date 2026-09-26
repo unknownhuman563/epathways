@@ -551,7 +551,7 @@ export default function EducationJourney({ activePromos = [], reviews = [], stat
                 department="education"
                 eyebrow="Student stories"
                 headline="What our students say"
-                intro="Real voices from students who chose ePathways for their New Zealand education journey. Every review here was submitted by a real client and approved by our team."
+                intro="Real voices from students who chose EP for their New Zealand education journey. Every review here was submitted by a real client and approved by our team."
             />
 
             {/* Partner Universities Section */}
@@ -573,7 +573,7 @@ export default function EducationJourney({ activePromos = [], reviews = [], stat
                         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
                         className="text-gray-700 text-sm md:text-base leading-relaxed mb-20 max-w-2xl mx-auto"
                     >
-                        These institutions trust ePathways to send serious students. That relationship works in your favor.
+                        These institutions trust EP to send serious students. That relationship works in your favor.
                     </motion.p>
 
                     <motion.div

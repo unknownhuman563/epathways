@@ -151,7 +151,7 @@ export default function RegistrationPage({ programs = [] }) {
 
     return (
         <div className="min-h-screen bg-white font-urbanist text-[#212121]">
-            <Head title="Register — ePathways" />
+            <Head title="Register — EP" />
             <Navbar />
 
             {/* Header */}

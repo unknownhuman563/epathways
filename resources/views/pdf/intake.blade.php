@@ -68,7 +68,7 @@
     @if ($mode === 'pdf')
         {{-- Repeating header + footer on every page (PDF only) --}}
         <div class="pagehead">
-            <div class="brand">ePathways</div>
+            <div class="brand">EP</div>
             <div class="sub">Immigration Advisers – New Zealand</div>
             <div class="rule"></div>
         </div>
@@ -79,7 +79,7 @@
     @if ($mode !== 'pdf')
         {{-- Static header for the in-browser preview / Word export --}}
         <div class="statichead">
-            <div class="brand">ePathways</div>
+            <div class="brand">EP</div>
             <div class="sub">Immigration Advisers – New Zealand</div>
             <div class="rule"></div>
         </div>

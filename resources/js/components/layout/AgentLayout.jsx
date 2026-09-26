@@ -45,7 +45,7 @@ export default function AgentLayout({ children }) {
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Agent Portal" accent="bg-teal-600" nav={gateNav(AGENT_NAV, modules)}>
+        <DashboardLayout brand="EP." subtitle="Agent Portal" accent="bg-teal-600" nav={gateNav(AGENT_NAV, modules)}>
             {children}
         </DashboardLayout>
     );

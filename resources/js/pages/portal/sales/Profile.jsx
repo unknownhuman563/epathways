@@ -11,7 +11,7 @@ export default function SalesProfile({ user }) {
             <PortalPageHeader
                 eyebrow="Account"
                 title="My Profile"
-                description="Your staff account on ePathways."
+                description="Your staff account on EP."
             />
 
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

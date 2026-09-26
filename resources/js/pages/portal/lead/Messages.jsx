@@ -22,7 +22,7 @@ export default function LeadMessages({ messages = { data: [], links: [] } }) {
             <PortalPageHeader
                 eyebrow="Stay in touch"
                 title="Your messages"
-                description="Messages from your ePathways adviser. Reply by email for now — in-portal replies coming soon."
+                description="Messages from your EP adviser. Reply by email for now — in-portal replies coming soon."
             />
 
             {rows.length === 0 ? (

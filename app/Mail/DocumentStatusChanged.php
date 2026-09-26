@@ -39,7 +39,7 @@ class DocumentStatusChanged extends Mailable implements ShouldQueue
         $word = $this->status === LeadDocument::STATUS_APPROVED ? 'approved' : 'needs attention';
 
         return new Envelope(
-            subject: "Your ePathways document was {$word}",
+            subject: "Your EP document was {$word}",
         );
     }
 

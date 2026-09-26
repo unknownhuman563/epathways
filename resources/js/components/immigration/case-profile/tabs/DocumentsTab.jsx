@@ -835,7 +835,7 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), keyThread
 
             {/* Attachment column — filename + View + Download for uploaded;
                 Upload button (opens file picker) for empty slots. On the Visa
-                Information Form row, the ePathways VIF generator (Preview / PDF /
+                Information Form row, the EP VIF generator (Preview / PDF /
                 Word) is surfaced inline ABOVE the upload controls — staff can use
                 the system-generated VIF or upload their own; both stay available. */}
             <td className="px-4 py-3">
@@ -2540,7 +2540,7 @@ function VifCard({ vif }) {
             </div>
             <div className="min-w-0 flex-1">
                 <div className="text-sm font-bold text-gray-900">Visa Information Form (Assessment)</div>
-                <p className="text-[12px] text-gray-500">Official ePathways VIF, filled from this case's visa assessment.</p>
+                <p className="text-[12px] text-gray-500">Official EP VIF, filled from this case's visa assessment.</p>
             </div>
             <VifButtons vif={vif} />
         </div>

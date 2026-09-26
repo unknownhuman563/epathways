@@ -8,7 +8,7 @@ const fmtDate = (iso) =>
 export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
     return (
         <div className="space-y-12 max-w-6xl mx-auto pb-16">
-            <Head title="Announcements — ePathways Portal" />
+            <Head title="Announcements — EP Portal" />
 
             {/* Header */}
             <div>

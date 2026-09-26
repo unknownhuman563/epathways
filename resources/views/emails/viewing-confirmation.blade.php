@@ -14,7 +14,7 @@
                     {{-- Header --}}
                     <tr>
                         <td style="background-color:#1F5A8B; padding:28px 32px;">
-                            <p style="margin:0; color:#ffffff; font-size:20px; font-weight:700;">ePathways</p>
+                            <p style="margin:0; color:#ffffff; font-size:20px; font-weight:700;">EP</p>
                             <p style="margin:4px 0 0; color:#d6e2ee; font-size:13px;">Accommodation — viewing request received</p>
                         </td>
                     </tr>
@@ -61,7 +61,7 @@
                     <tr>
                         <td style="padding:20px 32px; background-color:#f9fafb; border-top:1px solid #eef0f4;">
                             <p style="margin:0; font-size:12px; color:#9ca3af;">
-                                ePathways · <a href="{{ $siteUrl }}" style="color:#1F5A8B; text-decoration:none;">{{ preg_replace('#^https?://#', '', $siteUrl) }}</a>
+                                EP · <a href="{{ $siteUrl }}" style="color:#1F5A8B; text-decoration:none;">{{ preg_replace('#^https?://#', '', $siteUrl) }}</a>
                                 @if ($contactEmail) · {{ $contactEmail }} @endif
                                 @if ($phone) · {{ $phone }} @endif
                             </p>

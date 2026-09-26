@@ -89,9 +89,9 @@ class AppServiceProvider extends ServiceProvider
                 .'?email='.urlencode($notifiable->getEmailForPasswordReset());
 
             return (new MailMessage)
-                ->subject('ePathways Account Recovery')
+                ->subject('EP Account Recovery')
                 ->greeting('Hi '.($notifiable->name ?? 'there').',')
-                ->line('We received a request to reset the password for your ePathways account.')
+                ->line('We received a request to reset the password for your EP account.')
                 ->action('Reset your password', $url)
                 ->line('This link expires in 60 minutes.')
                 ->line('If you didn’t request a password reset, no action is needed — your password will stay the same.');

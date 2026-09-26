@@ -1,5 +1,5 @@
 <x-mail::message>
-# Your ePathways portal is ready, {{ $firstName }}
+# Your EP portal is ready, {{ $firstName }}
 
 Our team has created secure portal access for you. Use the details below to log in.
 
@@ -12,7 +12,7 @@ Our team has created secure portal access for you. Use the details below to log 
 Log in to my portal
 </x-mail::button>
 
-Once you're in you can track your application, upload requested documents, and view updates from your ePathways advisers.
+Once you're in you can track your application, upload requested documents, and view updates from your EP advisers.
 
 ## Please change your password
 
@@ -24,8 +24,8 @@ Reset my password
 
 Your reference: **{{ $leadId }}**
 
-If you didn't expect this email, please contact your ePathways adviser.
+If you didn't expect this email, please contact your EP adviser.
 
 Ngā mihi,<br>
-The ePathways team
+The EP team
 </x-mail::message>

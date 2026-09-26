@@ -35,7 +35,7 @@ export default function Home({ events = [], programGroups = [], activePromos = [
         {/* Accessible/SEO primary heading. The hero is a full-bleed video with
             no visible headline, so this sr-only H1 gives the page one logical
             H1 without altering the visual design. */}
-        <h1 className="sr-only">Luvep — Education & Immigration Services in New Zealand</h1>
+        <h1 className="sr-only">EP — Education, Immigration, Employment & Settlement Services in New Zealand</h1>
 
         {/* Live promo strip — renders nothing if no promos are active */}
         <PromoBanner promos={activePromos} variant="strip" />
@@ -87,7 +87,7 @@ export default function Home({ events = [], programGroups = [], activePromos = [
             titlePre="Artists We've Helped"
             titleHi="Bring to New Zealand"
             intro="Celebrating the artists and performers we've supported in bringing unforgettable concerts, shows, and live experiences to audiences across New Zealand."
-            cardSubtitle="New Zealand Artist ePathways"
+            cardSubtitle="New Zealand Artist · EP"
             viewAllHref="/visa-approved?category=artist"
             allowLegacy={false}
             hideIfEmpty

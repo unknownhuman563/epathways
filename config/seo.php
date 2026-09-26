@@ -25,21 +25,21 @@ return [
 
     // Brand name used in <title> suffixes, og:site_name and structured data.
     // Kept here (not hard-coded) so a rename is a one-line change.
-    'brand' => 'Luvep',
+    'brand' => 'EP',
 
     // Fallback title/description for any page not listed in 'pages'.
-    'default_title' => 'Luvep | Education & Immigration Services in New Zealand',
-    'default_description' => 'Luvep is a New Zealand education and immigration consultancy. Explore study pathways, visa assessments, licensed immigration advice and student accommodation support.',
+    'default_title' => 'EP | Education, Immigration, Employment & Settlement Services in New Zealand',
+    'default_description' => 'EP is a New Zealand education and immigration consultancy. Explore study pathways, visa assessments, licensed immigration advice and student accommodation support.',
 
     // Default Open Graph / Twitter share image, relative to the canonical base.
-    // Dedicated 1200×630 Luvep social sharing card. Static/public pages use this;
+    // Dedicated 1200×630 EP social sharing card. Static/public pages use this;
     // programme detail pages use their own image and fall back to this.
-    // (The Organization JSON-LD logo remains the square Luvep logo at
+    // (The Organization JSON-LD logo remains the square EP logo at
     // /images/ep-logo.png — see organizationSchema().)
     'og_image' => '/images/og-luvep.png',
 
-    // Square Luvep logo for schema.org/Organization "logo" (kept distinct from
-    // the wide og_image share card). /images/ep-logo.png IS the current Luvep
+    // Square EP logo for schema.org/Organization "logo" (kept distinct from
+    // the wide og_image share card). /images/ep-logo.png IS the current EP
     // logo — the "ep-" filename is legacy only and other components depend on
     // this path, so it is not renamed.
     'logo' => '/images/ep-logo.png',
@@ -87,74 +87,74 @@ return [
     */
     'pages' => [
         '/' => [
-            'title' => 'Luvep | Education & Immigration Services in New Zealand',
-            'description' => 'Luvep is a New Zealand education and immigration consultancy. Explore study pathways, visa assessments, licensed immigration advice and student accommodation support.',
+            'title' => 'EP | Education, Immigration, Employment & Settlement Services in New Zealand',
+            'description' => 'EP is a New Zealand education and immigration consultancy. Explore study pathways, visa assessments, licensed immigration advice and student accommodation support.',
         ],
         '/about-us' => [
-            'title' => 'About Us | Luvep',
-            'description' => 'Learn about Luvep — a New Zealand education and immigration consultancy helping students and migrants study, work and settle in New Zealand.',
+            'title' => 'About Us | EP',
+            'description' => 'Learn about EP — a New Zealand education and immigration consultancy helping students and migrants study, work and settle in New Zealand.',
             'breadcrumb' => 'About Us',
         ],
         '/immigration' => [
-            'title' => 'New Zealand Immigration Services | Luvep',
+            'title' => 'New Zealand Immigration Services | EP',
             'description' => 'New Zealand immigration support for resident, work, student, visitor and family visas. Start with an assessment and get advice from a licensed immigration adviser.',
             'breadcrumb' => 'Immigration',
         ],
         '/education-journey' => [
-            'title' => 'Study in New Zealand — Education Journey | Luvep',
-            'description' => 'Plan your study journey in New Zealand with Luvep. Explore programmes, pathways and guidance for international students from enrolment to graduation.',
+            'title' => 'Study in New Zealand — Education Journey | EP',
+            'description' => 'Plan your study journey in New Zealand with EP. Explore programmes, pathways and guidance for international students from enrolment to graduation.',
             'breadcrumb' => 'Education Journey',
         ],
         '/programs-levels' => [
-            'title' => 'Programs & Levels | Luvep',
+            'title' => 'Programs & Levels | EP',
             'description' => 'Browse New Zealand study programmes by level — certificates, diplomas and degrees — with entry requirements, intakes and outcomes.',
             'breadcrumb' => 'Programs & Levels',
         ],
         '/fee-guide' => [
-            'title' => 'Programme Fee Guide | Luvep',
-            'description' => 'Indicative tuition and study-cost estimates for New Zealand programmes offered through Luvep. Compare fees across levels and institutions.',
+            'title' => 'Programme Fee Guide | EP',
+            'description' => 'Indicative tuition and study-cost estimates for New Zealand programmes offered through EP. Compare fees across levels and institutions.',
             'breadcrumb' => 'Fee Guide',
         ],
         '/accommodation' => [
-            'title' => 'Student Accommodation in New Zealand | Luvep',
-            'description' => 'Accommodation support for students and migrants in New Zealand. Explore available rooms and homes and enquire about a place with Luvep.',
+            'title' => 'Student Accommodation in New Zealand | EP',
+            'description' => 'Accommodation support for students and migrants in New Zealand. Explore available rooms and homes and enquire about a place with EP.',
             'breadcrumb' => 'Accommodation',
         ],
         '/visa-approved' => [
-            'title' => 'Visa Approved — Client Successes | Luvep',
-            'description' => 'A gallery of visa-approved students and clients supported by Luvep on their New Zealand education and immigration journey.',
+            'title' => 'Visa Approved — Client Successes | EP',
+            'description' => 'A gallery of visa-approved students and clients supported by EP on their New Zealand education and immigration journey.',
             'breadcrumb' => 'Visa Approved',
         ],
         '/activities' => [
-            'title' => 'Activities — Events & Announcements | Luvep',
-            'description' => 'Upcoming events, announcements and live sessions from Luvep for students and migrants heading to New Zealand.',
+            'title' => 'Activities — Events & Announcements | EP',
+            'description' => 'Upcoming events, announcements and live sessions from EP for students and migrants heading to New Zealand.',
             'breadcrumb' => 'Activities',
         ],
 
         // Visa interest / intake entry pages (public informational forms).
         '/resident-interest' => [
-            'title' => 'New Zealand Resident Visa Interest | Luvep',
-            'description' => 'Register your interest in a New Zealand Resident Visa. Complete the interest form and Luvep will help you plan your next steps.',
+            'title' => 'New Zealand Resident Visa Interest | EP',
+            'description' => 'Register your interest in a New Zealand Resident Visa. Complete the interest form and EP will help you plan your next steps.',
             'breadcrumb' => 'Resident Visa Interest',
         ],
         '/work-interest' => [
-            'title' => 'Work Visa (AEWV) Interest | Luvep',
-            'description' => 'Register your interest in a New Zealand work visa (AEWV). Share your details and Luvep will help you plan your application.',
+            'title' => 'Work Visa (AEWV) Interest | EP',
+            'description' => 'Register your interest in a New Zealand work visa (AEWV). Share your details and EP will help you plan your application.',
             'breadcrumb' => 'Work Visa Interest',
         ],
         '/student-interest' => [
-            'title' => 'Student Visa Interest | Luvep',
-            'description' => 'Register your interest in studying in New Zealand on a student visa. Complete the form and Luvep will guide your enrolment and visa steps.',
+            'title' => 'Student Visa Interest | EP',
+            'description' => 'Register your interest in studying in New Zealand on a student visa. Complete the form and EP will guide your enrolment and visa steps.',
             'breadcrumb' => 'Student Visa Interest',
         ],
         '/visitor-interest' => [
-            'title' => 'Visitor Visa Interest | Luvep',
-            'description' => 'Register your interest in a New Zealand visitor visa. Share your travel plans and Luvep will help with your next steps.',
+            'title' => 'Visitor Visa Interest | EP',
+            'description' => 'Register your interest in a New Zealand visitor visa. Share your travel plans and EP will help with your next steps.',
             'breadcrumb' => 'Visitor Visa Interest',
         ],
         '/family-interest' => [
-            'title' => 'Family Visa Interest | Luvep',
-            'description' => 'Register your interest in a New Zealand family or partner visa. Complete the form and Luvep will guide your options.',
+            'title' => 'Family Visa Interest | EP',
+            'description' => 'Register your interest in a New Zealand family or partner visa. Complete the form and EP will guide your options.',
             'breadcrumb' => 'Family Visa Interest',
         ],
     ],

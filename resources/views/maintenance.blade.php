@@ -7,7 +7,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title>Back soon — ePathways</title>
+    <title>Back soon — EP</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -81,7 +81,7 @@
     <main class="card">
         <span class="badge"><span class="dot"></span> Scheduled maintenance</span>
 
-        <p class="brand">ePathways.</p>
+        <p class="brand">EP.</p>
         <h1>We'll be back shortly</h1>
 
         <p class="msg">{{ $message }}</p>

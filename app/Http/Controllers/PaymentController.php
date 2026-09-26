@@ -48,7 +48,7 @@ class PaymentController extends Controller
                         'currency' => $currency,
                         'product_data' => [
                             'name' => $productName,
-                            'description' => trim('With '.($booking->consultant_name ?: 'ePathways')),
+                            'description' => trim('With '.($booking->consultant_name ?: 'EP')),
                         ],
                         'unit_amount' => (int) round($price * 100),
                     ],

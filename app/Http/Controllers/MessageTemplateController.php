@@ -35,7 +35,7 @@ class MessageTemplateController extends Controller
         ['name' => 'password', 'description' => 'Portal password — only filled when credentials are generated (blank otherwise)'],
         ['name' => 'tracker_url', 'description' => 'Link to the lead /track/{code} page'],
         ['name' => 'engagement_url', 'description' => 'Scoped engagement signing link (only filled when sent from the engagement generator)'],
-        ['name' => 'assigned_staff_name', 'description' => 'Assigned staff member, or "the ePathways team"'],
+        ['name' => 'assigned_staff_name', 'description' => 'Assigned staff member, or "the EP team"'],
         ['name' => 'status', 'description' => 'Application status (passed when staff send an update)'],
         ['name' => 'status_detail', 'description' => 'Optional note describing the status change'],
         ['name' => 'event_name', 'description' => 'Event title (event_registration template)'],

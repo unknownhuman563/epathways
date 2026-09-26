@@ -44,7 +44,7 @@ class SeoTest extends TestCase
 
         $title = $this->title($html);
         $this->assertNotEmpty($title);
-        $this->assertStringContainsString('Luvep', $title);
+        $this->assertStringContainsString('EP', $title);
         // The old generic placeholder title must be gone.
         $this->assertNotSame('ePathways', $title);
 
@@ -90,8 +90,8 @@ class SeoTest extends TestCase
             '/<meta property="og:url" content="https:\/\/luvep\.com\/immigration"/',
             $html
         );
-        $this->assertStringContainsString('<meta property="og:site_name" content="Luvep">', $html);
-        // Default share card is the dedicated 1200×630 Luvep OG image.
+        $this->assertStringContainsString('<meta property="og:site_name" content="EP">', $html);
+        // Default share card is the dedicated 1200×630 EP OG image.
         $this->assertStringContainsString(
             '<meta property="og:image" content="https://luvep.com/images/og-luvep.png">',
             $html
@@ -108,10 +108,10 @@ class SeoTest extends TestCase
         $org = collect($blocks)->firstWhere('@type', 'Organization');
         $this->assertNotNull($org, 'Homepage should include Organization structured data');
         $this->assertIsArray($org, 'Organization JSON-LD must be valid JSON');
-        $this->assertSame('Luvep', $org['name']);
+        $this->assertSame('EP', $org['name']);
         $this->assertSame('https://luvep.com/', $org['url']);
         $this->assertSame('support@luvep.com', $org['email']);
-        // Logo is the current Luvep logo (legacy "ep-" filename), absolute on prod.
+        // Logo is the current EP logo (legacy "ep-" filename), absolute on prod.
         $this->assertSame('https://luvep.com/images/ep-logo.png', $org['logo']);
         $this->assertStringNotContainsString('epathways.co.nz', json_encode($org));
 
@@ -135,6 +135,17 @@ class SeoTest extends TestCase
             $source = file_get_contents(base_path($relative));
             $count = preg_match_all('/<(?:motion\.)?h1[\s>]/', $source);
             $this->assertSame(1, $count, "Page [{$label}] must have exactly one H1, found {$count}");
+        }
+    }
+
+    public function test_homepage_key_internal_links_are_reachable(): void
+    {
+        // The homepage links to these SEO pages via descriptive anchors. Guard
+        // that none 404 (the ServicesGrid "Engagement Services" tile previously
+        // pointed at a non-existent /contact route).
+        foreach (['/education-journey', '/programs-levels', '/fee-guide', '/immigration', '/accommodation', '/booking'] as $path) {
+            $status = $this->get($path)->getStatusCode();
+            $this->assertNotSame(404, $status, "Homepage link target {$path} must not 404 (got {$status})");
         }
     }
 
@@ -181,7 +192,7 @@ class SeoTest extends TestCase
 
         $title = $this->title($html);
         $this->assertStringContainsString('Diploma in Cybersecurity', $title);
-        $this->assertStringContainsString('Luvep', $title);
+        $this->assertStringContainsString('EP', $title);
 
         // Breadcrumb structured data for the programme hierarchy.
         $breadcrumb = collect($this->jsonLdBlocks($html))->firstWhere('@type', 'BreadcrumbList');

@@ -60,7 +60,7 @@ class LeadPhaseService
             'label'       => 'Outcome',
             'department'  => null,
             'description' => 'Pathway conclusion or alternative recommendation.',
-            'lead_copy'   => 'Your ePathways journey has reached a conclusion. See the details below for next steps.',
+            'lead_copy'   => 'Your EP journey has reached a conclusion. See the details below for next steps.',
             'stages'      => [
                 'Not Qualified',
                 'Work Pathway / Other',

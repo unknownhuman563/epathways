@@ -164,7 +164,7 @@ export default function EducationReports({ range = {}, pipeline = [], summary = 
                     </Section>
 
                     <p className="text-center text-[11px] text-gray-400">
-                        Generated {generated_at ? new Date(generated_at).toLocaleString("en-NZ") : "—"}{generated_by ? ` · ${generated_by}` : ""} · ePathways Education
+                        Generated {generated_at ? new Date(generated_at).toLocaleString("en-NZ") : "—"}{generated_by ? ` · ${generated_by}` : ""} · EP Education
                     </p>
                 </>
             )}

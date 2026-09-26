@@ -39,7 +39,7 @@ const ACCOMMODATION_NAV = [
 
 export default function AccommodationLayout({ children }) {
     return (
-        <DashboardLayout brand="ePathways." subtitle="Accommodation Portal" accent="bg-[#1F5A8B]" nav={ACCOMMODATION_NAV}>
+        <DashboardLayout brand="EP." subtitle="Accommodation Portal" accent="bg-[#1F5A8B]" nav={ACCOMMODATION_NAV}>
             {children}
         </DashboardLayout>
     );

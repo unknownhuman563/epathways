@@ -17,7 +17,7 @@
 <td style="background-color:#1f7a43;padding:22px 40px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
 <tr>
-<td style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;">ePathways<span style="color:#86efac;">.</span></td>
+<td style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;">EP<span style="color:#86efac;">.</span></td>
 <td align="right" style="font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.72);">Task Board</td>
 </tr>
 </table>
@@ -75,14 +75,14 @@
 </tr>
 </table>
 
-<p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:#94a3b8;">You're receiving this daily digest because you have overdue tasks assigned to you in ePathways.</p>
+<p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:#94a3b8;">You're receiving this daily digest because you have overdue tasks assigned to you in EP.</p>
 </td>
 </tr>
 
 {{-- Footer --}}
 <tr>
 <td style="padding:20px 40px 28px 40px;border-top:1px solid #eef0f4;">
-<p style="margin:0;font-size:11px;color:#9ca3af;">&copy; {{ date('Y') }} ePathways. All rights reserved.</p>
+<p style="margin:0;font-size:11px;color:#9ca3af;">&copy; {{ date('Y') }} EP. All rights reserved.</p>
 </td>
 </tr>
 

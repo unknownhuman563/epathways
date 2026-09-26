@@ -32,7 +32,7 @@ class TrackerWelcome extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Track your ePathways application',
+            subject: 'Track your EP application',
         );
     }
 

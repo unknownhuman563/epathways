@@ -80,7 +80,7 @@ export default function LeadJourney({ lead, roadmap = [], currentPhase = null, p
                                             <div className="mt-4 pt-4 border-t border-[#282728]/10 flex items-center gap-2">
                                                 <MapPinned size={13} className="text-[#009688]" />
                                                 <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#009688]">
-                                                    With {p.department || 'ePathways'}
+                                                    With {p.department || 'EP'}
                                                 </p>
                                             </div>
                                         </>

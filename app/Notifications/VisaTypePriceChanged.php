@@ -45,7 +45,7 @@ class VisaTypePriceChanged extends Notification
         $new = '$' . number_format((float) $this->entry->new_price_nzd, 2) . ' NZD';
 
         return (new MailMessage)
-            ->subject("ePathways: {$this->visaType->name} pricing updated")
+            ->subject("EP: {$this->visaType->name} pricing updated")
             ->greeting("Hi {$notifiable->name},")
             ->line("The consultation price for **{$this->visaType->name}** has been updated.")
             ->line("**Previous:** {$old}")

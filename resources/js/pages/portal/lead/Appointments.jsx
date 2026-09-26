@@ -22,7 +22,7 @@ export default function LeadAppointments({ lead, upcoming = [], past = [] }) {
             <PortalPageHeader
                 eyebrow="Calendar"
                 title="Appointments"
-                description="Your consultations and meetings with the ePathways team."
+                description="Your consultations and meetings with the EP team."
                 action={
                     <a
                         href="/booking"

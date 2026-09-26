@@ -932,7 +932,7 @@ class AiAdsWebhookController extends Controller
                 'headline' => $this->stubHeadline($service),
                 'body' => $this->stubBody($service),
                 'cta' => $this->stubCta($service),
-                'hashtags' => ['epathways', 'studyinnz', 'newzealand'],
+                'hashtags' => ['ep', 'studyinnz', 'newzealand'],
             ];
         }
 

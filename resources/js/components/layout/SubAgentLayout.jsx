@@ -39,7 +39,7 @@ export default function SubAgentLayout({ children }) {
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Sub-agent Portal" accent="bg-purple-600" nav={gateNav(NAV, modules)}>
+        <DashboardLayout brand="EP." subtitle="Sub-agent Portal" accent="bg-purple-600" nav={gateNav(NAV, modules)}>
             {children}
         </DashboardLayout>
     );

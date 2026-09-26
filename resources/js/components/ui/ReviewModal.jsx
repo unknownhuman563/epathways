@@ -9,8 +9,8 @@ import { X, Star, FileText, MessageCircle, CheckCircle, ArrowRight, Loader, Came
 // "What visa or service did we help you with?" but the dropdown above
 // already captures that, so it's been replaced with a story-driven prompt.
 const QUESTIONS = [
-    "What made you choose ePathways?",
-    "How was your overall experience working with ePathways?",
+    "What made you choose EP?",
+    "How was your overall experience working with EP?",
     "Would you recommend us to friends and family — and why?",
 ];
 
@@ -333,7 +333,7 @@ export default function ReviewModal({ open, onClose, department = "immigration" 
                                         className="w-3.5 h-3.5 rounded border-gray-300 text-[#436235] focus:ring-[#436235]/30 focus:ring-2 cursor-pointer"
                                     />
                                     <span className="text-[11px] text-gray-700 font-normal">
-                                        I also used ePathways for {otherDept === "immigration" ? "my visa processing" : "my education programme"}
+                                        I also used EP for {otherDept === "immigration" ? "my visa processing" : "my education programme"}
                                     </span>
                                 </label>
 
@@ -526,7 +526,7 @@ export default function ReviewModal({ open, onClose, department = "immigration" 
                                             value={data.paragraph}
                                             onChange={(e) => setData("paragraph", e.target.value)}
                                             className="w-full bg-white border border-gray-200 rounded-xl px-4 py-4 text-sm outline-none focus:border-[#436235] transition-colors resize-none leading-relaxed"
-                                            placeholder="Share your experience with ePathways in your own words…"
+                                            placeholder="Share your experience with EP in your own words…"
                                         />
                                         {errors.paragraph && (
                                             <p className="text-xs text-red-500 mt-1.5 font-light">{errors.paragraph}</p>

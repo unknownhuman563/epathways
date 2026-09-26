@@ -64,12 +64,12 @@ function FooterForm({ basePath, dept, item }) {
             <p className="text-[11px] font-semibold text-gray-500 flex items-center gap-1.5"><Mail size={12} /> Footer text</p>
             <label className="block">
                 <span className="block text-[10px] text-gray-400 mb-0.5">Company (in the copyright line)</span>
-                <input className={input} value={f.footer_company} onChange={set("footer_company")} placeholder={eff.company || "ePathways"} />
+                <input className={input} value={f.footer_company} onChange={set("footer_company")} placeholder={eff.company || "EP"} />
             </label>
             <div className="grid grid-cols-2 gap-2">
                 <label className="block">
                     <span className="block text-[10px] text-gray-400 mb-0.5">Website label</span>
-                    <input className={input} value={f.footer_website_label} onChange={set("footer_website_label")} placeholder={eff.website_label || "epathways.co.nz"} />
+                    <input className={input} value={f.footer_website_label} onChange={set("footer_website_label")} placeholder={eff.website_label || "luvep.com"} />
                 </label>
                 <label className="block">
                     <span className="block text-[10px] text-gray-400 mb-0.5">Website link</span>
@@ -179,7 +179,7 @@ export default function EmailBrandingView({ items = [], basePath = "/admin/email
                     <ArrowLeft size={14} /> Back to templates
                 </Link>
                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2"><Mail size={22} /> Email Branding</h1>
-                <p className="text-sm text-gray-500 mt-1">Set each department's email banner &amp; CTA image. A template's Branding picker uses these; a per-template custom image still overrides. Blank = the default ePathways artwork.</p>
+                <p className="text-sm text-gray-500 mt-1">Set each department's email banner &amp; CTA image. A template's Branding picker uses these; a per-template custom image still overrides. Blank = the default EP artwork.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

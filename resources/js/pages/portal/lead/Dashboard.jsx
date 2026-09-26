@@ -54,7 +54,7 @@ export default function LeadDashboard({
 }) {
     return (
         <div className="space-y-8 max-w-6xl mx-auto pb-16">
-            <Head title="My ePathways Portal" />
+            <Head title="My EP Portal" />
 
             {/* ── Hero ───────────────────────────────────────────────────── */}
             <section
@@ -223,7 +223,7 @@ export default function LeadDashboard({
                 </TeaserCard>
 
                 <TeaserCard
-                    eyebrow="Latest from ePathways"
+                    eyebrow="Latest from EP"
                     icon={<Megaphone size={14} />}
                     href="/portal/lead/announcements"
                     cta="All announcements"
@@ -256,7 +256,7 @@ export default function LeadDashboard({
                     <DetailRow icon={<Mail size={14} />} label="Email" value={lead.email || "—"} />
                     <DetailRow icon={<Phone size={14} />} label="Phone" value={lead.phone || "—"} />
                     <DetailRow icon={<MapPin size={14} />} label="Country" value={lead.residence_country || "—"} />
-                    <DetailRow icon={<Sparkles size={14} />} label="Joined ePathways" value={fmtDate(lead.created_at)} fullWidth />
+                    <DetailRow icon={<Sparkles size={14} />} label="Joined EP" value={fmtDate(lead.created_at)} fullWidth />
                 </dl>
             </section>
         </div>
@@ -516,7 +516,7 @@ function JourneyRoadmap({ roadmap = [], currentPhase = null, preEngagement = fal
                     Engagement being set up
                 </p>
                 <h3 className="text-2xl font-semibold tracking-tight mb-3" style={{ color: INK }}>
-                    Welcome to ePathways
+                    Welcome to EP
                 </h3>
                 <p className="text-sm text-gray-600 font-light leading-relaxed max-w-xl mx-auto">
                     We&apos;re still finalising your consultancy agreement and payment. Once those are sorted, your full journey roadmap — Agreement, Enrolment, and Visa — will unlock here. Your adviser will be in touch shortly.

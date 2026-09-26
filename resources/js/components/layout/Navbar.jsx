@@ -47,7 +47,7 @@ const Navbar = () => {
                     <a href={isAccommodation ? "/accommodation" : "/"} onClick={closeMenu} className="block h-full">
                         <img
                             src={isAccommodation ? ExaltLogo : Logo}
-                            alt={isAccommodation ? "Exalt Property Management" : "ePathways"}
+                            alt={isAccommodation ? "Exalt Property Management" : "EP"}
                             className="h-full w-auto rounded transition-transform duration-200 hover:scale-105"
                         />
                     </a>

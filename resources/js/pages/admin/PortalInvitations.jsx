@@ -492,7 +492,7 @@ function CredentialsModal({ credentials, onClose }) {
     };
 
     const copyBoth = () => {
-        const txt = `ePathways Portal\nLogin URL: ${window.location.origin}/login\nEmail: ${credentials.email}\nPassword: ${credentials.password}`;
+        const txt = `EP Portal\nLogin URL: ${window.location.origin}/login\nEmail: ${credentials.email}\nPassword: ${credentials.password}`;
         copy("both", txt);
     };
 

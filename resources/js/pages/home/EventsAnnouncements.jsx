@@ -92,7 +92,7 @@ export default function EventsAnnouncements() {
                              News & <span className="text-[#436235]">Announcements</span>
                         </h2>
                         <p className="text-gray-600 text-sm md:text-base font-light max-w-xl">
-                            The latest updates on New Zealand immigration, company events, and success stories from the ePathways community.
+                            The latest updates on New Zealand immigration, company events, and success stories from the EP community.
                         </p>
                     </div>
                 </div>

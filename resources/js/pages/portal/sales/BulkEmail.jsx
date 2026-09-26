@@ -38,7 +38,7 @@ function fillPreview(text, lead, selectedEvent, escapeValues = false) {
         status: lead?.status || "Qualified",
         status_detail: "",
         tracker_url: `${window.location.origin}/track/SAMPLE`,
-        assigned_staff_name: "the ePathways team",
+        assigned_staff_name: "the EP team",
         event_name: selectedEvent?.event_name || "Seminar: Studying in New Zealand",
         event_date: selectedEvent?.event_date || "Friday, 10 July 2026",
         event_time: selectedEvent?.event_time || "2:00 PM – 3:00 PM",

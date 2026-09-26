@@ -840,10 +840,10 @@ export function StepTerms({ data, setData, errors }) {
         <div className="space-y-8">
             <h2 className="text-xl sm:text-2xl font-bold text-[#282728] mb-8 leading-tight">Privacy & Terms</h2>
             <div className="bg-gray-50/50 rounded-3xl p-10 text-base text-gray-500 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
-                <p>Welcome to ePathways. By proceeding, you agree to the following terms. This assessment is designed to help us understand your immigration pathway to New Zealand and Australia.</p>
+                <p>Welcome to EP. By proceeding, you agree to the following terms. This assessment is designed to help us understand your immigration pathway to New Zealand and Australia.</p>
                 <p>The information you provide will be used solely for the purpose of this assessment. Eligibility criteria and pathways are subject to change in accordance with government regulations.</p>
                 <p>We are committed to protecting your privacy. All data submitted is encrypted and handled with the highest level of security. Please ensure that all information provided is accurate and complete to receive the most reliable evaluation.</p>
-                <p>ePathways facilitates the connection between potential students and educational institutions. We do not guarantee visa approval, as final decisions rest with the respective immigration authorities.</p>
+                <p>EP facilitates the connection between potential students and educational institutions. We do not guarantee visa approval, as final decisions rest with the respective immigration authorities.</p>
             </div>
             <div>
                 <label className={`flex items-center gap-5 p-4 cursor-pointer group rounded-2xl transition-all ${errors.terms_accepted ? 'bg-red-50 ring-2 ring-red-500/20' : ''}`}>
@@ -2072,7 +2072,7 @@ export function StepDeclaration({ data, setData, errors }) {
                     <li>Changes to your study plans or institution</li>
                 </ul>
                 <p className="mb-4"><strong className="text-[#282728]">Warning:</strong> It is an offense to provide false or misleading information to INZ. Providing false or misleading information may result in the decline of your application, the revocation of any visa granted, deportation from New Zealand, and/or criminal prosecution.</p>
-                <p>I acknowledge that ePathways acts as a facilitator and that the final decision on any visa application rests with Immigration New Zealand or the relevant immigration authority.</p>
+                <p>I acknowledge that EP acts as a facilitator and that the final decision on any visa application rests with Immigration New Zealand or the relevant immigration authority.</p>
             </div>
             <div>
                 <label className={`flex items-center gap-5 p-4 cursor-pointer group rounded-2xl transition-all ${errors.declaration_accepted ? 'bg-red-50 ring-2 ring-red-500/20' : ''}`}>

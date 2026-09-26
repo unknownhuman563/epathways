@@ -7,7 +7,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title>Tracker temporarily unavailable — ePathways</title>
+    <title>Tracker temporarily unavailable — EP</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -48,7 +48,7 @@
 <body>
     <main class="card">
         <span class="badge"><span class="dot"></span> Application Tracker</span>
-        <p class="brand">ePathways.</p>
+        <p class="brand">EP.</p>
         <h1>Temporarily unavailable</h1>
         <p class="msg">
             The application tracker is briefly offline for maintenance. Your documents and progress

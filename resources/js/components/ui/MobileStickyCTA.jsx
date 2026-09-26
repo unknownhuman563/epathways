@@ -21,7 +21,7 @@ export default function MobileStickyCTA() {
 
     const whatsappHref = contact?.whatsapp
         ? `https://wa.me/${String(contact.whatsapp).replace(/[^\d]/g, "")}?text=${encodeURIComponent(
-              "Hi ePathways — I'd like to know more about migrating to NZ."
+              "Hi EP — I'd like to know more about migrating to NZ."
           )}`
         : null;
     const phoneHref = contact?.phone

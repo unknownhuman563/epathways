@@ -81,7 +81,7 @@ export default function Assistant({ subject = null, aiEnabled = true, backUrl = 
 
     return (
         <div className="h-full min-h-0 bg-gray-50 flex flex-col font-urbanist rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <Head title="AI Assistant — ePathways" />
+            <Head title="AI Assistant — EP" />
 
             {/* Top bar */}
             <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center gap-3">
@@ -92,7 +92,7 @@ export default function Assistant({ subject = null, aiEnabled = true, backUrl = 
                     <Sparkles size={17} className="text-amber-300" />
                 </span>
                 <div className="min-w-0 flex-1">
-                    <h1 className="text-sm font-bold text-gray-900 leading-tight">ePathways Assistant</h1>
+                    <h1 className="text-sm font-bold text-gray-900 leading-tight">EP Assistant</h1>
                     {scoped ? (
                         <p className="text-[11px] text-gray-500 leading-tight truncate">About: {subject.label}</p>
                     ) : (

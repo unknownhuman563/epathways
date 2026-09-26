@@ -43,10 +43,10 @@
 <body>
 
 <div class="page-header">
-    <img src="{{ base_path('resources/assets/philipine_ep_logo.png') }}" alt="ePathways Philippines">
+    <img src="{{ base_path('resources/assets/philipine_ep_logo.png') }}" alt="EP">
 </div>
 
-<div class="eyebrow">ePathways · Study Proposal</div>
+<div class="eyebrow">EP · Study Proposal</div>
 <h1>STUDY PROPOSAL</h1>
 <div class="subtitle">Prepared for {{ $client_name }}</div>
 <hr>
@@ -54,7 +54,7 @@
 <p>Dear {{ $client_name }},</p>
 
 <p>
-    Thank you for considering ePathways for your study journey to New Zealand.
+    Thank you for considering EP for your study journey to New Zealand.
     Based on our discussion, we've prepared the following proposal outlining
     the recommended pathway, expected timeline, and next steps.
 </p>

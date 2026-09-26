@@ -47,7 +47,7 @@ const FacebookLive = ({ pastSessions = [], featuredSession = null }) => {
 
                         <div className="mb-8">
                             <span className="block text-gray-900 font-bold text-xs uppercase tracking-widest mb-2">Host</span>
-                            <p className="text-gray-600 font-light">ePathways team</p>
+                            <p className="text-gray-600 font-light">EP team</p>
                         </div>
 
                         <div className="mb-12">

@@ -122,7 +122,7 @@ class EmailBranding extends Model
         $siteUrl = rtrim((string) config('app.url'), '/');
 
         return [
-            'company' => 'ePathways',
+            'company' => 'EP',
             'website_label' => preg_replace('#^https?://#', '', $siteUrl),
             'website_url' => $siteUrl,
             'email' => (string) config('services.contact.email'),

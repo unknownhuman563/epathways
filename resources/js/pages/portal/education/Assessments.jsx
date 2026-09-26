@@ -321,7 +321,7 @@ export default function EducationAssessments({ eligibility = [], enrolment = [] 
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {isDraft(r) ? (
                                                         <a
-                                                            href={r.email ? `mailto:${r.email}?subject=${encodeURIComponent("Finish your ePathways assessment")}&body=${encodeURIComponent(`Hi ${r.name},\n\nWe noticed you started an assessment with ePathways but haven't finished it yet. Reply to this email if you'd like a hand completing it.\n\nNgā mihi,\nePathways`)}` : undefined}
+                                                            href={r.email ? `mailto:${r.email}?subject=${encodeURIComponent("Finish your EP assessment")}&body=${encodeURIComponent(`Hi ${r.name},\n\nWe noticed you started an assessment with EP but haven't finished it yet. Reply to this email if you'd like a hand completing it.\n\nNgā mihi,\nEP`)}` : undefined}
                                                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors ${r.email ? "" : "opacity-40 pointer-events-none"}`}
                                                         >
                                                             <Bell size={12} /> Send nudge

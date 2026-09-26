@@ -99,7 +99,7 @@ class AIService
     public function generateAdCreative(string $brief, string $platform = 'facebook'): array
     {
         $system = <<<'PROMPT'
-        You are a senior paid-social copywriter for ePathways, a New Zealand education & immigration consultancy. Write ONE high-performing ad creative for the given platform and brief.
+        You are a senior paid-social copywriter for EP, a New Zealand education & immigration consultancy. Write ONE high-performing ad creative for the given platform and brief.
 
         Voice: warm, credible, specific. Real value props (free assessment, licensed immigration advisers, NZQA-recognised programmes, end-to-end support). No fake urgency. Tasteful emoji okay.
 
@@ -127,9 +127,9 @@ class AIService
     public function suggestAdTargeting(array $brief): array
     {
         $system = <<<'PROMPT'
-        You are a paid-social media buyer for ePathways, a New Zealand education & immigration consultancy. Given an ad's goal, platform and post content, propose the best paid-ad AUDIENCE.
+        You are a paid-social media buyer for EP, a New Zealand education & immigration consultancy. Given an ad's goal, platform and post content, propose the best paid-ad AUDIENCE.
 
-        Context: ePathways helps international students and migrants move to New Zealand to study and settle. Typical prospects are 18-40, in source markets like India, the Philippines, Nepal, Sri Lanka, Vietnam, Pakistan and Bangladesh, plus onshore audiences already in New Zealand. Interests skew to study abroad, overseas education, student visas, IELTS/PTE, immigration, working in New Zealand, and fields like nursing, IT, business and trades.
+        Context: EP helps international students and migrants move to New Zealand to study and settle. Typical prospects are 18-40, in source markets like India, the Philippines, Nepal, Sri Lanka, Vietnam, Pakistan and Bangladesh, plus onshore audiences already in New Zealand. Interests skew to study abroad, overseas education, student visas, IELTS/PTE, immigration, working in New Zealand, and fields like nursing, IT, business and trades.
 
         CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
         Shape:

@@ -14,7 +14,7 @@ const FINANCE_NAV = [
 
 export default function FinanceLayout({ children }) {
     return (
-        <DashboardLayout brand="ePathways." subtitle="Finance Portal" accent="bg-indigo-600" nav={FINANCE_NAV}>
+        <DashboardLayout brand="EP." subtitle="Finance Portal" accent="bg-indigo-600" nav={FINANCE_NAV}>
             {children}
         </DashboardLayout>
     );

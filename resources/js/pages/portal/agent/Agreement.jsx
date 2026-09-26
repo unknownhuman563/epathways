@@ -22,7 +22,7 @@ export default function AgentAgreement({ agreement = null, affiliateFields = [],
 
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight">My Agreement</h1>
-                <p className="text-sm text-gray-500 mt-1">Your Affiliate Partner Agreement with ePathways.</p>
+                <p className="text-sm text-gray-500 mt-1">Your Affiliate Partner Agreement with EP.</p>
             </div>
 
             {agreement ? (
@@ -63,7 +63,7 @@ export default function AgentAgreement({ agreement = null, affiliateFields = [],
                             ) : (
                                 <div className="flex items-start gap-2 text-[12px] text-gray-500">
                                     <FileText size={14} className="mt-0.5 shrink-0 text-gray-400" />
-                                    <span>Your turn: fill in your bank &amp; contact details below, then sign to complete your partnership with ePathways.</span>
+                                    <span>Your turn: fill in your bank &amp; contact details below, then sign to complete your partnership with EP.</span>
                                 </div>
                             )}
                         </div>
@@ -79,7 +79,7 @@ export default function AgentAgreement({ agreement = null, affiliateFields = [],
                     </div>
                     <p className="text-sm font-bold text-gray-800">No agreement yet</p>
                     <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                        Your Affiliate Partner Agreement hasn&rsquo;t been prepared yet. The ePathways team will generate it and it will appear here for you to complete and sign.
+                        Your Affiliate Partner Agreement hasn&rsquo;t been prepared yet. The EP team will generate it and it will appear here for you to complete and sign.
                     </p>
                 </div>
             )}

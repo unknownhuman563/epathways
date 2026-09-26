@@ -44,7 +44,7 @@ const consultants = [
         // Emma — staff (not an IAA-licensed adviser). No role, no licence,
         // no badge.
         name: "Emma Ceballo",
-        bio: "Making sure every client feels supported from the first hello to arrival day, with a seamless experience at ePathways.",
+        bio: "Making sure every client feels supported from the first hello to arrival day, with a seamless experience at EP.",
         img: EmmaImg,
         licensed: false,
     },
@@ -482,7 +482,7 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                             transition={{ delay: 0.2, duration: 0.8 }}
                             className="text-white/60 text-sm md:text-base leading-relaxed max-w-5xl mb-12 font-light tracking-wide"
                         >
-                            Expert guidance through every step of your immigration journey. ePathways provides clear, honest, and stress-free pathways to your new life in New Zealand.
+                            Expert guidance through every step of your immigration journey. EP provides clear, honest, and stress-free pathways to your new life in New Zealand.
                         </motion.p>
 
                         {/* Premium Hero Actions */}

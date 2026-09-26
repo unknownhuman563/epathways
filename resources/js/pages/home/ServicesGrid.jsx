@@ -15,7 +15,7 @@ const services = [
     {
         tag: "Study Abroad",
         title: "Education Services",
-        description: "Admission and scholarship guidance for top global institutions.",
+        description: "Study in New Zealand with guidance on programmes, institutions and education pathways.",
         image: imageMap['education.png'],
         size: "large", // spans 2 rows
         link: "/education-journey"
@@ -23,7 +23,7 @@ const services = [
     {
         tag: "Pathways",
         title: "English Pro",
-        description: "Master the language for your journey with our specialized training programs.",
+        description: "Build the English skills you need to study and work in New Zealand.",
         image: imageMap['pathways.png'],
         size: "small",
         link: "/programs-levels"
@@ -31,23 +31,31 @@ const services = [
     {
         tag: "Visa & Migration",
         title: "Immigration Support",
-        description: "Navigate visas with confidence. Expert guidance from eligibility to processing.",
+        description: "New Zealand immigration services and visa pathways, with expert guidance from eligibility to processing.",
         video: immigrationVideo,
         size: "small",
         link: "/immigration"
     },
     {
+        tag: "Living",
+        title: "Student Accommodation",
+        description: "Student accommodation in New Zealand to help you settle in with confidence.",
+        image: imageMap['settlement.png'],
+        size: "small",
+        link: "/accommodation"
+    },
+    {
         tag: "Consultation",
         title: "Engagement Services",
-        description: "Connect with our advisors to find the best pathway for your future.",
+        description: "Connect with our advisers to find the right pathway for your future.",
         image: imageMap['agents.png'],
         size: "small",
-        link: "/contact"
+        link: "/booking"
     },
     {
         tag: "Career",
         title: "Employment Support",
-        description: "Explore job opportunities and secure your future in a new country.",
+        description: "Explore job opportunities and secure your future in New Zealand.",
         image: imageMap['job.png'],
         size: "small",
         link: "/fee-guide"
@@ -69,7 +77,7 @@ export default function ServicesGrid() {
                             What We <span className="text-[#436235]">Offer</span>
                         </h2>
                         <p className="text-gray-600 text-sm md:text-base font-light mx-auto">
-                            ePathways is your trusted partner, providing expert guidance and end-to-end support—from assessment to success.
+                            EP is your trusted New Zealand partner, providing expert guidance and end-to-end support—from assessment to success.
                         </p>
                     </div>
                 </div>
@@ -97,10 +105,11 @@ export default function ServicesGrid() {
                                     className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"
                                 />
                             ) : (
-                                <img 
-                                    src={service.image} 
-                                    alt={service.title} 
-                                    className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" 
+                                <img
+                                    src={service.image}
+                                    alt={service.title}
+                                    loading="lazy"
+                                    className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"
                                 />
                             )}
                             

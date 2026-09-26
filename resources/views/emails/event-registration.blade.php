@@ -20,7 +20,7 @@
                     {{-- Header banner (hosted URL — no attachment) --}}
                     <tr>
                         <td style="padding:0; background-color:#0f2f1c;">
-                            <img src="{{ $siteUrl }}/images/email/team-header.png" alt="ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                            <img src="{{ $siteUrl }}/images/email/team-header.png" alt="EP" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
                         </td>
                     </tr>
 
@@ -75,7 +75,7 @@
                         <td style="padding:20px 40px 0 40px;">
                             <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#333333;">
                                 Thank you for your interest in exploring opportunities to study and work in New Zealand
-                                with ePathways.
+                                with EP.
                             </p>
                             <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#333333;">
                                 We are an <strong>education consultancy</strong> that helps students and professionals
@@ -84,7 +84,7 @@
                                 from selecting the right program to preparing your requirements.
                             </p>
                             <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#333333;">
-                                To better assist you, I, <strong>Bryll</strong> of ePathways Philippines, will personally
+                                To better assist you, I, <strong>Bryll</strong> of EP, will personally
                                 reach out within the <strong>next 24 hours</strong> to discuss your background and possible
                                 options based on your profile.
                             </p>
@@ -109,7 +109,7 @@
                     <tr>
                         <td style="padding:26px 0 0 0;">
                             <a href="{{ $bookUrl }}" target="_blank">
-                                <img src="{{ $footerUrl }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                                <img src="{{ $footerUrl }}" alt="Book your free consultation with EP" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
                             </a>
                         </td>
                     </tr>
@@ -142,7 +142,7 @@
                     <tr>
                         <td style="padding:14px 40px 30px 40px;" align="center">
                             <p style="margin:0; font-size:11px; color:#aaaaaa;">
-                                Copyright &copy; {{ date('Y') }} ePathways. All rights reserved.
+                                Copyright &copy; {{ date('Y') }} EP. All rights reserved.
                             </p>
                         </td>
                     </tr>

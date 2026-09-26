@@ -189,7 +189,7 @@ export default function Activities({ events, pastSessions = [], featuredSession 
                         Moments from our community
                     </h2>
                     <p className="text-gray-600 text-lg font-light mb-16 max-w-4xl mx-auto">
-                        See the connections made, skills gained, and memories created at ePathways events.
+                        See the connections made, skills gained, and memories created at EP events.
                     </p>
 
                     <div className="relative group">

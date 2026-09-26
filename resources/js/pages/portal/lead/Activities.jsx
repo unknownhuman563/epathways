@@ -10,7 +10,7 @@ const fmtMonth = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { mont
 export default function LeadActivities({ upcoming = [], past = [], registeredEventId = null }) {
     return (
         <div className="space-y-10 max-w-6xl mx-auto pb-16">
-            <Head title="Activities — ePathways Portal" />
+            <Head title="Activities — EP Portal" />
 
             {/* Header */}
             <div>

@@ -42,9 +42,9 @@
         <tr>
             <td>
                 @if(!empty($logo_data))
-                    <img src="{{ $logo_data }}" alt="ePathways" style="height:80px; margin-bottom:4px;">
+                    <img src="{{ $logo_data }}" alt="EP" style="height:80px; margin-bottom:4px;">
                 @else
-                    <div class="brand">ePathways.</div>
+                    <div class="brand">EP.</div>
                 @endif
                 <div class="eyebrow" style="margin-top:4px;">Daily Time &amp; Task Record</div>
                 <h1>Daily Report</h1>
@@ -130,7 +130,7 @@
 
     <div class="foot">
         This report is a system-generated record of the employee's logged time and tasks for {{ $prettyDate }}.
-        Generated {{ $generatedAt }} · ePathways Daily Time &amp; Task Record.
+        Generated {{ $generatedAt }} · EP Daily Time &amp; Task Record.
     </div>
 </body>
 </html>

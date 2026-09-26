@@ -98,7 +98,7 @@ export default function ConsultationForm({ info, onChange, onConfirm, isSubmitti
     return (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8 space-y-8">
             <p className="text-sm text-gray-600 leading-relaxed">
-                <span className="font-bold">Welcome to ePathways</span> — please complete this form so we can better assess your goals and prepare for your consultation.
+                <span className="font-bold">Welcome to EP</span> — please complete this form so we can better assess your goals and prepare for your consultation.
             </p>
 
             {/* Personal Information */}
@@ -208,7 +208,7 @@ export default function ConsultationForm({ info, onChange, onConfirm, isSubmitti
             <div className="space-y-3">
                 <label className="flex items-start gap-2.5 text-sm text-gray-700 cursor-pointer">
                     <input type="checkbox" checked={!!info.consentFollowup} onChange={(e) => onChange({ consentFollowup: e.target.checked })} className="mt-0.5 text-[#436235] focus:ring-[#436235]" />
-                    I consent to receive follow-up communication regarding this consultation, including reminders and related offers from ePathways.
+                    I consent to receive follow-up communication regarding this consultation, including reminders and related offers from EP.
                 </label>
                 <label className="flex items-start gap-2.5 text-sm text-gray-700 cursor-pointer">
                     <input type="checkbox" checked={!!info.consentRecording} onChange={(e) => onChange({ consentRecording: e.target.checked })} className="mt-0.5 text-[#436235] focus:ring-[#436235]" />

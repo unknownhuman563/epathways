@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>{{ $subjectLine ?? 'ePathways' }}</title>
+    <title>{{ $subjectLine ?? 'EP' }}</title>
 </head>
 <body style="margin:0; padding:0; background-color:#eef0f4; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
     @php
@@ -58,7 +58,7 @@
                     @if ($banner)
                     <tr>
                         <td style="padding:0; background-color:#ffffff;">
-                            <img src="{{ $banner }}" alt="ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                            <img src="{{ $banner }}" alt="EP" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
                         </td>
                     </tr>
                     @endif
@@ -77,7 +77,7 @@
                     <tr>
                         <td style="padding:24px 0 0 0;">
                             <a href="{{ $bookingUrl }}" target="_blank">
-                                <img src="{{ $footer }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                                <img src="{{ $footer }}" alt="Book your free consultation with EP" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
                             </a>
                         </td>
                     </tr>

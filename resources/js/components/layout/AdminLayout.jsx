@@ -148,7 +148,7 @@ export default function AdminLayout({ children }) {
 
     return (
         <DashboardLayout
-            brand="ePathways."
+            brand="EP."
             subtitle={isSuperAdmin ? "Super Admin" : "Admin Panel"}
             accent="bg-gray-900"
             nav={nav}

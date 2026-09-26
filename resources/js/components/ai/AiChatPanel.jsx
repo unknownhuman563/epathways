@@ -132,7 +132,7 @@ export default function AiChatPanel({ onClose }) {
                         <Sparkles size={16} />
                     </span>
                     <div className="flex-1 min-w-0">
-                        <h2 className="text-sm font-bold text-gray-900 leading-tight">ePathways Assistant</h2>
+                        <h2 className="text-sm font-bold text-gray-900 leading-tight">EP Assistant</h2>
                         <p className="text-[11px] text-gray-400 leading-tight">Drafts only — always review before sending.</p>
                     </div>
                     <button onClick={() => setShowHistory((v) => !v)} title="Conversations" className={`p-1.5 rounded-lg hover:bg-gray-100 ${showHistory ? "bg-gray-100 text-gray-900" : "text-gray-500"}`}>

@@ -63,12 +63,12 @@ return [
         [
             'key' => 'first_contact',
             'label' => 'First contact',
-            'body' => 'Hi [name], I\'m calling from ePathways about the enquiry you made at [source]. I help gather the paperwork before our licensed adviser looks at your case — is now a good time for five minutes?',
+            'body' => 'Hi [name], I\'m calling from EP about the enquiry you made at [source]. I help gather the paperwork before our licensed adviser looks at your case — is now a good time for five minutes?',
         ],
         [
             'key' => 'no_answer',
             'label' => 'No answer / voicemail',
-            'body' => 'Hi [name], this is [me] from ePathways about your [source] enquiry. I\'ll try again in a couple of days — or reply to the email I\'ve just sent and we\'ll book a time that suits you.',
+            'body' => 'Hi [name], this is [me] from EP about your [source] enquiry. I\'ll try again in a couple of days — or reply to the email I\'ve just sent and we\'ll book a time that suits you.',
         ],
         [
             'key' => 'chasing_documents',

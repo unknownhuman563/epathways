@@ -685,7 +685,7 @@ export default function Registration({ event }) {
                             </div>
                         </div>
                         <div className="p-6 flex-1 flex flex-col">
-                            <p className="text-[13px] text-gray-300 leading-relaxed">A 30-minute private session with a certified ePathways adviser.</p>
+                            <p className="text-[13px] text-gray-300 leading-relaxed">A 30-minute private session with a certified EP adviser.</p>
                             <ul className="mt-4 space-y-2.5 flex-1">
                                 {['30-min private session', 'Discuss your specific situation', 'No sales pressure'].map((txt) => (
                                     <li key={txt} className="flex items-start gap-2.5 text-[12.5px] text-gray-200">

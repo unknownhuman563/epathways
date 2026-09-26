@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@yield('code', 'Error') — ePathways</title>
+    <title>@yield('code', 'Error') — EP</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;900&display=swap" rel="stylesheet">
@@ -135,7 +135,7 @@
 <body>
 <div class="shell">
     <header class="brand">
-        <a href="/">epathways<span>.</span></a>
+        <a href="/">EP<span>.</span></a>
     </header>
     <main>
         <div class="card">
@@ -150,7 +150,7 @@
         </div>
     </main>
     <footer>
-        © {{ date('Y') }} ePathways — Education &amp; Immigration Consultancy
+        © {{ date('Y') }} EP — Education &amp; Immigration Consultancy
     </footer>
 </div>
 </body>

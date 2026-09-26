@@ -29,7 +29,7 @@ export default function AgentProfile({ user, referral = null }) {
             <PortalPageHeader
                 eyebrow="Account"
                 title="My Profile"
-                description="Your recruiting agent account on ePathways."
+                description="Your recruiting agent account on EP."
             />
 
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

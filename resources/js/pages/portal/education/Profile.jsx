@@ -8,7 +8,7 @@ export default function EducationProfile({ user }) {
     return (
         <div className="space-y-6 max-w-3xl mx-auto pb-12">
             <Head title="My Profile — Education" />
-            <PortalPageHeader eyebrow="Account" title="My Profile" description="Your staff account on ePathways." />
+            <PortalPageHeader eyebrow="Account" title="My Profile" description="Your staff account on EP." />
 
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 flex items-center gap-5">

@@ -466,7 +466,7 @@ class CommunicationService
             // never stored, so it stays blank unless the calling action passes it.
             'password' => '',
             'has_portal_account' => $lead->portalUser()->exists() ? 'yes' : 'no',
-            'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
+            'assigned_staff_name' => $staff?->name ?? 'the EP team',
         ], $eventCtx, $extra);
     }
 

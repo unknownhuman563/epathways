@@ -74,7 +74,7 @@ export default function ImmigrationLayout({ children }) {
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Immigration Portal" accent="bg-[#009688]" nav={NAV}>
+        <DashboardLayout brand="EP." subtitle="Immigration Portal" accent="bg-[#009688]" nav={NAV}>
             {children}
         </DashboardLayout>
     );

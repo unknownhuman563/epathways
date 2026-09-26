@@ -198,7 +198,7 @@ export default function QuickLeadForm({
 
             {!isCompact && (
                 <p className={`mt-4 text-[10px] text-center font-light ${isDark ? "text-white/30" : "text-gray-400"}`}>
-                    By submitting, you agree to be contacted by ePathways. We never share your details.
+                    By submitting, you agree to be contacted by EP. We never share your details.
                 </p>
             )}
         </form>

@@ -33,7 +33,7 @@ class DocumentRequestedFromLead extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'ePathways needs your ' . $this->documentLabel,
+            subject: 'EP needs your ' . $this->documentLabel,
         );
     }
 

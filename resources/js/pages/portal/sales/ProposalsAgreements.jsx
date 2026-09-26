@@ -410,7 +410,7 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
         const client = rows.filter((r) => r.group !== 'needs_you').sort(byNewest);
 
         return [
-            { key: 'needs_you', label: 'Needs you', sub: 'action sits with ePathways', tone: 'amber', rows: needs },
+            { key: 'needs_you', label: 'Needs you', sub: 'action sits with EP', tone: 'amber', rows: needs },
             { key: 'with_client', label: 'With the client', sub: 'waiting on the lead', tone: 'gray', rows: client },
         ];
     }, [rows, sort]);
@@ -891,7 +891,7 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
         const live = leadRows.filter((r) => ! hasPending(r)).sort(byNewest);
 
         return [
-            { key: 'pending', label: 'Needs verification', sub: 'action sits with ePathways', tone: 'amber', rows: pending },
+            { key: 'pending', label: 'Needs verification', sub: 'action sits with EP', tone: 'amber', rows: pending },
             { key: 'live', label: 'Generated & sent', sub: 'live agreements', tone: 'gray', rows: live },
         ];
     }, [leadRows, sort]);
@@ -1595,7 +1595,7 @@ function NotifyLeadModal({ target, onClose }) {
     const noun       = nounTitle.toLowerCase();
     const firstName  = (lead.name || '').split(' ')[0] || 'there';
     const hasEmail   = !! lead.email;
-    const subject    = `Your ${nounTitle} is ready — ePathways`;
+    const subject    = `Your ${nounTitle} is ready — EP`;
 
     const send = () => {
         setSending(true);
@@ -1713,14 +1713,14 @@ function NotifyLeadModal({ target, onClose }) {
                             <div className="inline-block px-3 py-1.5 rounded-md bg-gray-900 text-white text-[11px] font-bold">
                                 Open my tracker →
                             </div>
-                            <p className="text-[11px] text-gray-500 italic">Ngā mihi, The ePathways team</p>
+                            <p className="text-[11px] text-gray-500 italic">Ngā mihi, The EP team</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-2 bg-gray-50/50">
                     <p className="text-[11px] text-gray-500 italic">
-                        Sends via the ePathways queue — usually within a minute.
+                        Sends via the EP queue — usually within a minute.
                     </p>
                     <div className="flex items-center gap-2">
                         <button

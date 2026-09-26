@@ -372,7 +372,7 @@ function EmailTab({ mode = 'send', event, leads, emailTemplates, sentEmails, sch
                     <RichTextEditor value={data.body} onChange={(html) => setData('body', html)} />
                     {errors.body && <span className="text-xs text-rose-600">{errors.body}</span>}
                     <span className="block text-[11px] text-gray-400 mt-1">
-                        Variables: <code>{'{{first_name}}'}</code> <code>{'{{event_name}}'}</code> <code>{'{{event_date}}'}</code> <code>{'{{event_time}}'}</code> <code>{'{{event_location}}'}</code>. Sent using the branded ePathways email design.
+                        Variables: <code>{'{{first_name}}'}</code> <code>{'{{event_name}}'}</code> <code>{'{{event_date}}'}</code> <code>{'{{event_time}}'}</code> <code>{'{{event_location}}'}</code>. Sent using the branded EP email design.
                     </span>
                 </label>
 

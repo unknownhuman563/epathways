@@ -75,7 +75,7 @@ export default function EducationLayout({ children }) {
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Education Portal" accent="bg-[#14532d]" nav={EDUCATION_NAV}>
+        <DashboardLayout brand="EP." subtitle="Education Portal" accent="bg-[#14532d]" nav={EDUCATION_NAV}>
             {children}
         </DashboardLayout>
     );

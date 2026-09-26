@@ -11,8 +11,8 @@ import { Star, FileText, MessageCircle, CheckCircle, ArrowRight, Camera, Home } 
 // don't have to retype info staff already have.
 
 const QUESTIONS = [
-    "What made you choose ePathways?",
-    "How was your overall experience working with ePathways?",
+    "What made you choose EP?",
+    "How was your overall experience working with EP?",
     "Would you recommend us to friends and family — and why?",
 ];
 
@@ -91,14 +91,14 @@ export default function LeaveReviewPage({
 
     return (
         <div className="min-h-screen bg-white font-urbanist">
-            <Head title="Leave a review · ePathways" />
+            <Head title="Leave a review · EP" />
 
             {/* Slim header — just brand, no nav */}
             <header className="border-b border-gray-100">
                 <div className="max-w-4xl mx-auto px-6 sm:px-10 py-5 flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-[#282728] flex items-center justify-center text-white text-xs font-black">eP</div>
                     <div>
-                        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-gray-500 leading-none">ePathways</p>
+                        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-gray-500 leading-none">EP</p>
                         <p className="text-[10px] text-gray-400 mt-0.5 leading-none">Client review</p>
                     </div>
                 </div>
@@ -121,7 +121,7 @@ export default function LeaveReviewPage({
                             className="inline-flex items-center gap-2 bg-[#282728] hover:bg-black text-white text-[11px] font-bold uppercase tracking-[0.22em] px-7 py-3.5 rounded-xl transition-colors"
                         >
                             <Home size={14} strokeWidth={2.5} />
-                            Back to ePathways
+                            Back to EP
                         </Link>
                     </div>
                 ) : (
@@ -213,7 +213,7 @@ export default function LeaveReviewPage({
                                         }}
                                         className="w-3.5 h-3.5 rounded border-gray-300 text-[#282728] focus:ring-[#282728]/30 focus:ring-2 cursor-pointer" />
                                     <span className="text-[11px] text-gray-700">
-                                        I also used ePathways for {otherDept === "immigration" ? "my visa processing" : "my education programme"}
+                                        I also used EP for {otherDept === "immigration" ? "my visa processing" : "my education programme"}
                                     </span>
                                 </label>
                                 {data.also_other_dept && (
@@ -303,7 +303,7 @@ export default function LeaveReviewPage({
                                     </label>
                                     <textarea value={data.paragraph} rows={6}
                                         onChange={(e) => setData("paragraph", e.target.value)}
-                                        placeholder="Tell us about your experience with ePathways..."
+                                        placeholder="Tell us about your experience with EP..."
                                         className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#282728] transition-colors resize-y" />
                                     {errors.paragraph && <p className="text-xs text-red-500 mt-1.5">{errors.paragraph}</p>}
                                 </div>

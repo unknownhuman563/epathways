@@ -23,7 +23,7 @@ const AccreditationSection = () => {
                             <span className="text-[#436235]">Local Expertise</span>
                         </h2>
                         <p className="text-gray-600 text-base sm:text-lg font-light leading-relaxed mb-6 sm:mb-8">
-                            ePathways is a recognized education and immigration agency. Our team includes ICEF-trained consultants and Licensed Immigration Advisers, ensuring that your journey is backed by professional knowledge and ethical standards.
+                            EP is a recognized New Zealand education and immigration consultancy. Our team includes ICEF-trained education consultants and Licensed Immigration Advisers, ensuring that your journey is backed by professional knowledge and ethical standards.
                         </p>
                         <div className="flex items-center gap-4">
                             <div className="h-px w-12 bg-[#436235]"></div>
@@ -41,9 +41,10 @@ const AccreditationSection = () => {
                         transition={{ duration: 0.6 }}
                         className="flex-1 w-full flex justify-center items-center"
                     >
-                        <img 
-                            src={ICEFLogo} 
-                            alt="ICEF Accreditation" 
+                        <img
+                            src={ICEFLogo}
+                            alt="ICEF Accreditation"
+                            loading="lazy"
                             className="w-full max-w-lg h-auto object-contain transition-transform duration-500 hover:scale-105"
                         />
                     </motion.div>

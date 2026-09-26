@@ -42,7 +42,7 @@ export default function AboutUs() {
                 <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none p-20">
                     <img
                         src={LogoBackdrop}
-                        alt="ePathways Logo Backdrop"
+                        alt="EP Logo Backdrop"
                         className="w-full max-w-4xl object-contain opacity-50 grayscale"
                     />
                 </div>
@@ -66,7 +66,7 @@ export default function AboutUs() {
                         <div className="bg-gray-100 rounded-lg aspect-[5/4] w-[85%] overflow-hidden shadow-xl">
                             <img
                                 src={GroupPic2}
-                                alt="ePathways Celebration"
+                                alt="EP Celebration"
                                 className="w-full h-full object-cover"
                             />
                         </div>
@@ -75,7 +75,7 @@ export default function AboutUs() {
                         <div className="absolute top-40 right-0 w-[60%] aspect-square rounded-lg overflow-hidden shadow-2xl">
                             <img
                                 src={GroupPic}
-                                alt="ePathways Professional Team"
+                                alt="EP Professional Team"
                                 className="w-full h-full object-cover"
                             />
                         </div>
@@ -210,7 +210,7 @@ export default function AboutUs() {
                     <div className="flex flex-col items-center mb-20 text-center">
                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mb-4">The Team Behind</span>
                         <div className="flex items-center gap-2 mb-6">
-                            <img src={LogoBlack} alt="ePathways Logo" className="h-8 object-contain grayscale brightness-0" />
+                            <img src={LogoBlack} alt="EP Logo" className="h-8 object-contain grayscale brightness-0" />
                         </div>
                         <div className="h-0.5 w-16 bg-[#436235]"></div>
                     </div>
@@ -292,7 +292,7 @@ export default function AboutUs() {
                                 <div className="h-[1px] w-12 bg-[#436235]/60"></div>
                             </div>
                             <h2 className="text-4xl md:text-5xl font-bold text-[#282728] uppercase tracking-tight leading-tight">
-                                ePathways <br /><span className="text-[#436235]">Worldwide</span>
+                                EP <br /><span className="text-[#436235]">Worldwide</span>
                             </h2>
                         </div>
                         <p className="text-gray-500 text-sm max-w-xs leading-relaxed">Click on any location pin to meet the local team and get in touch.</p>
@@ -392,7 +392,7 @@ export default function AboutUs() {
                         {/* Bottom legend */}
                         <div className="absolute bottom-4 left-6 flex items-center gap-3">
                             <div className="w-3 h-3 rounded-full bg-[#436235] border-2 border-white shadow"></div>
-                            <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">ePathways Office</span>
+                            <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">EP Office</span>
                         </div>
                     </div>
 

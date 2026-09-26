@@ -12,7 +12,7 @@
                 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #e5e7eb;">
                     <tr>
                         <td style="background:#436235; padding:22px 32px;">
-                            <div style="color:#ffffff; font-size:18px; font-weight:700; letter-spacing:-0.3px;">ePathways</div>
+                            <div style="color:#ffffff; font-size:18px; font-weight:700; letter-spacing:-0.3px;">EP</div>
                             <div style="color:#c7d6bd; font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-top:3px;">Daily Time &amp; Task Records</div>
                         </td>
                     </tr>
@@ -47,12 +47,12 @@
                             </table>
 
                             <p style="margin:0 0 4px; font-size:15px; color:#374151;">Thank you!</p>
-                            <p style="margin:16px 0 0; font-size:15px; color:#374151;">Best,<br><strong>ePathways</strong></p>
+                            <p style="margin:16px 0 0; font-size:15px; color:#374151;">Best,<br><strong>EP</strong></p>
                         </td>
                     </tr>
                     <tr>
                         <td style="background:#f9fafb; border-top:1px solid #e5e7eb; padding:16px 32px; color:#9ca3af; font-size:11px; line-height:1.6;">
-                            This is a system-generated report from the ePathways Daily Time &amp; Task Record.
+                            This is a system-generated report from the EP Daily Time &amp; Task Record.
                         </td>
                     </tr>
                 </table>
