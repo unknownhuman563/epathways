@@ -390,13 +390,13 @@ export default function DashboardLayout({
                     sidebarOpen ? "translate-x-0" : "-translate-x-full"
                 }`}
             >
-                <SidebarContent />
+                {SidebarContent()}
             </aside>
 
             {/* Desktop Sidebar */}
             <aside className="hidden lg:flex flex-col w-64 bg-[#F5F5F7] h-screen shrink-0 pb-4 pt-4 pl-4">
                 <div className="bg-white rounded-3xl shadow-sm border border-gray-50 flex-1 flex flex-col overflow-hidden">
-                    <SidebarContent />
+                    {SidebarContent()}
                 </div>
             </aside>
 
