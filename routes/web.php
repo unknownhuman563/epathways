@@ -1561,6 +1561,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/steps/start', [$cp, 'startProcess']);
             Route::post('/cases/{lead}/steps/{step}/complete', [$cp, 'completeStep']);
             Route::post('/cases/{lead}/steps/{step}/reactivate', [$cp, 'reactivateStep']);
+            // INZ visa sub-status tracker (Visa Lodged → outcome).
+            Route::post('/cases/{lead}/visa-progress', [$cp, 'updateVisaProgress']);
+            Route::post('/cases/{lead}/visa-progress/status', [$cp, 'updateVisaApplicationStatus']);
             Route::post('/cases/{lead}/payment', [$cp, 'recordPayment']);
             Route::post('/cases/{lead}/partner-recommendation', [$cp, 'partnerRecommendation']);
             Route::post('/cases/{lead}/verdict', [$cp, 'recordVerdict']);
@@ -1954,6 +1957,13 @@ Route::middleware(['auth'])->group(function () {
                 ->name('cases.payment');
             Route::post('/cases/{lead}/partner-recommendation', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'partnerRecommendation'])
                 ->name('cases.partner-recommendation');
+
+            // INZ visa sub-status tracker (Visa Lodged → outcome). Procedural
+            // status tracking — not advice-bearing.
+            Route::post('/cases/{lead}/visa-progress', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateVisaProgress'])
+                ->name('cases.visa-progress');
+            Route::post('/cases/{lead}/visa-progress/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateVisaApplicationStatus'])
+                ->name('cases.visa-progress.status');
 
             // Build 12 phase 5 — advice-bearing attestations. Licence-gated in
             // the controller via AdviceBearingPolicy; the lodgement sign-off is

@@ -427,6 +427,10 @@ class Lead extends Model
         // Full dated timeline of every department status change — drives the
         // Pipeline "when did this status happen" view. See recordStageChange().
         'stage_history',
+        // INZ-style sub-status tracker for the Visa Lodge / Visa Outcome stages
+        // (activities + per-activity status history). JSON so it never touches
+        // the leads row-size limit. See App\Services\Immigration\VisaProgressService.
+        'visa_progress',
 
         // ── Wide profile-info build — columns surfaced by the
         //    LeadController::updatePersonal allow-list and rendered
@@ -516,6 +520,7 @@ class Lead extends Model
         'last_activity_at' => 'datetime',
         'owner_since' => 'datetime',
         'stage_history' => 'array',
+        'visa_progress' => 'array',
         'last_seen_at' => 'datetime',
         'is_student' => 'boolean',
         'student_converted_at' => 'datetime',

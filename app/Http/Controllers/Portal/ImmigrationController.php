@@ -436,6 +436,10 @@ class ImmigrationController extends Controller
                         // fall back to "Unassigned".
                         'immigration_stage' => $l->immigration_stage,
                         'immigration_priority' => $l->immigration_priority,
+                        // INZ visa sub-status summary (Visa Lodged → outcome) — a
+                        // compact badge for the row + collapse. null when the case
+                        // is not in a tracked stage.
+                        'visa_progress' => app(\App\Services\Immigration\VisaProgressService::class)->summary($l),
                         'docs_total' => $l->documents->count(),
                         'docs_approved' => $l->documents->where('status', 'Approved')->count(),
                         'docs_pending' => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),

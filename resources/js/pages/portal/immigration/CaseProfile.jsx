@@ -10,9 +10,10 @@ import ProcessTab from "@/components/immigration/case-profile/tabs/ProcessTab";
 import NotesTab from "@/components/immigration/case-profile/tabs/NotesTab";
 import FinancialsTab from "@/components/immigration/case-profile/tabs/FinancialsTab";
 import DependantsTab from "@/components/immigration/case-profile/tabs/DependantsTab";
+import StagesTab from "@/components/immigration/case-profile/tabs/StagesTab";
 import AiRecordAssistant from "@/components/ai/AiRecordAssistant";
 import {
-    FileText, MessageSquare, Sparkles, StickyNote, User, Workflow, DollarSign, Users, LayoutDashboard,
+    FileText, MessageSquare, Sparkles, StickyNote, User, Workflow, DollarSign, Users, LayoutDashboard, Milestone,
 } from "lucide-react";
 
 // Build 11.D — Case Profile page. Six-tab workspace for an immigration case.
@@ -24,6 +25,7 @@ const TABS = [
     { key: "personal",       label: "Personal",           icon: User,          Comp: PersonalTab },
     { key: "dependants",     label: "Family",             icon: Users,         Comp: DependantsTab },
     { key: "documents",      label: "Documents",          icon: FileText,      Comp: DocumentsTab },
+    { key: "stages",         label: "Stages",             icon: Milestone,     Comp: StagesTab },
     { key: "communications", label: "Communications",     icon: MessageSquare, Comp: CommunicationsTab },
     { key: "ai_health",      label: "AI Health",       icon: Sparkles,        Comp: AIHealthTab },
     { key: "notes",          label: "Notes & Activity", icon: StickyNote,     Comp: NotesTab },
@@ -44,6 +46,7 @@ export default function CaseProfile() {
         financials = { record: null, payments: [], totals: {}, referred_by: null },
         inzForms = [], dependents = [], vif = null, caseOptions = [], tiedTo = null, visaTypes = [],
         assessmentCompleteness = null, engagement = {}, tasks = { items: [] },
+        visaProgress = { tracked: false, activities: [] }, stageTimeline = [],
     } = props;
 
     // Deep-link tab via ?tab=…  — preserved from the legacy
@@ -77,6 +80,7 @@ export default function CaseProfile() {
         lead, intake, documents, documentRequests, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
         communications, clientReplies, agreements, notes, activity, findings, process, threads, caseStaff, financials, inzForms, dependents, vif, caseOptions, visaTypes,
         assessmentCompleteness, engagement, attention, tasks,
+        visaProgress, stageTimeline,
         onNavigate: setActiveTab,
     };
     const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? PersonalTab;

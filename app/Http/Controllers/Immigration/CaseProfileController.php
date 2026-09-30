@@ -11,6 +11,8 @@ use App\Models\LeadNote;
 use App\Models\ResidentIntake;
 use App\Models\StudentIntake;
 use App\Models\User;
+use App\Services\Immigration\VisaProgressService;
+use Illuminate\Validation\Rule;
 use App\Models\VisitorIntake;
 use App\Models\WorkIntake;
 use App\Services\Immigration\CaseChecklistService;
@@ -156,6 +158,13 @@ class CaseProfileController extends Controller
             'visaTypes' => \App\Models\VisaType::where('active', true)
                 ->orderBy('name')->get(['id', 'name'])
                 ->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values(),
+            // INZ-style visa sub-status tracker (Visa Lodged → outcome) — current
+            // sub-status + per-activity history + lodge/outcome dates.
+            'visaProgress' => app(\App\Services\Immigration\VisaProgressService::class)->get($lead),
+            // Dated timeline of every immigration stage this case moved through —
+            // drives the Stages tab (the current stage expands into the tracker).
+            'stageTimeline' => collect($lead->stage_history ?? [])
+                ->where('department', 'immigration')->values()->all(),
         ]);
     }
 
@@ -930,6 +939,56 @@ class CaseProfileController extends Controller
         ]);
 
         return back()->with('success', 'Finding dismissed.');
+    }
+
+    /**
+     * Set one INZ visa-progress activity's status. Procedural status tracking
+     * (like a QC result) — NOT advice-bearing, so it is not routed through
+     * AdviceBearingPolicy. Appends the transition to the activity's history so
+     * past + current both survive.
+     */
+    public function updateVisaProgress(Request $request, Lead $lead, VisaProgressService $progress)
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+        $this->ensureCanViewCases($user);
+        abort_unless($lead->is_immigration_case, 404);
+
+        $data = $request->validate([
+            'activity' => ['required', 'string', Rule::in(collect($progress->catalogue())->pluck('key')->all())],
+            'status' => ['required', 'string', Rule::in(array_keys($progress->statuses()))],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $progress->setActivityStatus($lead, $data['activity'], $data['status'], $data['note'] ?? null, $user);
+
+        return back()->with('success', 'Visa progress updated.');
+    }
+
+    /**
+     * Set the overall INZ application-status label (e.g. "Under Assessment") and,
+     * optionally, the lodge date (stored on the existing inz_lodged_at column).
+     */
+    public function updateVisaApplicationStatus(Request $request, Lead $lead, VisaProgressService $progress)
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+        $this->ensureCanViewCases($user);
+        abort_unless($lead->is_immigration_case, 404);
+
+        $data = $request->validate([
+            'application_status' => ['nullable', 'string', 'max:120'],
+            'lodged_at' => ['nullable', 'date'],
+        ]);
+
+        if ($request->has('lodged_at')) {
+            $lead->inz_lodged_at = $data['lodged_at'] ?: null;
+            $lead->save();
+        }
+
+        $progress->setApplicationStatus($lead, $data['application_status'] ?? null);
+
+        return back()->with('success', 'Visa application status updated.');
     }
 
     /**
