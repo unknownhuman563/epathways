@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { router } from "@inertiajs/react";
+import { immBase } from "@/lib/caseRoutes";
 import {
     CircleDashed, Loader2, MessageCircleQuestion, CheckCircle2, MinusCircle,
     ChevronDown, ChevronRight, History, MapPin, CalendarClock,
@@ -44,7 +45,7 @@ function ActivityRow({ leadId, activity }) {
     const setStatus = (status) => {
         if (status === activity.status) return;
         setSaving(true);
-        router.post(`/portal/immigration/cases/${leadId}/visa-progress`, { activity: activity.key, status }, {
+        router.post(`${immBase()}/cases/${leadId}/visa-progress`, { activity: activity.key, status }, {
             preserveScroll: true,
             onFinish: () => setSaving(false),
         });
@@ -113,7 +114,7 @@ function SubStatusTracker({ leadId, visaProgress }) {
 
     const saveHead = () => {
         setSavingHead(true);
-        router.post(`/portal/immigration/cases/${leadId}/visa-progress/status`, {
+        router.post(`${immBase()}/cases/${leadId}/visa-progress/status`, {
             application_status: appStatus || null,
             lodged_at: lodgedAt || null,
         }, { preserveScroll: true, onFinish: () => setSavingHead(false) });
