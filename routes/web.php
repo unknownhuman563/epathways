@@ -1965,6 +1965,21 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/visa-progress/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateVisaApplicationStatus'])
                 ->name('cases.visa-progress.status');
 
+            // Potential Cases — onboarding/vetting pipeline before official cases.
+            // Two logged consultations + a key-matters audio acknowledgment gate
+            // the written-agreement signing (a licensed adviser can override with
+            // a reason); passing promotes the lead to an official case.
+            $pc = \App\Http\Controllers\Immigration\PotentialCaseController::class;
+            Route::get('/potential-cases', [$pc, 'index'])->name('potential-cases');
+            Route::post('/potential-cases', [$pc, 'store'])->name('potential-cases.store');
+            Route::post('/potential-cases/{potentialCase}/meeting', [$pc, 'logMeeting'])->name('potential-cases.meeting');
+            Route::post('/potential-cases/{potentialCase}/acknowledge-audio', [$pc, 'acknowledgeAudio'])->name('potential-cases.acknowledge-audio');
+            Route::post('/potential-cases/{potentialCase}/agreement-sent', [$pc, 'markAgreementSent'])->name('potential-cases.agreement-sent');
+            Route::post('/potential-cases/{potentialCase}/sign', [$pc, 'sign'])->name('potential-cases.sign');
+            Route::post('/potential-cases/{potentialCase}/override', [$pc, 'override'])->name('potential-cases.override');
+            Route::post('/potential-cases/{potentialCase}/promote', [$pc, 'promote'])->name('potential-cases.promote');
+            Route::post('/potential-cases/{potentialCase}/decline', [$pc, 'decline'])->name('potential-cases.decline');
+
             // Build 12 phase 5 — advice-bearing attestations. Licence-gated in
             // the controller via AdviceBearingPolicy; the lodgement sign-off is
             // what completes step 12, not the upload.
