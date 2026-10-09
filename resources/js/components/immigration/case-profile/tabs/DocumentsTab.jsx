@@ -162,6 +162,9 @@ export default function DocumentsTab({
     // "Request a document" modal — a free-text ad-hoc request not tied to a
     // checklist slot.
     const [requestOpen, setRequestOpen] = useState(false);
+    // Draft for the "Request documents" modal, lifted here so closing the modal
+    // KEEPS the draft — it's cleared only after a successful send.
+    const [reqDraft, setReqDraft] = useState(() => ({ picked: new Set(), customLabels: [""], message: "" }));
     // Status filter for the checklist (All / Needs client action / Submitted /
     // For Adviser Review / Approved).
     const [filter, setFilter] = useState("all");
@@ -440,6 +443,9 @@ export default function DocumentsTab({
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors"
                     >
                         Request documents
+                        {(reqDraft.picked.size > 0 || reqDraft.customLabels.some((l) => l.trim()) || reqDraft.message.trim()) && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/90" title="Draft in progress" />
+                        )}
                     </button>
                 </div>
             </div>
@@ -638,6 +644,8 @@ export default function DocumentsTab({
                         key: r.key, label: r.label, category: r.category,
                         required: r.required, provided: !! r.document,
                     }))}
+                    draft={reqDraft}
+                    setDraft={setReqDraft}
                     onClose={() => setRequestOpen(false)}
                 />
             )}
@@ -1898,11 +1906,9 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    // Don't lose a typed message to a stray backdrop click / X.
-    const attemptClose = () => {
-        if (message.trim() && ! window.confirm("Discard this request? Your message will be lost.")) return;
-        setOpen(false);
-    };
+    // Closing keeps the typed message — this component stays mounted (only the
+    // portal toggles), so the draft is still here when reopened.
+    const attemptClose = () => setOpen(false);
 
     const send = () => {
         if (submitting) return;
@@ -2273,33 +2279,26 @@ function RfiRequestTableRow({ req, leadId }) {
 // Ad-hoc document request — a free-text label (not tied to a checklist slot),
 // emailed to the client and logged as a LeadDocumentRequest via the same
 // endpoint the per-row request uses.
-function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
-    // Which checklist documents to ask the client for (keyed by checklist key).
-    const [picked, setPicked] = useState(() => new Set());
-    // Off-checklist ad-hoc requests ("Other") — one or more custom documents.
-    const [customLabels, setCustomLabels] = useState([""]);
-    const [message, setMessage] = useState("");
+function RequestAnyDocument({ leadId, checklistItems = [], draft, setDraft, onClose }) {
+    // Draft lives in the parent so closing the modal KEEPS it — picked checklist
+    // keys, the "Other" custom rows, and the message all persist until sent.
+    const picked = draft.picked;
+    const customLabels = draft.customLabels;
+    const message = draft.message;
     const [submitting, setSubmitting] = useState(false);
 
-    const setCustomAt = (idx, val) => setCustomLabels((prev) => prev.map((l, i) => (i === idx ? val : l)));
-    const addCustom = () => setCustomLabels((prev) => [...prev, ""]);
-    const removeCustom = (idx) => setCustomLabels((prev) => (prev.length <= 1 ? [""] : prev.filter((_, i) => i !== idx)));
+    const setMessage = (v) => setDraft((prev) => ({ ...prev, message: v }));
+    const setCustomAt = (idx, val) => setDraft((prev) => ({ ...prev, customLabels: prev.customLabels.map((l, i) => (i === idx ? val : l)) }));
+    const addCustom = () => setDraft((prev) => ({ ...prev, customLabels: [...prev.customLabels, ""] }));
+    const removeCustom = (idx) => setDraft((prev) => ({ ...prev, customLabels: prev.customLabels.length <= 1 ? [""] : prev.customLabels.filter((_, i) => i !== idx) }));
     const customCount = customLabels.filter((l) => l.trim()).length;
 
-    // Guard against losing a part-built request to a stray backdrop click / Esc.
-    const dirty = picked.size > 0 || customCount > 0 || message.trim() !== "";
-    const dirtyRef = useRef(dirty);
-    dirtyRef.current = dirty;
-    const attemptClose = () => {
-        if (dirtyRef.current && ! window.confirm("Discard this document request? Your selections will be lost.")) return;
-        onClose();
-    };
-
+    // Closing just hides the modal — the draft is kept in the parent. Clearing
+    // only happens after a successful send.
     useEffect(() => {
-        const onKey = (e) => { if (e.key === "Escape") attemptClose(); };
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [onClose]);
 
     // Group checklist items by category so the picker mirrors the checklist table.
@@ -2313,10 +2312,10 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
         return Array.from(m.entries());
     }, [checklistItems]);
 
-    const toggle = (key) => setPicked((prev) => {
-        const next = new Set(prev);
+    const toggle = (key) => setDraft((prev) => {
+        const next = new Set(prev.picked);
         next.has(key) ? next.delete(key) : next.add(key);
-        return next;
+        return { ...prev, picked: next };
     });
 
     const count = picked.size + customCount;
@@ -2338,7 +2337,11 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
             {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => { toast.success(`Requested ${items.length} document${items.length > 1 ? "s" : ""} from the client`); onClose(); },
+                onSuccess: () => {
+                    toast.success(`Requested ${items.length} document${items.length > 1 ? "s" : ""} from the client`);
+                    setDraft({ picked: new Set(), customLabels: [""], message: "" }); // sent → clear the draft
+                    onClose();
+                },
                 onError: (errs) => toast.error(Object.values(errs)[0] || "Request failed"),
                 onFinish: () => setSubmitting(false),
             },
@@ -2346,16 +2349,16 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={attemptClose}>
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
             <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 flex-shrink-0">
                     <div>
                         <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
                             <Plus size={14} className="text-gray-500" /> Request documents
                         </h2>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Tick which documents to ask the client for — they'll get an upload link for each.</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Tick which documents to ask the client for — your draft is kept if you close.</p>
                     </div>
-                    <button type="button" onClick={attemptClose} className="text-gray-400 hover:text-gray-700"><XIcon size={16} /></button>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><XIcon size={16} /></button>
                 </header>
 
                 <div className="px-5 py-4 space-y-4 overflow-y-auto">
