@@ -1898,6 +1898,12 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
+    // Don't lose a typed message to a stray backdrop click / X.
+    const attemptClose = () => {
+        if (message.trim() && ! window.confirm("Discard this request? Your message will be lost.")) return;
+        setOpen(false);
+    };
+
     const send = () => {
         if (submitting) return;
         setSubmitting(true);
@@ -1936,7 +1942,7 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
             </button>
             {open && typeof document !== "undefined" && createPortal(
                 (
-                    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setOpen(false)}>
+                    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={attemptClose}>
                         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
                             <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
                                 <div className="min-w-0">
@@ -1945,7 +1951,7 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
                                     </h2>
                                     <p className="text-[11px] text-gray-500 mt-0.5 truncate">{rowLabel}</p>
                                 </div>
-                                <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700">
+                                <button type="button" onClick={attemptClose} className="text-gray-400 hover:text-gray-700">
                                     <XIcon size={16} />
                                 </button>
                             </header>
@@ -2270,15 +2276,30 @@ function RfiRequestTableRow({ req, leadId }) {
 function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
     // Which checklist documents to ask the client for (keyed by checklist key).
     const [picked, setPicked] = useState(() => new Set());
-    // An off-checklist ad-hoc request ("Other").
-    const [customLabel, setCustomLabel] = useState("");
+    // Off-checklist ad-hoc requests ("Other") — one or more custom documents.
+    const [customLabels, setCustomLabels] = useState([""]);
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
+    const setCustomAt = (idx, val) => setCustomLabels((prev) => prev.map((l, i) => (i === idx ? val : l)));
+    const addCustom = () => setCustomLabels((prev) => [...prev, ""]);
+    const removeCustom = (idx) => setCustomLabels((prev) => (prev.length <= 1 ? [""] : prev.filter((_, i) => i !== idx)));
+    const customCount = customLabels.filter((l) => l.trim()).length;
+
+    // Guard against losing a part-built request to a stray backdrop click / Esc.
+    const dirty = picked.size > 0 || customCount > 0 || message.trim() !== "";
+    const dirtyRef = useRef(dirty);
+    dirtyRef.current = dirty;
+    const attemptClose = () => {
+        if (dirtyRef.current && ! window.confirm("Discard this document request? Your selections will be lost.")) return;
+        onClose();
+    };
+
     useEffect(() => {
-        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        const onKey = (e) => { if (e.key === "Escape") attemptClose(); };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [onClose]);
 
     // Group checklist items by category so the picker mirrors the checklist table.
@@ -2298,16 +2319,16 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
         return next;
     });
 
-    const count = picked.size + (customLabel.trim() ? 1 : 0);
+    const count = picked.size + customCount;
 
     const send = () => {
         if (submitting) return;
-        // Build one request item per picked checklist document + the custom one.
+        // Build one request item per picked checklist document + each custom one.
         const items = checklistItems
             .filter((it) => picked.has(it.key))
             .map((it) => ({ label: it.label, description: message.trim() || null, required: !! it.required }));
-        if (customLabel.trim()) {
-            items.push({ label: customLabel.trim(), description: message.trim() || null, required: true });
+        for (const l of customLabels) {
+            if (l.trim()) items.push({ label: l.trim(), description: message.trim() || null, required: true });
         }
         if (items.length === 0) { toast.error("Pick at least one document to request"); return; }
         setSubmitting(true);
@@ -2325,7 +2346,7 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={attemptClose}>
             <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 flex-shrink-0">
                     <div>
@@ -2334,7 +2355,7 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
                         </h2>
                         <p className="text-[11px] text-gray-500 mt-0.5">Tick which documents to ask the client for — they'll get an upload link for each.</p>
                     </div>
-                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><XIcon size={16} /></button>
+                    <button type="button" onClick={attemptClose} className="text-gray-400 hover:text-gray-700"><XIcon size={16} /></button>
                 </header>
 
                 <div className="px-5 py-4 space-y-4 overflow-y-auto">
@@ -2366,17 +2387,34 @@ function RequestAnyDocument({ leadId, checklistItems = [], onClose }) {
                         <p className="text-[12px] text-gray-500">No checklist items for this case yet — use "Other" below.</p>
                     )}
 
-                    {/* Off-checklist custom request */}
+                    {/* Off-checklist custom requests — one or more */}
                     <div className="pt-1">
                         <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1">Other (not on the checklist)</label>
-                        <input
-                            type="text"
-                            value={customLabel}
-                            onChange={(e) => setCustomLabel(e.target.value)}
-                            maxLength={120}
-                            placeholder="e.g. Employment contract"
-                            className="w-full text-xs px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900"
-                        />
+                        <div className="space-y-1.5">
+                            {customLabels.map((label, idx) => (
+                                <div key={idx} className="flex items-center gap-1.5">
+                                    <input
+                                        type="text"
+                                        value={label}
+                                        onChange={(e) => setCustomAt(idx, e.target.value)}
+                                        maxLength={120}
+                                        placeholder="e.g. Employment contract"
+                                        className="flex-1 min-w-0 text-xs px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900"
+                                        onKeyDown={(e) => { if (e.key === "Enter" && label.trim() && idx === customLabels.length - 1) { e.preventDefault(); addCustom(); } }}
+                                    />
+                                    {(customLabels.length > 1 || label.trim()) && (
+                                        <button type="button" onClick={() => removeCustom(idx)} title="Remove"
+                                            className="flex-shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50">
+                                            <XIcon size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" onClick={addCustom}
+                            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-800">
+                            <Plus size={12} /> Add another document
+                        </button>
                     </div>
 
                     {/* Shared instruction line */}

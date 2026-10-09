@@ -541,8 +541,11 @@ class Lead extends Model
         // Encrypted at rest — Crypt::decryptString runs on read,
         // Crypt::encryptString on write. Existing plain-text passport
         // numbers were re-encrypted by the migration.
-        'passport_number' => 'encrypted',
-        'current_nz_visa_number' => 'encrypted',
+        // Fail-soft: a value encrypted under a previous APP_KEY returns null
+        // (logged) instead of throwing a DecryptException that would blank the
+        // whole cases list when serialising every case's passport number.
+        'passport_number' => \App\Casts\SafeEncrypted::class,
+        'current_nz_visa_number' => \App\Casts\SafeEncrypted::class,
         // Booleans (mirrors migration column types).
         'has_been_in_nz_continuously' => 'boolean',
         'meets_184_day_rule_two_years' => 'boolean',
