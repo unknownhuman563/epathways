@@ -18,7 +18,7 @@
                 // contact block (bottom: 58px) so nothing is covered.
                 $w = $canvas->get_width();
                 $h = $canvas->get_height();
-                $coverBottom = 703;
+                $coverBottom = 663; // just below the contact block (bottom: 58px ≈ 661pt)
                 $canvas->filled_rectangle(0, $coverBottom, $w, $h - $coverBottom, $teal);
                 return;
             }
