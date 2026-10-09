@@ -40,7 +40,7 @@
     .cover .brand-row { width: 100%; }
     .cover .brand-row td { vertical-align: top; }
     .cover .logo-chip { background: #ffffff; display: inline-block; padding: 16px 20px; border-radius: 3px; }
-    .cover .logo-chip img { height: 64px; width: 203px; } /* immigration logo, trimmed 3.17:1; explicit size so dompdf doesn't render the source full-size */
+    .cover .logo-chip img { height: 44px; width: 140px; } /* immigration logo, trimmed 3.17:1; explicit size so dompdf doesn't render the source full-size */
     .cover .company { text-align: right; font-size: 15pt; font-weight: 700; line-height: 1.25; }
     .cover .cover-mid { position: absolute; left: 55px; right: 55px; top: 360px; }
     .cover .eyebrow { font-size: 15pt; font-weight: 400; opacity: 0.92; margin-bottom: 8px; }
